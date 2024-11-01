@@ -4,4 +4,4 @@ This version of transflow works in a web browser in real time using the GPU. Opt
 
 A demo is live at [chalier.fr/transflow](https://chalier.fr/transflow/).
 
-[![](https://i.imgur.com/SIE9u7w.gif)](https://i.imgur.com/NIR38lv.mp4)
+[![](../assets/Www.gif)](../assets/Www.mp4)

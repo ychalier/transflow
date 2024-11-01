@@ -24,7 +24,7 @@ __pycache__
 *.bbl
 *.blg
 
-assets
+assets/*
 profiles
 out
 
@@ -42,3 +42,14 @@ media
 
 *.egg-info
 dist
+
+!assets/Deer.jpg
+!assets/Frame.png
+!assets/LagrangePolynomial.png
+!assets/Mask.png
+!assets/Output.gif
+!assets/Output.mp4
+!assets/River.gif
+!assets/River.mp4
+!assets/Www.gif
+!assets/Www.mp4

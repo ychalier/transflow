@@ -45,8 +45,8 @@ The first argument `flow.mp4` is the video to extract the optical flow from. The
 
 Flow Source | Bitmap Source | Result
 ----------- | ------------- | ------
-[River.mp4](https://i.imgur.com/TishrBr.mp4) | [Deer.jpg](https://i.imgur.com/S5VgP5D.jpeg) | [Output.mp4]((https://i.imgur.com/0onNbH9.mp4))
-![River.mp4](https://i.imgur.com/Xr3zdnn.gif) | ![Deer.jpg](https://i.imgur.com/S5VgP5D.jpeg) | ![Output.mp4](https://i.imgur.com/zC3rIdt.gif)
+[River.mp4](assets/River.mp4) | [Deer.jpg](assets/Deer.jpg) | [Output.mp4](assets/Output.mp4)
+[![River.mp4](assets/River.gif)](assets/River.mp4) | [![Deer.jpg](assets/Deer.jpg)](assets/Deer.jpg) | [![Output.mp4](assets/Output.gif)](assets/Output.mp4)
 
 The first step is to use a graphic editor to add a white frame around the deer. This creates the erasing effect when the white pixels move onto the colored ones.
 
@@ -54,13 +54,13 @@ With the editor, create a new image where you cut out the deer, color it white, 
 
 Modified Bitmap Source | Reset Mask
 ---------------------- | ----------
-[DeerFrame.png](https://i.imgur.com/hXHtVET.png) | [Mask.png](https://i.imgur.com/1bcKmlb.png)
-![DeerFrame.png](https://i.imgur.com/hXHtVET.png) | ![Mask.png](https://i.imgur.com/1bcKmlb.png)
+[Frame.png](assets/Frame.png) | [Mask.png](assets/Mask.png)
+[![Frame.png](assets/Frame.png)](assets/Frame.png) | [![Mask.png](assets/Mask.png)](assets/Mask.png)
 
 Then, all you need is this one command:
 
 ```console
-transflow River.mp4 -d forward -b DeerFrame.png -rm random -rk Mask.png -ha 0:0:0:0 -o Output.mp4
+transflow River.mp4 -d forward -b Frame.png -rm random -rk Mask.png -ha 0:0:0:0 -o Output.mp4
 ```
 
 - The first argument is the flow source, the river video.
@@ -78,7 +78,7 @@ A final detail could be to control the flow gain to ease the start and the end, 
 
 The formula is based on time `t`. The river video lasts for about 30 seconds. Such formulas can be obtained via [Lagrange interpolation](https://en.wikipedia.org/wiki/Lagrange_polynomial), I published a hacky tool for that, the [Online Lagrange Polynomial Editor](https://chalier.fr/lagrange/):
 
-[![](https://i.imgur.com/eDTu7CW.png)](https://chalier.fr/lagrange/)
+[![](assets/LagrangePolynomial.png)](https://chalier.fr/lagrange/)
 
 ## Flow Estimation Parameters
 
