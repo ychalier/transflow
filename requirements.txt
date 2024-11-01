@@ -1,0 +1,8 @@
+av
+numpy
+opencv-python
+Pillow
+pygame
+pyside6
+scipy
+tqdm

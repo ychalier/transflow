@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+
+<html>
+
+<head lang="en">
+	<meta charset="utf8">
+    <meta name="viewport" content="width=device-width" />
+	<link rel="stylesheet" href="transflow.css">
+	<title>transflow</title>
+</head>
+
+<body>
+    
+    <canvas id="display"></canvas>
+
+    <div id="dashboard">
+		<select id="select-method">
+			<option value="pm">point matching</option>
+			<option value="lk">Lucas-Kanade</option>
+			<option value="hs" selected>Horn-Schunck</option>
+		</select>
+		<div id="range-inputs"></div>
+        <div id="dashboard-buttons">
+            <button id="button-refresh" title="go back to home menu">menu</button>
+            <button id="button-reset" title="reset all range parameters to their default value">reset</button>
+            <button id="button-recall" title="reset displacement map">recall</button>
+            <button id="button-export" title="download screenshot as png">export</button>
+            <button id="button-share" title="copy link to clipboard">share</button>
+        </div>
+	</div>
+
+    <div id="wait">
+        <section class="padded">
+            <br>
+            loading <mark>sources</mark>…
+        </section>
+    </div>
+
+    <div id="menu">
+        <section class="padded">
+            <h1>transflow</h1>
+            <p>
+                <details>
+                    <summary><b>about</b></summary>
+                    <a href="https://chalier.fr/transflow/">Transflow</a>
+                    is a tool for transferring
+                    <a href="https://en.wikipedia.org/wiki/Optical_flow">optical flow</a>
+                    across texture sources.
+                    Code is on <a href="https://github.com/ychalier/transflow">GitHub</a>.
+                    <a href="https://chalier.fr/#contact">Contact me</a> for any question.
+                </details>
+            </p>
+            <form id="menu-form" method="get">
+                <div class="form-group">
+                    <label for="select-motion-source">motion source</label>
+                    <select id="select-motion-source" name="motionType">
+                        <option value="webcam" selected>webcam</option>
+                        <option value="video">video URL</option>
+                        <option value="vfile">video file</option>
+                    </select>
+                </div>
+                <div class="form-group optional-input" for="select-motion-source" option="webcam">
+                    <label for="select-motion-webcam">motion webcam</label>
+                    <select name="motionSource" id="select-motion-webcam" class="select-webcam" disabled ></select>
+                </div>
+                <div class="form-group optional-input" for="select-motion-source" option="video">
+                    <label for="select-motion-video">motion video</label>
+                    <input name="motionSource" id="select-motion-video" type="text" disabled placeholder="http://example.org/video.mp4" />
+                    <div class="gallery-wrapper" for="select-motion-video"></div>
+                </div>
+                <div class="form-group optional-input" for="select-motion-source" option="vfile">
+                    <label for="select-motion-vfile">motion video</label>
+                    <input name="motionSource" id="select-motion-vfile" class="input-file" type="file" accept="video/mp4,video/webm,video/ogg" />
+                    <label for="select-motion-vfile" class="input-file-label">browse…</label>
+                </div>
+                <div class="form-spacer"></div>
+                <div class="form-group">
+                    <label for="select-bitmap-source">bitmap source</label>
+                    <select id="select-bitmap-source" name="bitmapType">
+                        <option value="webcam" selected>webcam</option>
+                        <option value="video">video URL</option>
+                        <option value="vfile">video file</option>
+                        <option value="image">image URL</option>
+                        <option value="ifile">image file</option>
+                        <option value="random">random image</option>
+                    </select>
+                </div>
+                <div class="form-group optional-input" for="select-bitmap-source" option="webcam">
+                    <label for="select-bitmap-webcam">bitmap webcam</label>
+                    <select name="bitmapSource" id="select-bitmap-webcam" class="select-webcam"></select>
+                </div>
+                <div class="form-group optional-input hidden" for="select-bitmap-source" option="video">
+                    <label for="select-bitmap-video">bitmap video</label>
+                    <input name="bitmapSource" id="select-bitmap-video" type="text" disabled placeholder="http://example.org/video.mp4" />
+                    <div class="gallery-wrapper" for="select-bitmap-video"></div>
+                </div>
+                <div class="form-group optional-input" for="select-bitmap-source" option="vfile">
+                    <label for="select-bitmap-vfile">bitmap video</label>
+                    <input name="bitmapSource" id="select-bitmap-vfile" class="input-file" type="file" accept="video/mp4,video/webm,video/ogg" disabled />
+                    <label for="select-bitmap-vfile" class="input-file-label">browse…</label>
+                </div>
+                <div class="form-group optional-input hidden" for="select-bitmap-source" option="image">
+                    <label for="select-bitmap-image">bitmap image</label>
+                    <input name="bitmapSource" id="select-bitmap-image" type="text" disabled placeholder="http://example.org/image.jpg" />
+                </div>
+                <div class="form-group optional-input" for="select-bitmap-source" option="ifile">
+                    <label for="select-bitmap-ifile">bitmap image</label>
+                    <input name="bitmapSource" id="select-bitmap-ifile" class="input-file" type="file" accept="image/apng,image/avif,image/gif,image/jpeg,image/png,image/svg+xml,image/webp" disabled />
+                    <label for="select-bitmap-ifile" class="input-file-label">browse…</label>
+                </div>
+                <div class="form-spacer"></div>
+                <details>
+                    <summary><b>more options</b></summary>
+                    <div class="form-group">
+                        <label for="input-width">width</label>
+                        <input required id="input-width" name="width" type="number" step="1" min="1" max="3840" value="1280"/>
+                    </div>
+                    <div class="form-group">
+                        <label for="input-height">height</label>
+                        <input required id="input-height" name="height" type="number" step="1" min="1" max="3840" value="720"/>
+                    </div>
+                    <div class="form-group">
+                        <label for="input-block">block size</label>
+                        <input required id="input-block" name="blockSize" type="number" step="1" min="1" max="128" value="1" />
+                    </div>
+        
+                    <div class="form-group">
+                        <label for="select-interp">interpolation</label>
+                        <select required id="select-interp" name="interpolation">
+                            <option value="nearest" selected>nearest</option>
+                            <option value="linear">linear</option>
+                        </select>
+                    </div>
+                </details>
+                <div class="form-spacer"></div>
+                <p>
+                    <button>start</button>
+                    <button id="button-reset-menu">reset</button>
+                </p>
+            </form>
+        </section>
+    </div>
+
+    <template id="template-gallery">
+        <div class="gallery">
+            <div class="gallery-item">
+                <video src="https://i.imgur.com/PqRcJhp.mp4" loop muted title="Yosemite Sequence"></video>
+            </div>
+            <div class="gallery-item">
+                <video src="https://i.imgur.com/1M5GkT4.mp4" loop muted title="Nature Still"></video>
+            </div>
+            <div class="gallery-item">
+                <video src="https://i.imgur.com/YvnsJJG.mp4" loop muted title="Lille Subway"></video>
+            </div>
+            <div class="gallery-item">
+                <video src="https://i.imgur.com/nbCvI69.mp4" loop muted title="Forest Still"></video>
+            </div>
+            <div class="gallery-item">
+                <video src="https://i.imgur.com/Ew9TjUM.mp4" loop muted title="Branches"></video>
+            </div>
+            <div class="gallery-item">
+                <video src="https://i.imgur.com/3zog7ui.mp4" loop muted title="Fireplace"></video>
+            </div>
+            <div class="gallery-item">
+                <video src="https://i.imgur.com/TishrBr.mp4" loop muted title="River"></video>
+            </div>
+        </div>   
+    </template>
+
+    <script src="transflow.js"></script>
+
+</body>
+
+</html>
