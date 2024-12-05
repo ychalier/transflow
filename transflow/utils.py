@@ -70,3 +70,28 @@ def compose_average(*colors: tuple[int, int, int]) -> tuple[int, int, int]:
         int(sum(c[1] for c in colors) / n),
         int(sum(c[2] for c in colors) / n),
     )
+
+
+def multiply_arrays(arrays: list[numpy.ndarray]) -> numpy.ndarray:
+    if len(arrays) == 1:
+        return arrays[0]
+    out = numpy.multiply(arrays[0], arrays[1])
+    for array in arrays[2:]:
+        numpy.multiply(out, array, out)
+    return out
+
+
+def binarize_arrays(arrays: list[numpy.ndarray]) -> list[numpy.ndarray]:
+    for array in arrays:
+        where = numpy.where(numpy.abs(array) > 0.2)
+        array[:,:] = 0
+        array[where] = 1
+    return arrays
+
+
+def absmax(arrays: list[numpy.ndarray]) -> numpy.ndarray:
+    w, h = arrays[0].shape[0:2]
+    stack = numpy.stack(arrays).reshape((2, w * h * 2))
+    abs_stack = numpy.abs(stack)
+    argmax = numpy.argmax(abs_stack, axis=0).reshape((1, w * h * 2))
+    return numpy.take_along_axis(stack, argmax, 0).reshape(arrays[0].shape)

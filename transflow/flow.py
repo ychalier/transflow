@@ -35,10 +35,6 @@ class FlowSource:
             if kernel_path is None else numpy.load(kernel_path)
         self.flow_gain = None
         self.flow_gain_string = flow_gain
-        self.fx_min: numpy.ndarray = None
-        self.fx_max: numpy.ndarray = None
-        self.fy_min: numpy.ndarray = None
-        self.fy_max: numpy.ndarray = None
         self.frame_index = -1
         self.seek = seek
         self.seek_time = seek_time
@@ -52,16 +48,6 @@ class FlowSource:
         self.length = length
         if self.length <= 0:
             self.length = None
-        self.fx_min = numpy.zeros((self.height, self.width), dtype=int)
-        self.fx_max = numpy.zeros((self.height, self.width), dtype=int)
-        self.fy_min = numpy.zeros((self.height, self.width), dtype=int)
-        self.fy_max = numpy.zeros((self.height, self.width), dtype=int)
-        for i in range(self.height):
-            for j in range(self.width):
-                self.fx_min[i, j] = -j
-                self.fx_max[i, j] = width - j - 1
-                self.fy_min[i, j] = -i
-                self.fy_max[i, j] = height - i - 1
         if self.seek is None:
             self.seek = 0
         if self.seek_time is not None:
@@ -107,8 +93,7 @@ class FlowSource:
             ff = 1 if self.flow_gain is None else self.flow_gain(self.t)
         except ZeroDivisionError:
             ff = 0
-        numpy.clip(ff * flow[:,:,0], self.fx_min, self.fx_max, flow[:,:,0])
-        numpy.clip(ff * flow[:,:,1], self.fy_min, self.fy_max, flow[:,:,1])
+        flow *= ff
         if self.mask is None:
             flow_masked = flow
         else:

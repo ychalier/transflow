@@ -5,6 +5,7 @@ import random
 import re
 import time
 import traceback
+import typing
 import warnings
 
 import numpy
@@ -14,6 +15,7 @@ from .flow import FlowSource, FlowDirection
 from .bitmap import BitmapSource
 from .accumulator import Accumulator
 from .output import VideoOutput, ZipOutput, NumpyOutput, render1d, render2d
+from .utils import multiply_arrays, binarize_arrays, absmax
 
 
 def append_history():
@@ -121,10 +123,24 @@ def export_checkpoint(
     output.close()
 
 
+flows_merging_functions: dict[str, typing.Callable[[list[numpy.ndarray]], numpy.ndarray]] = {
+    "first": lambda flows: flows[0],
+    "sum": sum,
+    "average": lambda flows: sum(flows) / len(flows),
+    "difference": lambda flows: flows[0] - sum(flows[1:]),
+    "product": multiply_arrays,
+    "maskbin": lambda flows: multiply_arrays([flows[0]] + binarize_arrays(flows[1:])),
+    "masklin": lambda flows: multiply_arrays([flows[0]] + [numpy.abs(f) for f in flows[1:]]),
+    "absmax": absmax,
+}
+
+
 def transfer(
         flow_path: str,
         bitmap_path: str | None,
         output_path: str | None,
+        extra_flow_paths: list[str] | None,
+        flows_merging_function: str = "first",
         use_mvs: bool = False,
         vcodec: str = "h264",
         reset_mode: str = "off",
@@ -165,6 +181,14 @@ def transfer(
         = output_queue = output_process = flow_output = bs_framerate\
         = accumulator = None
 
+    if extra_flow_paths is None:
+        extra_flow_paths: list[str] = []
+        flows_merging_function = "first"
+    extra_flow_sources: list[FlowSource] = []
+    extra_flow_queues: list[multiprocessing.Queue] = []
+    extra_flow_processes: list[SourceProcess] = []
+    merge_flows = flows_merging_functions[flows_merging_function]
+
     def close():
         if export_flow:
             flow_output.close()
@@ -172,16 +196,22 @@ def transfer(
             shape_queue.close()
         if flow_queue is not None:
             flow_queue.close()
+        for q in extra_flow_queues:
+            q.close()
         if bitmap_queue is not None:
             bitmap_queue.close()
         if output_queue is not None:
             output_queue.put(None)
         if flow_process is not None:
             flow_process.kill()
+        for p in extra_flow_processes:
+            p.kill()
         if bitmap_process is not None:
             bitmap_process.kill()
         if flow_process is not None:
             flow_process.join()
+        for p in extra_flow_processes:
+            p.join()
         if bitmap_process is not None:
             bitmap_process.join()
         if output_process is not None:
@@ -234,13 +264,33 @@ def transfer(
         flow_queue = multiprocessing.Queue(maxsize=1)
         flow_process = SourceProcess(flow_source, flow_queue, shape_queue)
         flow_process.start()
+
+        for extra_flow_path in extra_flow_paths:
+            extra_flow_sources.append(FlowSource.from_args(
+                extra_flow_path, use_mvs=use_mvs, mask_path=mask_path,
+                kernel_path=kernel_path, cv_config=cv_config,
+                flow_gain=flow_gain, size=size, direction=direction,
+                seek=ckpt_meta.get("cursor"), seek_time=seek_time,
+                duration_time=duration_time))
+            extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
+            extra_flow_processes.append(SourceProcess(
+                extra_flow_sources[-1], extra_flow_queues[-1], shape_queue))
+            extra_flow_processes[-1].start()
+
+        flow_sources_to_load = 1 + len(extra_flow_processes)
+        flow_sources_loaded = 0
+
         while True:
             try:
-                (fs_width, fs_height, fs_framerate, fs_direction, fs_length,
-                 fs_seek, fs_duration) = shape_queue.get(timeout=1)
-                break
+                shape_info = shape_queue.get(timeout=1)
+                if flow_sources_loaded == 0:
+                    (fs_width, fs_height, fs_framerate, fs_direction, fs_length,
+                     fs_seek, fs_duration) = shape_info
+                flow_sources_loaded += 1
+                if flow_sources_loaded >= flow_sources_to_load:
+                    break
             except queue.Empty as exc:
-                if flow_process.is_alive():
+                if flow_process.is_alive() and all(p.is_alive() for p in extra_flow_processes):
                     continue
                 raise RuntimeError("Flow process died during initialization.") from exc
 
@@ -296,9 +346,17 @@ def transfer(
         pbar = tqdm.tqdm(total=fs_duration, unit="frame")
         while True:
             try:
-                flow = flow_queue.get(timeout=1)
-                if flow is None:
+                flows = []
+                break_now = False
+                for q in [flow_queue] + extra_flow_queues:
+                    flow = q.get(timeout=1)
+                    if flow is None:
+                        break_now = True
+                        break
+                    flows.append(flow)
+                if break_now:
                     break
+                flow = merge_flows(flows)
                 if export_flow:
                     flow_output.write_array(numpy.round(flow).astype(int) if round_flow else flow)
                 accumulator.update(flow, fs_direction)

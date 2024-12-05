@@ -12,6 +12,7 @@ This document provides details on how to use the `transflow` module for performi
 - [Flow Preprocessing](#flow-preprocessing)
 - [Flow Gain](#flow-gain)
 - [Flow Convolution Kernel](#flow-convolution-kernel)
+- [Multiple Flow Sources](#multiple-flow-sources)
 - [Accumulation Methods](#accumulation-methods)
 - [Accumulator Heatmap](#accumulator-heatmap)
 - [Accumulator Visualization](#accumulator-visualization)
@@ -168,6 +169,21 @@ Flow can be filtered with convolution kernels by specifying the path to a kernel
 import numpy
 numpy.save("blur.npy", numpy.ones((3, 3)) / 9)
 ```
+
+## Multiple Flow Sources
+
+Multiple flow sources can be specified and merged. A first source must be specified as the first positional argument, as usually, and will be used to determine defaults metrics such as output framerate. Extra flow sources can be specified using the `-f, --extra-flow` argument. You may provide one or more paths to valid flow inputs (video files, preprocessed archives, webcam indices). For each pair of frame, flows from all sources will be merged according to the operation specified with the `-sm, --flows-merging-function` argument, which, by default, is the sum.
+
+Mergin Function | Description
+--------------- | -----------
+`absmax`        | Take the greatest (in magnitude) values accross flows
+`average`       | Scaled sum of all flows
+`difference`    | Take the difference between the first flow and the sum of the others
+`first`         | Only return the first flow (for debugging)
+`maskbin`       | Multiply the first flow by others where values are mapped to either 0 (no movement) or 1 (some movement) – for reference, a threshold of 0.2 pixel in magnitude is used as threshold
+`masklin`       | Multiply the first flow by others where values are converted to absolute values (so they serve as scaling factors)
+`product`       | Product of all flows
+`sum`           | Sum of all flows (default)
 
 ## Accumulation Methods
 

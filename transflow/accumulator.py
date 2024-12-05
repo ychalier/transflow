@@ -70,8 +70,20 @@ class Accumulator:
             self.heatmap_max = x[0]
             self.heatmap_decay = x[1]
             self.heatmap_threshold = x[2]
+        self.fx_min = numpy.zeros((self.height, self.width), dtype=int)
+        self.fx_max = numpy.zeros((self.height, self.width), dtype=int)
+        self.fy_min = numpy.zeros((self.height, self.width), dtype=int)
+        self.fy_max = numpy.zeros((self.height, self.width), dtype=int)
+        for i in range(self.height):
+            for j in range(self.width):
+                self.fx_min[i, j] = -j
+                self.fx_max[i, j] = width - j - 1
+                self.fy_min[i, j] = -i
+                self.fy_max[i, j] = height - i - 1
 
     def _update_flow(self, flow: numpy.ndarray):
+        numpy.clip(flow[:,:,0], self.fx_min, self.fx_max, flow[:,:,0])
+        numpy.clip(flow[:,:,1], self.fy_min, self.fy_max, flow[:,:,1])
         self.flow_int = numpy.round(flow).astype(int)
         self.flow_flat = numpy.ravel(self.flow_int[:,:,1] * self.width + self.flow_int[:,:,0])
         if self.heatmap_mode == HeatmapMode.DISCRETE:

@@ -25,6 +25,15 @@ def main():
         type=str,
         help="input flow: a path to either a video file or a zip archive "\
             "(precomputed flow or checkpoint)")
+    parser.add_argument("-f", "--extra-flow",
+        type=str,
+        nargs="*",
+        help="merge multiple flow sources")
+    parser.add_argument("-sm", "--flows-merging-function",
+        type=str, default="sum",
+        choices=["first", "sum", "average", "difference", "product", "maskbin",
+                 "masklin", "absmax"],
+        help="operations to aggregate extra flow sources")
     parser.add_argument("-b", "--bitmap",
         type=str, default=None,
         help="input bitmap: either a path to a video or an image file or a "\
@@ -161,6 +170,8 @@ def main():
         args.flow,
         args.bitmap,
         args.output,
+        extra_flow_paths=args.extra_flow,
+        flows_merging_function=args.flows_merging_function,
         use_mvs=args.use_mvs,
         vcodec=args.vcodec,
         reset_mode=args.reset_mode,
