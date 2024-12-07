@@ -139,6 +139,9 @@ def main():
     parser.add_argument("-ce", "--checkpoint-every",
         type=int, default=None,
         help="export checkpoint every X frame")
+    parser.add_argument("-cd", "--checkpoint-end",
+        action="store_true",
+        help="export checkpoint at the last frame")
     parser.add_argument("-s", "--safe",
         action="store_true",
         help="save a checkpoint when the program gets interrupted "\
@@ -199,6 +202,7 @@ def main():
         render_colors=args.render_colors,
         render_binary=args.render_binary,
         checkpoint_every=args.checkpoint_every,
+        checkpoint_end=args.checkpoint_end,
         safe=args.safe,
         seed=args.seed,
         seek_time=seek_time,

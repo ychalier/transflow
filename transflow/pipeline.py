@@ -168,6 +168,7 @@ def transfer(
         render_colors: str | None = None,
         render_binary: bool = False,
         checkpoint_every: int | None = None,
+        checkpoint_end: bool = False,
         safe: bool = True,
         seed: int | None = None,
         seek_time: float | None = None,
@@ -247,7 +248,7 @@ def transfer(
         has_output = output_bitmap or output_intensity or output_heatmap\
             or output_accumulator
 
-        if not (has_output or export_flow):
+        if not (has_output or export_flow or checkpoint_end):
             warnings.warn("No output or exportation selected")
 
         if size is not None:
@@ -400,7 +401,7 @@ def transfer(
                 traceback.print_exc()
                 break
         pbar.close()
-        if exception and safe:
+        if (exception and safe) or checkpoint_end:
             export_checkpoint(flow_path, bitmap_path, output_path, replace,
                               cursor, accumulator, seed)
         close()
