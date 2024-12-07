@@ -65,7 +65,7 @@ class Window:
 
         self.padding = 8
         self.border_width = 1
-        self.square_size = 30
+        self.square_size = 16
         self.square_padding = 2
         self.anchors_per_row = None
         self.h3 = None
@@ -213,6 +213,15 @@ class Window:
         y *= self.mapping.shape[0] / surface_height
         return self.mapping[int(y), int(x), 1], self.mapping[int(y), int(x), 0]
 
+    def export(self):
+        f = lambda s: os.path.splitext(os.path.basename(s))[0]
+        filename = f"{f(self.bitmap_path)}_{f(self.ckpt_path)}_{int(1000*time.time())}.png"
+        altered_bitmap = numpy.copy(self.bitmap)
+        for anchor, color in self.anchor_colors.items():
+            altered_bitmap[*anchor] = color
+        PIL.Image.fromarray(altered_bitmap).save(filename)
+        print(f"Exported to {os.path.realpath(filename)}")
+
     def update(self) -> bool:
         should_draw = False
         for event in pygame.event.get():
@@ -221,6 +230,8 @@ class Window:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
+                if event.key == pygame.K_s and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                    self.export()
             elif event.type == pygame.MOUSEMOTION:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 new_hovering = self.get_anchor(mouse_x, mouse_y)
@@ -234,7 +245,7 @@ class Window:
                     result = askcolor(self.anchor_colors[anchor])
                     if result is not None:
                         self.anchor_colors[anchor] = result
-                        should_draw = True
+                        should_draw = True                
         if should_draw:
             self.draw()
         return True
