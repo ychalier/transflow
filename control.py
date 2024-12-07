@@ -170,6 +170,11 @@ class Window:
                     (surface_width, surface_height)),
                 (surface_width + 2 * self.padding,
                  self.height - surface_height - self.padding))
+            pygame.draw.rect(self.window, (255, 0, 0), (
+                (self.hovering[1] - 2) / self.mapping.shape[1] * surface_width + self.padding,
+                self.height - (self.hovering[0] + 2) / self.mapping.shape[0] * surface_height - self.padding,
+                5 * self.mapping.shape[1] / surface_width,
+                5 * self.mapping.shape[0] / surface_height), 1)
 
         pygame.display.flip()
 
