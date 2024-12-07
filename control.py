@@ -19,6 +19,7 @@ import pygame
 from transflow.accumulator import MappingAccumulator
 
 
+RED = (255, 0, 0)
 BORDER_COLOR = (0, 0, 0)
 BACKGROUND_COLOR = (32, 32, 32)
 
@@ -63,7 +64,7 @@ class Window:
         self.anchor_colors = {}
 
         self.padding = 8
-        self.border_width = 2
+        self.border_width = 1
         self.square_size = 30
         self.square_padding = 2
         self.anchors_per_row = None
@@ -93,7 +94,7 @@ class Window:
         for anchor, targets in self.anchors.items():
             mask = numpy.zeros((*self.bitmap.shape[:2], 4), dtype=numpy.uint8)
             for i, j in targets:
-                mask[i,j] = (255, 0, 0, 255)
+                mask[i,j] = (*RED, 255)
             array = mask.transpose(1, 0, 2)
             surf = pygame.Surface((854, 480), pygame.SRCALPHA)
             pygame.pixelcopy.array_to_surface(surf, array[:,:,0:3])
@@ -153,6 +154,13 @@ class Window:
 
         anchor_x = anchor_y = self.padding
         for anchor in self.anchors_ordered:
+            if anchor == self.hovering:
+                self.window.fill(RED, (
+                    anchor_x - self.border_width,
+                    anchor_y - self.border_width,
+                    self.square_size + 2 * self.border_width,
+                    self.square_size + 2 * self.border_width
+                )) 
             self.window.fill(self.anchor_colors[anchor], (
                 anchor_x,
                 anchor_y,
@@ -170,7 +178,7 @@ class Window:
                     (surface_width, surface_height)),
                 (surface_width + 2 * self.padding,
                  self.height - surface_height - self.padding))
-            pygame.draw.rect(self.window, (255, 0, 0), (
+            pygame.draw.rect(self.window, RED, (
                 (self.hovering[1] - 2) / self.mapping.shape[1] * surface_width + self.padding,
                 self.height - (self.hovering[0] + 2) / self.mapping.shape[0] * surface_height - self.padding,
                 5 * self.mapping.shape[1] / surface_width,
@@ -186,7 +194,24 @@ class Window:
             k = i * self.anchors_per_row + j
             if k < len(self.anchors_ordered):
                 return self.anchors_ordered[k]
-        return None
+        return self.get_anchor_from_output(x, y)
+
+    def get_anchor_from_output(self, x: int, y: int) -> tuple[int, int] | None:
+        surface_width = (self.width - 3 * self.padding) // 2
+        surface_height = surface_width * 9 // 16
+        if x < 2 * self.padding + surface_width:
+            return None
+        if x > 2 * self.padding + 2 * surface_width:
+            return None
+        if y < self.h3 + 2 * self.padding:
+            return None
+        if y > self.height - self.padding:
+            return None
+        x -= 2 * self.padding + surface_width
+        y -= self.h3 + 2 * self.padding
+        x *= self.mapping.shape[1] / surface_width
+        y *= self.mapping.shape[0] / surface_height
+        return self.mapping[int(y), int(x), 1], self.mapping[int(y), int(x), 0]
 
     def update(self) -> bool:
         should_draw = False
