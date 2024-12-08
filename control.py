@@ -19,6 +19,7 @@ import pygame
 from transflow.accumulator import MappingAccumulator
 
 
+WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BORDER_COLOR = (0, 0, 0)
 BACKGROUND_COLOR = (32, 32, 32)
@@ -54,6 +55,7 @@ class Window:
         self.window = None
         self.width = width
         self.height = None
+        self.font12 = pygame.font.SysFont("Consolas", 12)
 
         self.mapping = None
         self.bitmap = None
@@ -68,7 +70,7 @@ class Window:
         self.square_size = 16
         self.square_padding = 2
         self.anchors_per_row = None
-        self.h3 = None
+        self.height_anchors = None
 
     def load(self):
         with zipfile.ZipFile(self.ckpt_path) as archive:
@@ -109,11 +111,14 @@ class Window:
     def __enter__(self):
         self.load()
 
-        h1 = 3 * self.padding
-        h2 = self.mapping.shape[0] * ((self.width - 3 * self.padding) // 2) / self.mapping.shape[1]
+        self.height_panes = self.mapping.shape[0] * ((self.width - 3 * self.padding) // 2) / self.mapping.shape[1]
         self.anchors_per_row = (self.width - self.padding) // (self.square_size + self.square_padding)
-        self.h3 = (self.square_size + self.square_padding) * math.ceil(len(self.anchors) / self.anchors_per_row)
-        self.height = h1 + h2 + self.h3
+        self.height_anchors = (self.square_size + self.square_padding) * math.ceil(len(self.anchors) / self.anchors_per_row)
+        self.height_footer = self.square_size
+        self.height = 4 * self.padding + self.height_panes + self.height_anchors + self.height_footer
+
+        self.surface_width = (self.width - 3 * self.padding) // 2
+        self.surface_height = self.surface_width * 9 // 16
 
         self.window = pygame.display.set_mode(
             (self.width, self.height))
@@ -122,36 +127,7 @@ class Window:
     def draw(self):
         self.window.fill(BACKGROUND_COLOR)
 
-        surface_width = (self.width - 3 * self.padding) // 2
-        surface_height = surface_width * 9 // 16
-
-        altered_bitmap = numpy.copy(self.bitmap)
-        for anchor, color in self.anchor_colors.items():
-            altered_bitmap[*anchor] = color
-
-        bitmap_surface = pygame.transform.scale(pygame.surfarray.make_surface(altered_bitmap.transpose(1, 0, 2)), (surface_width, surface_height))
-
-        output = altered_bitmap[self.mapping[:,:,1], self.mapping[:,:,0], :]
-        output_surface = pygame.transform.scale(pygame.surfarray.make_surface(output.transpose(1, 0, 2)), (surface_width, surface_height))
-
-        self.window.fill(BORDER_COLOR, (
-            self.padding - self.border_width,
-            self.height - surface_height - self.padding - self.border_width,
-            surface_width + 2 * self.border_width,
-            surface_height + 2 * self.border_width))
-        self.window.fill(BORDER_COLOR, (
-            surface_width + 2 * self.padding - self.border_width,
-            self.height - surface_height - self.padding - self.border_width,
-            surface_width + 2 * self.border_width,
-            surface_height + 2 * self.border_width))
-
-        self.window.blit(bitmap_surface, (
-            self.padding,
-            self.height - surface_height - self.padding))
-        self.window.blit(output_surface, (
-            surface_width + 2 * self.padding,
-            self.height - surface_height - self.padding))
-
+        # Draw Anchors
         anchor_x = anchor_y = self.padding
         for anchor in self.anchors_ordered:
             if anchor == self.hovering:
@@ -170,25 +146,68 @@ class Window:
             if anchor_x + self.square_size > self.width - self.padding:
                 anchor_x = self.padding
                 anchor_y += self.square_size + self.square_padding
+        
+        # Draw Panes
+        altered_bitmap = numpy.copy(self.bitmap)
+        for anchor, color in self.anchor_colors.items():
+            altered_bitmap[*anchor] = color
+        bitmap_surface = pygame.transform.scale(
+            pygame.surfarray.make_surface(altered_bitmap.transpose(1, 0, 2)),
+            (self.surface_width, self.surface_height))
+        output = altered_bitmap[self.mapping[:,:,1], self.mapping[:,:,0], :]
+        output_surface = pygame.transform.scale(
+            pygame.surfarray.make_surface(output.transpose(1, 0, 2)),
+            (self.surface_width, self.surface_height))
+        paney = self.height_anchors + 2 * self.padding
+        self.window.fill(BORDER_COLOR, (
+            self.padding - self.border_width,
+            paney - self.border_width,
+            self.surface_width + 2 * self.border_width,
+            self.surface_height + 2 * self.border_width))
+        self.window.fill(BORDER_COLOR, (
+            self.surface_width + 2 * self.padding - self.border_width,
+            paney - self.border_width,
+            self.surface_width + 2 * self.border_width,
+            self.surface_height + 2 * self.border_width))
+        self.window.blit(bitmap_surface, (
+            self.padding,
+            paney))
+        self.window.blit(output_surface, (
+            self.surface_width + 2 * self.padding,
+            paney))
 
+        # Draw Over Panes
         if self.hovering is not None:
             self.window.blit(
                 pygame.transform.scale(
                     self.hover_surfaces[self.hovering],
-                    (surface_width, surface_height)),
-                (surface_width + 2 * self.padding,
-                 self.height - surface_height - self.padding))
+                    (self.surface_width, self.surface_height)),
+                (self.surface_width + 2 * self.padding, paney))
             pygame.draw.rect(self.window, RED, (
-                (self.hovering[1] - 2) / self.mapping.shape[1] * surface_width + self.padding,
-                self.height - (self.hovering[0] + 2) / self.mapping.shape[0] * surface_height - self.padding,
-                5 * self.mapping.shape[1] / surface_width,
-                5 * self.mapping.shape[0] / surface_height), 1)
+                (self.hovering[1] - 1) / self.mapping.shape[1] * self.surface_width + self.padding,
+                paney + (self.hovering[0] - 1) / self.mapping.shape[0] * self.surface_height,
+                5 * self.mapping.shape[1] / self.surface_width,
+                5 * self.mapping.shape[0] / self.surface_height), 1)
+            
+        # Draw Footer
+        footery = self.height_anchors + self.height_panes + 3 * self.padding
+        if self.hovering is not None:
+            area = len(self.anchors[self.hovering]) / self.mapping.shape[0] / self.mapping.shape[1]
+            surface = self.font12.render(
+                f"Anchor at ({self.hovering[1]}, {self.hovering[0]}),"\
+                    f" {len(self.anchors[self.hovering])}px"\
+                    f" ({int(100 * area)}% area),"\
+                    f" rgb{self.anchor_colors[self.hovering]}",
+                True, WHITE, BACKGROUND_COLOR)
+            w = surface.get_width()
+            h = surface.get_height()
+            self.window.blit(surface, (self.width - w - self.padding, footery + self.square_size - h))
 
         pygame.display.flip()
 
     def get_anchor(self, x: int, y: int) -> tuple[int, int] | None:
         if x > self.padding and x < self.width - self.padding\
-            and y > self.padding and y < self.padding + self.h3:
+            and y > self.padding and y < self.padding + self.height_anchors:
             i = (y - self.padding) // (self.square_size + self.square_padding)
             j = (x - self.padding) // (self.square_size + self.square_padding)
             k = i * self.anchors_per_row + j
@@ -197,20 +216,18 @@ class Window:
         return self.get_anchor_from_output(x, y)
 
     def get_anchor_from_output(self, x: int, y: int) -> tuple[int, int] | None:
-        surface_width = (self.width - 3 * self.padding) // 2
-        surface_height = surface_width * 9 // 16
-        if x < 2 * self.padding + surface_width:
+        if x < 2 * self.padding + self.surface_width:
             return None
-        if x > 2 * self.padding + 2 * surface_width:
+        if x > 2 * self.padding + 2 * self.surface_width:
             return None
-        if y < self.h3 + 2 * self.padding:
+        if y < self.height_anchors + 2 * self.padding:
             return None
         if y > self.height - self.padding:
             return None
-        x -= 2 * self.padding + surface_width
-        y -= self.h3 + 2 * self.padding
-        x *= self.mapping.shape[1] / surface_width
-        y *= self.mapping.shape[0] / surface_height
+        x -= 2 * self.padding + self.surface_width
+        y -= self.height_anchors + 2 * self.padding
+        x *= self.mapping.shape[1] / self.surface_width
+        y *= self.mapping.shape[0] / self.surface_height
         if int(y) >= self.mapping.shape[0] or int(x) >= self.mapping.shape[1]:
             return None
         return self.mapping[int(y), int(x), 1], self.mapping[int(y), int(x), 0]
@@ -251,6 +268,7 @@ class Window:
                             should_draw = True
                     elif event.button == pygame.BUTTON_RIGHT:
                         self.anchor_colors[anchor] = tuple(self.bitmap[anchor[0], anchor[1]].tolist())
+                        should_draw = True
         if should_draw:
             self.draw()
         return True
