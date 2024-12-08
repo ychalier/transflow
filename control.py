@@ -64,6 +64,9 @@ class Window:
         self.anchors_ordered = None
         self.hovering = None
         self.anchor_colors = {}
+        self.default_anchor_colors = {}
+        self.buffer = WHITE
+        self.is_v_down = False
 
         self.padding = 8
         self.border_width = 1
@@ -106,7 +109,8 @@ class Window:
 
         self.anchors_ordered = [x[0] for x in sorted(self.anchors.items(), key=lambda x: -len(x[1]))]
         for anchor in self.anchors_ordered:
-            self.anchor_colors[anchor] = tuple(self.bitmap[anchor[0], anchor[1]].tolist())
+            self.default_anchor_colors[anchor] = tuple(self.bitmap[anchor[0], anchor[1]].tolist())
+            self.anchor_colors[anchor] = self.default_anchor_colors[anchor]
 
     def __enter__(self):
         self.load()
@@ -191,6 +195,13 @@ class Window:
             
         # Draw Footer
         footery = self.height_anchors + self.height_panes + 3 * self.padding
+        self.window.fill(self.buffer, (
+            self.padding,
+            footery,
+            self.square_size,
+            self.square_size))
+        self.draw_hovered_color()
+
         if self.hovering is not None:
             area = len(self.anchors[self.hovering]) / self.mapping.shape[0] / self.mapping.shape[1]
             surface = self.font12.render(
@@ -204,6 +215,19 @@ class Window:
             self.window.blit(surface, (self.width - w - self.padding, footery + self.square_size - h))
 
         pygame.display.flip()
+
+    def get_hovered_color(self) -> tuple[int, int, int]:
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        return self.window.get_at((mouse_x, mouse_y))[:3]
+
+    def draw_hovered_color(self, flip=False):
+        self.window.fill(self.get_hovered_color(), (
+            self.padding + self.square_padding + self.square_size,
+            self.height_anchors + self.height_panes + 3 * self.padding,
+            self.square_size,
+            self.square_size))
+        if flip:
+            pygame.display.flip()
 
     def get_anchor(self, x: int, y: int) -> tuple[int, int] | None:
         if x > self.padding and x < self.width - self.padding\
@@ -240,6 +264,9 @@ class Window:
             altered_bitmap[*anchor] = color
         PIL.Image.fromarray(altered_bitmap).save(filename)
         print(f"Exported to {os.path.realpath(filename)}")
+    
+    def is_in_buffer(self, x: int, y: int) -> bool:
+        return x >= self.padding and x < self.padding + self.square_size and y >= self.height - self.padding - self.square_size and y <= self.height - self.padding
 
     def update(self) -> bool:
         should_draw = False
@@ -249,14 +276,38 @@ class Window:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
-                if event.key == pygame.K_s and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                elif event.key == pygame.K_s and pygame.key.get_mods() & pygame.KMOD_CTRL:
                     self.export()
+                elif event.key == pygame.K_c and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                    self.buffer = self.get_hovered_color()
+                    should_draw = True
+                elif event.key == pygame.K_v:
+                    self.is_v_down = True
+                    if pygame.key.get_mods() & pygame.KMOD_CTRL and self.hovering is not None:
+                        self.anchor_colors[self.hovering] = self.buffer
+                        should_draw = True
+                elif event.key == pygame.K_r:
+                    for anchor, color in self.default_anchor_colors.items():
+                        self.anchor_colors[anchor] = color
+                    should_draw = True
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_v:
+                    self.is_v_down = False
+                elif event.key == pygame.K_LCTRL:
+                    self.is_ctrl_down = False
             elif event.type == pygame.MOUSEMOTION:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 new_hovering = self.get_anchor(mouse_x, mouse_y)
                 if new_hovering != self.hovering:
+                    if new_hovering is not None:
+                        if pygame.mouse.get_pressed()[2]:
+                            self.anchor_colors[new_hovering] = self.default_anchor_colors[new_hovering]
+                        elif self.is_v_down and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                            self.anchor_colors[new_hovering] = self.buffer
                     should_draw = True
                 self.hovering = new_hovering
+                if not should_draw:
+                    self.draw_hovered_color(True)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 anchor = self.get_anchor(mouse_x, mouse_y)
@@ -267,7 +318,12 @@ class Window:
                             self.anchor_colors[anchor] = result
                             should_draw = True
                     elif event.button == pygame.BUTTON_RIGHT:
-                        self.anchor_colors[anchor] = tuple(self.bitmap[anchor[0], anchor[1]].tolist())
+                        self.anchor_colors[anchor] = self.default_anchor_colors[anchor]
+                        should_draw = True
+                elif self.is_in_buffer(mouse_x, mouse_y):
+                    result = askcolor(self.buffer)
+                    if result is not None:
+                        self.buffer = result
                         should_draw = True
         if should_draw:
             self.draw()
