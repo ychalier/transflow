@@ -160,7 +160,7 @@ class Window:
                     anchor_y - self.border_width,
                     self.square_size + 2 * self.border_width,
                     self.square_size + 2 * self.border_width
-                )) 
+                ))
             self.window.fill(self.anchor_colors[anchor], (
                 anchor_x,
                 anchor_y,
@@ -211,6 +211,8 @@ class Window:
         y -= self.h3 + 2 * self.padding
         x *= self.mapping.shape[1] / surface_width
         y *= self.mapping.shape[0] / surface_height
+        if int(y) >= self.mapping.shape[0] or int(x) >= self.mapping.shape[1]:
+            return None
         return self.mapping[int(y), int(x), 1], self.mapping[int(y), int(x), 0]
 
     def export(self):
@@ -242,10 +244,13 @@ class Window:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 anchor = self.get_anchor(mouse_x, mouse_y)
                 if anchor is not None:
-                    result = askcolor(self.anchor_colors[anchor])
-                    if result is not None:
-                        self.anchor_colors[anchor] = result
-                        should_draw = True                
+                    if event.button == pygame.BUTTON_LEFT:
+                        result = askcolor(self.anchor_colors[anchor])
+                        if result is not None:
+                            self.anchor_colors[anchor] = result
+                            should_draw = True
+                    elif event.button == pygame.BUTTON_RIGHT:
+                        self.anchor_colors[anchor] = tuple(self.bitmap[anchor[0], anchor[1]].tolist())
         if should_draw:
             self.draw()
         return True
