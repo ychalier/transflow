@@ -1,7 +1,16 @@
 """Simple GUI for analyzing the mapping from a checkpoint, and slightly alter
 the input image to control how the output will look.
+
+Bindings:
+- Left click: change color
+- Right click: reset color (can be held down)
+- Ctrl+R: reset all colors
+- Ctrl+C: store the color currently pointed at in the buffer
+- Ctrl+V: apply the buffered color to the region pointed at (can be held down)
+- Ctrl+S: export altered input as PNG
 """
 import argparse
+import colorsys
 import math
 import os
 import pickle
@@ -42,6 +51,14 @@ def askcolor(base_color: tuple[int, int, int]) -> tuple[int, int, int] | None:
     thread.join()
     rgb, hex = thread.result
     return rgb
+
+
+def get_opposite_color(color: tuple[int, int, int]) -> tuple[int, int, int]:
+    r, g, b = color
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    return tuple(map(
+        lambda x: int(255 * x),
+        colorsys.hls_to_rgb(h+.5, .5, 1)))
 
 
 class Window:
@@ -97,15 +114,10 @@ class Window:
 
         self.hover_surfaces = {}
         for anchor, targets in self.anchors.items():
-            mask = numpy.zeros((*self.bitmap.shape[:2], 4), dtype=numpy.uint8)
+            alpha = numpy.zeros(self.bitmap.shape[:2], dtype=numpy.uint8)
             for i, j in targets:
-                mask[i,j] = (*RED, 255)
-            array = mask.transpose(1, 0, 2)
-            surf = pygame.Surface((854, 480), pygame.SRCALPHA)
-            pygame.pixelcopy.array_to_surface(surf, array[:,:,0:3])
-            surface_alpha = numpy.array(surf.get_view('A'), copy=False)
-            surface_alpha[:,:] = array[:,:,3]
-            self.hover_surfaces[anchor] = surf
+                alpha[i,j] = 255
+            self.hover_surfaces[anchor] = alpha.T
 
         self.anchors_ordered = [x[0] for x in sorted(self.anchors.items(), key=lambda x: -len(x[1]))]
         for anchor in self.anchors_ordered:
@@ -182,9 +194,13 @@ class Window:
 
         # Draw Over Panes
         if self.hovering is not None:
+            size = (self.mapping.shape[1], self.mapping.shape[0])
+            surf = pygame.Surface(size, pygame.SRCALPHA)
+            surf.fill(get_opposite_color(self.anchor_colors[self.hovering]), (0, 0, *size))
+            numpy.array(surf.get_view('A'), copy=False)[:,:] = self.hover_surfaces[self.hovering]
             self.window.blit(
                 pygame.transform.scale(
-                    self.hover_surfaces[self.hovering],
+                    surf,
                     (self.surface_width, self.surface_height)),
                 (self.surface_width + 2 * self.padding, paney))
             pygame.draw.rect(self.window, RED, (
