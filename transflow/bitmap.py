@@ -54,7 +54,7 @@ class BitmapSource:
                 case "cnoise":
                     return ColoredNoiseBitmapSource(width, height, seed)
                 case "gradient":
-                    return GradientNoiseBitmapSource(width, height, seed)
+                    return GradientBitmapSource(width, height, seed)
                 case _:
                     raise ValueError(f"Unknown bitmap source '{stillm.group(1)}'")
         elif os.path.isfile(path) and ext in {".jpg", ".jpeg", ".png"}:
@@ -129,76 +129,80 @@ class ColoredNoiseBitmapSource(StillBitmapSource):
         return numpy.random.randint(0, 256, size=(self.height, self.width, 3), dtype=numpy.uint8)
 
 
-class GradientNoiseBitmapSource(StillBitmapSource):
+class GradientBitmapSource(StillBitmapSource):
 
-    CHAIKIN_ITERATIONS = 3
-    BLOB_COUNT = 3
-    SX = 300
-    SY = 300
-    MIN_POINTS = 3
-    MAX_POINTS = 6
+    NODE_I = 0
+    NODE_J = 1
+    NODE_RGB = 2
+    NODE_MIX = 3
+    NODE_TRIPLE = 4
+    NODE_Z = 5
+    NODE_B = 6
 
-    @staticmethod
-    def fig2rgb_array(fig):
-        """adapted from: https://stackoverflow.com/questions/21939658/"""
-        fig.canvas.draw()
-        buf = fig.canvas.tostring_rgb()
-        ncols, nrows = fig.canvas.get_width_height()
-        return numpy.frombuffer(buf, dtype=numpy.uint8).reshape(nrows, ncols, 3)
-
-    def _generate_blob(self):
-        import scipy.spatial
-        cx = random.random() * self.width
-        cy = random.random() * self.height
-        points = []
-        for _ in range(random.randint(self.MIN_POINTS, self.MAX_POINTS)):
-            px = random.normalvariate(cx, self.SX)
-            py = random.normalvariate(cy, self.SY)
-            points.append((px, py))
-        array = numpy.array(points)
-        hull = scipy.spatial.ConvexHull(array)
-        ipoints = array[hull.vertices].tolist()
-        ipoints.append(points[hull.vertices[0]])
-        for _ in range(self.CHAIKIN_ITERATIONS):
-            jpoints = []
-            for a, b in zip(ipoints, ipoints[1:]):
-                ab = [b[0] - a[0], b[1] - a[1]]
-                jpoints.append((a[0] + .25 * ab[0], a[1] + .25 * ab[1]))
-                jpoints.append((a[0] + .75 * ab[0], a[1] + .75 * ab[1]))
-            ipoints = jpoints[:]
-        kpoints = [ipoints[-1], points[hull.vertices[0]], ipoints[0]]
-        for _ in range(self.CHAIKIN_ITERATIONS):
-            jpoints = [kpoints[0]]
-            for a, b in zip(kpoints, kpoints[1:]):
-                ab = [b[0] - a[0], b[1] - a[1]]
-                jpoints.append((a[0] + .25 * ab[0], a[1] + .25 * ab[1]))
-                jpoints.append((a[0] + .75 * ab[0], a[1] + .75 * ab[1]))
-            kpoints = jpoints[:] + [kpoints[-1]]
-        return ipoints + kpoints
+    def generate(self, node_type: int, depth: int) -> tuple:
+        if depth <= 0 and node_type != self.NODE_Z:
+            return self.generate(self.NODE_Z, 0)
+        if node_type in [self.NODE_TRIPLE, self.NODE_MIX]:
+            return (
+                node_type,
+                self.generate(self.NODE_B, depth - 1),
+                self.generate(self.NODE_B, depth - 1),
+                self.generate(self.NODE_B, depth - 1)
+            )
+        elif node_type == self.NODE_B:
+            if random.random() < .25:
+                return self.generate(self.NODE_Z, depth - 1)
+            return self.generate(self.NODE_MIX, depth - 1)
+        elif node_type == self.NODE_Z:
+            x = random.random() 
+            if x < .333:
+                return (self.NODE_I, None, None, None)
+            elif x < .666:
+                return (self.NODE_J, None, None, None)
+            return (
+                self.NODE_RGB,
+                random.random() * 2 - 1,
+                random.random() * 2 - 1,
+                random.random() * 2 - 1)
+    
+    def evaluate(self, tree: tuple, i: int, j: int) -> tuple[float, float, float]:
+        nt, a, b, c = tree
+        if nt == self.NODE_TRIPLE:
+            return (
+                self.evaluate(a, i, j)[0],
+                self.evaluate(b, i, j)[1],
+                self.evaluate(c, i, j)[2])
+        if nt == self.NODE_MIX:
+            out = [0, 0, 0]
+            evals = [
+                self.evaluate(a, i, j),
+                self.evaluate(b, i, j),
+                self.evaluate(c, i, j)]
+            for k in range(3):
+                w = (1 + evals[0][k]) / 2
+                out[k] = (1 - w) * evals[1][k] + w * evals[2][k]
+            return out
+        if nt == self.NODE_RGB:
+            return (a, b, c)
+        if nt == self.NODE_I:
+            z = 2 * (i / (self.height - 1)) - 1
+            return (z, z, z)
+        if nt == self.NODE_J:
+            z = 2 * (j / (self.width - 1)) - 1
+            return (z, z, z)
+        return NotImplementedError(f"Unknown node type {nt}")
 
     def _init_array(self):
-        import matplotlib.pyplot, scipy.ndimage
-        numpy.random.seed(self.seed)
         random.seed(self.seed)
+        tree = self.generate(self.NODE_TRIPLE, 5)
         array = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
-        array[:,:] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        for _ in range(self.BLOB_COUNT):
-            blob = self._generate_blob()
-            fig = matplotlib.pyplot.figure(figsize=(self.width/72, self.height/72), dpi=72)
-            ax = fig.gca()
-            ax.set_axis_off()
-            matplotlib.pyplot.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
-            matplotlib.pyplot.margins(0, 0)
-            ax.set_xlim(0, self.width - 1)
-            ax.set_ylim(0, self.height - 1)
-            ax.imshow(array, aspect="equal", origin="lower")
-            ax.fill(
-                [p[0] for p in blob], [p[1] for p in blob],
-                color=(random.random(), random.random(), random.random(), 1))
-            array = scipy.ndimage.gaussian_filter(self.fig2rgb_array(fig), sigma=(31, 31, 0))
-            matplotlib.pyplot.close()
-        noise = numpy.sqrt(numpy.random.random((self.height, self.width, 1)))
-        return (noise * array).astype(numpy.uint8)
+        for i in range(self.height):
+            for j in range(self.width):
+                r, g, b = self.evaluate(tree, i, j)
+                array[i, j, 0] = 255 * (r + 1) / 2
+                array[i, j, 1] = 255 * (g + 1) / 2
+                array[i, j, 2] = 255 * (b + 1) / 2
+        return array.astype(numpy.uint8)
 
 
 class ImageBitmapSource(StillBitmapSource):
