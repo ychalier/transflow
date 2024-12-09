@@ -168,11 +168,13 @@ def transfer(
         render_colors: str | None = None,
         render_binary: bool = False,
         checkpoint_every: int | None = None,
+        checkpoint_end: bool = False,
         safe: bool = True,
         seed: int | None = None,
         seek_time: float | None = None,
         bitmap_seek_time: float | None = None,
-        duration_time: float | None = None):
+        duration_time: float | None = None,
+        bitmap_alteration_path: str | None = None):
 
     if safe:
         append_history()
@@ -247,7 +249,7 @@ def transfer(
         has_output = output_bitmap or output_intensity or output_heatmap\
             or output_accumulator
 
-        if not (has_output or export_flow):
+        if not (has_output or export_flow or checkpoint_end):
             warnings.warn("No output or exportation selected")
 
         if size is not None:
@@ -314,7 +316,8 @@ def transfer(
         if output_bitmap:
             bitmap_source = BitmapSource.from_args(
                 bitmap_path, size, seek=ckpt_meta.get("cursor"), seed=seed,
-                seek_time=bitmap_seek_time)
+                seek_time=bitmap_seek_time,
+                alteration_path=bitmap_alteration_path)
             bitmap_queue = multiprocessing.Queue(maxsize=1)
             bitmap_process = SourceProcess(bitmap_source, bitmap_queue, shape_queue)
             bitmap_process.start()
@@ -323,6 +326,8 @@ def transfer(
             if fs_width != bs_width or fs_height != bs_height:
                 raise ValueError(f"Resolutions do not match: flow is {fs_width}x{fs_height} "\
                                  f"while bitmap is {bs_width}x{bs_height}.")
+        elif bitmap_alteration_path is not None:
+            warnings.warn("An alteration path was passed but no bitmap was provided")
 
         shape_queue.close()
 
@@ -400,7 +405,7 @@ def transfer(
                 traceback.print_exc()
                 break
         pbar.close()
-        if exception and safe:
+        if (exception and safe) or checkpoint_end:
             export_checkpoint(flow_path, bitmap_path, output_path, replace,
                               cursor, accumulator, seed)
         close()

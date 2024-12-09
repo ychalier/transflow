@@ -68,7 +68,10 @@ This repository also contains two other versions of this program:
 - in the [cpp](cpp) folder, a C++ version using OpenCV to transfer the flow from one webcam to another,
 - in the [www](www) folder, a WebGL version that emulates the effect in a web browser; a version is hosted on [chalier.fr/transflow](https://chalier.fr/transflow/).
 
-There is also another module, [viewflow](viewflow), for visualizing and inspecting optical flow in a video player setting.
+There are also other modules:
+
+- [viewflow](viewflow), for visualizing and inspecting optical flow in a video player setting,
+- [control](control.py), for generating alteration images (see [Bitmap Alteration](USAGE.md#bitmap-alteration)). 
 
 ## Contributing
 

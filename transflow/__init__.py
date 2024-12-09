@@ -43,6 +43,9 @@ def main():
         type=str, default=None,
         help="output path: if provided, path to export the output video (as "\
             "an MP4 file) ; otherwise, opens a temporary display window")
+    parser.add_argument("-ba", "--bitmap-alteration",
+        type=str, default=None,
+        help="path to a PNG file containing alteration to apply to bitmaps")
     parser.add_argument("-ef", "--export-flow",
         action="store_true",
         help="export computed flow to a file")
@@ -139,6 +142,9 @@ def main():
     parser.add_argument("-ce", "--checkpoint-every",
         type=int, default=None,
         help="export checkpoint every X frame")
+    parser.add_argument("-cd", "--checkpoint-end",
+        action="store_true",
+        help="export checkpoint at the last frame")
     parser.add_argument("-s", "--safe",
         action="store_true",
         help="save a checkpoint when the program gets interrupted "\
@@ -199,8 +205,10 @@ def main():
         render_colors=args.render_colors,
         render_binary=args.render_binary,
         checkpoint_every=args.checkpoint_every,
+        checkpoint_end=args.checkpoint_end,
         safe=args.safe,
         seed=args.seed,
         seek_time=seek_time,
         bitmap_seek_time=parse_timestamp(args.bitmap_seek),
-        duration_time=duration_time)
+        duration_time=duration_time,
+        bitmap_alteration_path=args.bitmap_alteration)

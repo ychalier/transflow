@@ -19,6 +19,7 @@ This document provides details on how to use the `transflow` module for performi
 - [Resetting Accumulator](#resetting-accumulator)
 - [Generative Bitmap Sources](#generative-bitmap-sources)
 - [Webcam Sources](#webcam-sources)
+- [Bitmap Alteration](#bitmap-alteration)
 - [Live Visualization](#live-visualization)
 - [Interrupting Processing](#interrupting-processing)
 - [Restart From Checkpoint](#restart-from-checkpoint)
@@ -295,6 +296,43 @@ transflow "dshow::video=Logitech Webcam C930e" -sz 1280x720 -mv -oi
 >    transflow v4l2::/dev/video4 -sz 1280x720 -mv -oi
 >    ```
 
+## Bitmap Alteration
+
+Altering the bitmap is a way to control how the output will look if the flow has the *expansion property*, ie. some pixels grow into regions that eventually covers large areas of the original bitmap. For instances, a video of a body of water in motion will drastically decrease the number of independent pixels. This means that forcing the color of those pixels will impact the whole output while only imperceptibly alter the input.
+
+You can specify an alteration image with the `-ba, --bitmap-alteration` argument. It takes a path to a PNG file. This image should be transparent (alpha channel set to 0) for pixels that should not be touched. Non-transparent pixels will be pasted onto the bitmap. For video bitmaps, the same alteration is applied on all frames.
+
+In order to know in advance which pixels to alter, you may use the [control.py](control.py) script:
+
+1. First, use Transflow with the `-cd` flag to generate a mapping checkpoint (see [Restart From Checkpoint](#restart-from-checkpoint)).
+    ```console
+    transflow flow.mp4 -cd
+    ```
+2. Then, call the [control.py](control.py) script and pass the checkpoint as argument. If you already know which bitmap image you're using, you might want to pass it as well.
+    ```console
+    python control.py flow_12345.ckpt.zip image.jpg
+    ```
+3. Edit the color of some sources and export the alteration image by hitting Ctrl+S (more details below).
+4. Use Transflow again and specify the bitmap alteration argument.
+    ```console
+    transflow flow.mp4 -b image.jpg -ba flow_12345_1730000000000.png
+    ```
+
+
+In the [control.py](control.py) GUI, you see pixel sources in the header, ordered by their target area, decreasing: this means the first (top left) source covers the most area. Hovering on it highlights its target zone. Clicking on it opens a color picker to edit its color. Other bindings:
+- Left click: change color
+- Right click: reset color (can be held down)
+- Ctrl+R: reset all colors
+- Ctrl+C: store the color currently pointed at in the buffer
+- Ctrl+V: apply the buffered color to the region pointed at (can be held down)
+- Ctrl+S: export alteration input as PNG
+
+> [!NOTE]
+> Currently, this script only works with the Mapping Accumulator (see [Accumulation Methods](#accumulation-methods)). Also, if the loaded accumulator contains too many sources, the least important ones are ignored for better performances. This can be controlled with the `-m, --max-sources-display` argument.
+
+> [!WARNING]
+> This script is a hacky tool and may (will) not work in some contexts. Feel free to improve it and share your code!
+
 ## Live Visualization
 
 If the `-o` argument is omitted, ie. no output file is provided, a window will show processed frames as they are produced. The window can be closed by pressing the ESC key. This allows for checking an output before going all-in on a one hour render.
@@ -307,9 +345,10 @@ If you set the `-s, --safe` flag, interrupting the processing will create a chec
 
 ## Restart From Checkpoint
 
-Checkpoints allows for resuming computation at a given frame. It contains the accumulator data at the frame it was exported at. This helps for lengthy processings or for handling errors. There are two ways of creating checkpoints: 
+Checkpoints allows for resuming computation at a given frame. It contains the accumulator data at the frame it was exported at. This helps for lengthy processings or for handling errors. There are three ways of creating checkpoints: 
 
 - You can specify a frame interval with the `-ce, --checkpoint-every` argument at which exporting a checkpoint file (with `.ckpt.zip` extension).
+- You can export a checkpoint for the last frame by setting the `-cd, --checkpoint-end` argument. This can be used with the control script (TODO: add reference!)
 - They can be automatically created with an interruption or error occurs if the `-s, --safe` flag is set (see [Interrupint Processing](#interrupting-processing) section).
 
 Checkpoints files be passed as flow sources, as they contain data about which flow source was used and where to restart computation. Arguments must be passed again to resume computation in the exact same settings.

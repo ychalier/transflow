@@ -11,10 +11,12 @@ from .utils import parse_hex_color
 
 class BitmapSource:
 
-    def __init__(self):
+    def __init__(self, alteration_path: str | None):
+        self.alteration_path: str | None = alteration_path
         self.width: int = None
         self.height: int = None
         self.framerate: int | None = None
+        self.alteration: tuple[list[int], list[int]] | None = None
 
     def __enter__(self) -> typing.Self:
         return self
@@ -28,10 +30,36 @@ class BitmapSource:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         pass
 
+    def load_alteration(self):
+        if self.alteration_path is None:
+            return
+        import PIL.Image
+        image = numpy.array(PIL.Image.open(self.alteration_path))
+        inds = []
+        vals = []
+        for i in range(image.shape[0]):
+            for j in range(image.shape[1]):
+                if image[i, j, 3] == 0:
+                    continue
+                k = (i * self.width + j) * 3
+                inds += [k, k + 1, k + 2]
+                vals += image[i, j, :3].tolist()
+        self.alteration = (inds, vals)
+            
+    def setup(self):
+        self.load_alteration()
+
+    def alter(self, array: numpy.ndarray) -> numpy.ndarray:
+        if self.alteration is None:
+            return array
+        numpy.put(array, self.alteration[0], self.alteration[1])
+        return array
+
     @classmethod
     def from_args(cls, path: str, size: tuple[int, int] | None = None,
                   seek: int | None = None, seed: int | None = None,
-                  seek_time: float | None = None):
+                  seek_time: float | None = None,
+                  alteration_path: str | None = None):
         ext = os.path.splitext(path)[1]
         stillm = re.match(r"(color|noise|bwnoise|cnoise|gradient|#?[0-9a-f]{6})(:\d+:\d+)?",
                           path.lower().strip())
@@ -44,30 +72,30 @@ class BitmapSource:
                 raise ValueError(f"Please specify a resolution with {stillm.group(1)}:width:height")
             match stillm.group(1):
                 case "color":
-                    return ColorBitmapSource(width, height, seed=seed)
+                    return ColorBitmapSource(width, height, seed=seed, alteration_path=alteration_path)
                 case _ if re.match(r"#?[0-9a-f]{6}", stillm.group(1)):
-                    return ColorBitmapSource(width, height, stillm.group(1), seed=seed)
+                    return ColorBitmapSource(width, height, stillm.group(1), seed=seed, alteration_path=alteration_path)
                 case "noise":
-                    return NoiseBitmapSource(width, height, seed)
+                    return NoiseBitmapSource(width, height, seed, alteration_path)
                 case "bwnoise":
-                    return BwNoiseBitmapSource(width, height, seed)
+                    return BwNoiseBitmapSource(width, height, seed, alteration_path)
                 case "cnoise":
-                    return ColoredNoiseBitmapSource(width, height, seed)
+                    return ColoredNoiseBitmapSource(width, height, seed, alteration_path)
                 case "gradient":
                     return GradientBitmapSource(width, height, seed)
                 case _:
                     raise ValueError(f"Unknown bitmap source '{stillm.group(1)}'")
         elif os.path.isfile(path) and ext in {".jpg", ".jpeg", ".png"}:
-            return ImageBitmapSource(path)
+            return ImageBitmapSource(path, alteration_path)
         else:
-            return CvBitmapSource(path, seek, seek_time)
+            return CvBitmapSource(path, seek, seek_time, alteration_path)
 
 
 class StillBitmapSource(BitmapSource):
 
     def __init__(self, width: int | None = None, height: int | None = None,
-                 seed: int | None = None):
-        BitmapSource.__init__(self)
+                 seed: int | None = None, alteration_path: str | None = None):
+        BitmapSource.__init__(self, alteration_path)
         self.width = width
         self.height = height
         self.seed = seed
@@ -80,18 +108,19 @@ class StillBitmapSource(BitmapSource):
         self.array = self._init_array()
         self.width = self.array.shape[1]
         self.height = self.array.shape[0]
+        self.setup()
         return self
 
     def __next__(self) -> numpy.ndarray:
         assert self.array is not None
-        return self.array.copy()
+        return self.alter(self.array.copy())
 
 
 class ColorBitmapSource(StillBitmapSource):
 
     def __init__(self, width: int, height: int, bitmap_color: str | None = None,
-                 seed: int | None = None):
-        StillBitmapSource.__init__(self, width, height, seed)
+                 seed: int | None = None, alteration_path: str | None = None):
+        StillBitmapSource.__init__(self, width, height, seed, alteration_path)
         self.bitmap_color = bitmap_color
 
     def _init_array(self):
@@ -207,8 +236,8 @@ class GradientBitmapSource(StillBitmapSource):
 
 class ImageBitmapSource(StillBitmapSource):
 
-    def __init__(self, path: str):
-        StillBitmapSource.__init__(self)
+    def __init__(self, path: str, alteration_path: str | None = None):
+        StillBitmapSource.__init__(self, alteration_path=alteration_path)
         self.path = path
 
     def _init_array(self):
@@ -222,8 +251,9 @@ class ImageBitmapSource(StillBitmapSource):
 class CvBitmapSource(BitmapSource):
 
     def __init__(self, path: str, seek: int | None = None,
-                 seek_time: float | None = None):
-        BitmapSource.__init__(self)
+                 seek_time: float | None = None,
+                 alteration_path: str | None = None):
+        BitmapSource.__init__(self, alteration_path)
         self.path = path
         self.capture = None
         self.seek = seek
@@ -239,6 +269,7 @@ class CvBitmapSource(BitmapSource):
         if self.seek is not None:
             for _ in range(self.seek):
                 self.capture.read()
+        self.setup()
         return self
 
     def __next__(self) -> numpy.ndarray:
@@ -248,7 +279,7 @@ class CvBitmapSource(BitmapSource):
         success, frame = self.capture.read()
         if not success or frame is None:
             raise StopIteration
-        return numpy.array(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        return self.alter(numpy.array(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.capture.release()
