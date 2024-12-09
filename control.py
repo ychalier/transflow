@@ -7,16 +7,19 @@ Bindings:
 - Ctrl+R: reset all colors
 - Ctrl+C: store the color currently pointed at in the buffer
 - Ctrl+V: apply the buffered color to the region pointed at (can be held down)
-- Ctrl+S: export altered input as PNG
+- Ctrl+S: export alteration input as PNG
 """
 import argparse
 import colorsys
+import json
 import math
 import os
 import pickle
 import threading
 import time
+import tkinter
 import tkinter.colorchooser
+import warnings
 import zipfile
 
 import numpy
@@ -34,7 +37,7 @@ BORDER_COLOR = (0, 0, 0)
 BACKGROUND_COLOR = (32, 32, 32)
 
 
-def askcolor(base_color: tuple[int, int, int]) -> tuple[int, int, int] | None:
+def ask_color(base_color: tuple[int, int, int]) -> tuple[int, int, int] | None:
     """For some reason, opening/closing the color picker from the main thread
     randomly kills the main window. Doing it in a dedicated thread seems to fix
     this, though I do not understand why.
@@ -53,6 +56,32 @@ def askcolor(base_color: tuple[int, int, int]) -> tuple[int, int, int] | None:
     return rgb
 
 
+def ask_export_format() -> bool:
+    """
+    @return True if all sources should be exported
+    """
+    window = tkinter.Tk()
+    window.title("Export")
+    label = tkinter.Label(
+        window,
+        text="Some sources still have their defaults colors."\
+            "\nChoose what to export.")
+    label.grid(column=0, row=0, columnspan=2)
+    vars = {}
+    def click_changes():
+        vars["choice"] = False
+        window.destroy()
+    def click_all():
+        vars["choice"] = True
+        window.destroy()
+    tkinter.Button(window, text="Changes only", command=click_changes)\
+        .grid(column=0, row=1)
+    tkinter.Button(window, text="All", command=click_all)\
+        .grid(column=1, row=1)
+    window.mainloop()
+    return vars.get("choice")
+
+
 def get_opposite_color(color: tuple[int, int, int]) -> tuple[int, int, int]:
     r, g, b = color
     h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
@@ -63,10 +92,13 @@ def get_opposite_color(color: tuple[int, int, int]) -> tuple[int, int, int]:
 
 class Window:
 
-    def __init__(self,width: int, ckpt_path: str, bitmap_path: str):
+    def __init__(self, width: int, ckpt_path: str, bitmap_path: str | None,
+                 max_sources_display: int = 264):
 
         self.ckpt_path = ckpt_path
         self.bitmap_path = bitmap_path
+        self.flow_path = None
+        self.cursor = None
 
         pygame.init()
         self.window = None
@@ -74,14 +106,16 @@ class Window:
         self.height = None
         self.font12 = pygame.font.SysFont("Consolas", 12)
 
+        self.w = None
+        self.h = None
         self.mapping = None
         self.bitmap = None
-        self.anchors = None
-        self.hover_surfaces = None
-        self.anchors_ordered = None
-        self.hovering = None
-        self.anchor_colors = {}
-        self.default_anchor_colors = {}
+        self.targets = None
+        self.masks = None
+        self.sources = None
+        self.colors = {}
+        self.hovered = None
+        self.default_colors = {}
         self.buffer = WHITE
         self.is_v_down = False
 
@@ -89,128 +123,159 @@ class Window:
         self.border_width = 1
         self.square_size = 16
         self.square_padding = 2
-        self.anchors_per_row = None
-        self.height_anchors = None
+        self.sources_per_row = None
+        self.height_sources = None
+        self.max_sources_display = max_sources_display
 
     def load(self):
+
+        # Load mapping
         with zipfile.ZipFile(self.ckpt_path) as archive:
+            with archive.open("meta.json") as file:
+                meta = json.load(file)
+                self.flow_path = meta["flow_path"]
+                self.cursor = meta["cursor"]
             with archive.open("accumulator.bin") as file:
-                accumulator = pickle.load(file)
-        if not isinstance(accumulator, MappingAccumulator):
+                acc = pickle.load(file)
+        if not isinstance(acc, MappingAccumulator):
             raise ValueError("Checkpoint must contain an accumulator of type"\
-                            f"MappingAccumulator, not {type(accumulator)}")
+                            f"MappingAccumulator, not {type(acc)}")
         self.mapping = numpy.concatenate(
-            [accumulator.mapx[:,:,numpy.newaxis],
-             accumulator.mapy[:,:,numpy.newaxis]],
+            [acc.mapx[:,:,numpy.newaxis], acc.mapy[:,:,numpy.newaxis]],
             axis=2).astype(int)
-        self.anchors = {}
-        for i in range(self.mapping.shape[0]):
-            for j in range(self.mapping.shape[1]):
-                anchor = (self.mapping[i][j][1], self.mapping[i][j][0])
-                self.anchors.setdefault(anchor, [])
-                self.anchors[anchor].append((i, j))
-        print("Found", len(self.anchors), "anchors")
-        self.bitmap = numpy.array(PIL.Image.open(self.bitmap_path))
+        self.h = self.mapping.shape[0]
+        self.w = self.mapping.shape[1]
 
-        self.hover_surfaces = {}
-        for anchor, targets in self.anchors.items():
-            alpha = numpy.zeros(self.bitmap.shape[:2], dtype=numpy.uint8)
+        # Identify sources
+        self.targets = {}
+        for i in range(self.h):
+            for j in range(self.w):
+                source = (self.mapping[i][j][1], self.mapping[i][j][0])
+                self.targets.setdefault(source, [])
+                self.targets[source].append((i, j))
+        if len(self.targets) > self.max_sources_display:
+            warnings.warn(f"Found too many sources! ({len(self.targets)})")
+
+        # Selecting sources
+        sorted_targets = sorted(self.targets.items(), key=lambda x: -len(x[1]))
+        self.sources = [x[0] for x in sorted_targets][:self.max_sources_display]
+
+        # Building masks
+        self.masks = {}
+        for source in self.sources:
+            targets = self.targets[source]
+            alpha = numpy.zeros((self.w, self.h), dtype=numpy.uint8)
             for i, j in targets:
-                alpha[i,j] = 255
-            self.hover_surfaces[anchor] = alpha.T
+                alpha[j,i] = 255
+            self.masks[source] = alpha
 
-        self.anchors_ordered = [x[0] for x in sorted(self.anchors.items(), key=lambda x: -len(x[1]))]
-        for anchor in self.anchors_ordered:
-            self.default_anchor_colors[anchor] = tuple(self.bitmap[anchor[0], anchor[1]].tolist())
-            self.anchor_colors[anchor] = self.default_anchor_colors[anchor]
+        # Loading or generating bitmap
+        if self.bitmap_path is not None:
+            self.bitmap = numpy.array(PIL.Image.open(self.bitmap_path))[:,:,:3]
+        else:
+            self.bitmap = numpy.random.randint(0, 255, (*self.mapping.shape[:2], 3))
+
+        # Collecting colors
+        for source in self.sources:
+            color = tuple(self.bitmap[source[0], source[1]].tolist())
+            self.default_colors[source] = color
+            self.colors[source] = color
 
     def __enter__(self):
         self.load()
 
-        self.height_panes = self.mapping.shape[0] * ((self.width - 3 * self.padding) // 2) / self.mapping.shape[1]
-        self.anchors_per_row = (self.width - self.padding) // (self.square_size + self.square_padding)
-        self.height_anchors = (self.square_size + self.square_padding) * math.ceil(len(self.anchors) / self.anchors_per_row)
+        self.height_panes =\
+            self.h * ((self.width - 3 * self.padding) // 2) / self.w
+        self.sources_per_row =\
+            (self.width - self.padding)\
+            // (self.square_size + self.square_padding)
+        self.height_sources =\
+            (self.square_size + self.square_padding)\
+            * math.ceil(len(self.sources) / self.sources_per_row)
         self.height_footer = self.square_size
-        self.height = 4 * self.padding + self.height_panes + self.height_anchors + self.height_footer
+        self.height =\
+            4 * self.padding\
+            + self.height_panes + self.height_sources + self.height_footer
 
-        self.surface_width = (self.width - 3 * self.padding) // 2
-        self.surface_height = self.surface_width * 9 // 16
+        self.surfw = (self.width - 3 * self.padding) // 2
+        self.surfh = self.surfw * 9 // 16
 
-        self.window = pygame.display.set_mode(
-            (self.width, self.height))
+        self.window = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption(os.path.basename(self.ckpt_path))
 
     def draw(self):
         self.window.fill(BACKGROUND_COLOR)
 
-        # Draw Anchors
-        anchor_x = anchor_y = self.padding
-        for anchor in self.anchors_ordered:
-            if anchor == self.hovering:
+        # Draw Sources
+        src_x = src_y = self.padding
+        for source in self.sources:
+            if source == self.hovered:
                 self.window.fill(RED, (
-                    anchor_x - self.border_width,
-                    anchor_y - self.border_width,
+                    src_x - self.border_width,
+                    src_y - self.border_width,
                     self.square_size + 2 * self.border_width,
                     self.square_size + 2 * self.border_width
                 ))
-            self.window.fill(self.anchor_colors[anchor], (
-                anchor_x,
-                anchor_y,
+            self.window.fill(self.colors[source], (
+                src_x,
+                src_y,
                 self.square_size,
                 self.square_size))
-            anchor_x += self.square_size + self.square_padding
-            if anchor_x + self.square_size > self.width - self.padding:
-                anchor_x = self.padding
-                anchor_y += self.square_size + self.square_padding
-        
+            src_x += self.square_size + self.square_padding
+            if src_x + self.square_size > self.width - self.padding:
+                src_x = self.padding
+                src_y += self.square_size + self.square_padding
+
         # Draw Panes
+        paney = self.height_sources + 2 * self.padding
+
+        # Draw Left Pane
         altered_bitmap = numpy.copy(self.bitmap)
-        for anchor, color in self.anchor_colors.items():
-            altered_bitmap[*anchor] = color
+        for source, color in self.colors.items():
+            altered_bitmap[*source] = color
         bitmap_surface = pygame.transform.scale(
             pygame.surfarray.make_surface(altered_bitmap.transpose(1, 0, 2)),
-            (self.surface_width, self.surface_height))
-        output = altered_bitmap[self.mapping[:,:,1], self.mapping[:,:,0], :]
-        output_surface = pygame.transform.scale(
-            pygame.surfarray.make_surface(output.transpose(1, 0, 2)),
-            (self.surface_width, self.surface_height))
-        paney = self.height_anchors + 2 * self.padding
+            (self.surfw, self.surfh))
         self.window.fill(BORDER_COLOR, (
             self.padding - self.border_width,
             paney - self.border_width,
-            self.surface_width + 2 * self.border_width,
-            self.surface_height + 2 * self.border_width))
+            self.surfw + 2 * self.border_width,
+            self.surfh + 2 * self.border_width))
+        self.window.blit(bitmap_surface, (self.padding, paney))
+
+        # Draw Right Pane
+        output = altered_bitmap[self.mapping[:,:,1], self.mapping[:,:,0], :]
+        output_surface = pygame.transform.scale(
+            pygame.surfarray.make_surface(output.transpose(1, 0, 2)),
+            (self.surfw, self.surfh))
         self.window.fill(BORDER_COLOR, (
-            self.surface_width + 2 * self.padding - self.border_width,
+            self.surfw + 2 * self.padding - self.border_width,
             paney - self.border_width,
-            self.surface_width + 2 * self.border_width,
-            self.surface_height + 2 * self.border_width))
-        self.window.blit(bitmap_surface, (
-            self.padding,
-            paney))
-        self.window.blit(output_surface, (
-            self.surface_width + 2 * self.padding,
-            paney))
+            self.surfw + 2 * self.border_width,
+            self.surfh + 2 * self.border_width))
+        self.window.blit(output_surface, (self.surfw + 2 * self.padding, paney))
 
         # Draw Over Panes
-        if self.hovering is not None:
-            size = (self.mapping.shape[1], self.mapping.shape[0])
-            surf = pygame.Surface(size, pygame.SRCALPHA)
-            surf.fill(get_opposite_color(self.anchor_colors[self.hovering]), (0, 0, *size))
-            numpy.array(surf.get_view('A'), copy=False)[:,:] = self.hover_surfaces[self.hovering]
+        if self.hovered is not None:
+            surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            surf.fill(
+                get_opposite_color(self.colors[self.hovered]),
+                (0, 0, self.w, self.h))
+            numpy.array(surf.get_view('A'), copy=False)[:,:] =\
+                self.masks[self.hovered]
             self.window.blit(
                 pygame.transform.scale(
                     surf,
-                    (self.surface_width, self.surface_height)),
-                (self.surface_width + 2 * self.padding, paney))
+                    (self.surfw, self.surfh)),
+                (self.surfw + 2 * self.padding, paney))
             pygame.draw.rect(self.window, RED, (
-                (self.hovering[1] - 1) / self.mapping.shape[1] * self.surface_width + self.padding,
-                paney + (self.hovering[0] - 1) / self.mapping.shape[0] * self.surface_height,
-                5 * self.mapping.shape[1] / self.surface_width,
-                5 * self.mapping.shape[0] / self.surface_height), 1)
-            
+                (self.hovered[1] - 1) / self.w * self.surfw + self.padding,
+                paney + (self.hovered[0] - 1) / self.h * self.surfh,
+                5 * self.w / self.surfw,
+                5 * self.h / self.surfh), 1)
+
         # Draw Footer
-        footery = self.height_anchors + self.height_panes + 3 * self.padding
+        footery = self.height_sources + self.height_panes + 3 * self.padding
         self.window.fill(self.buffer, (
             self.padding,
             footery,
@@ -218,17 +283,17 @@ class Window:
             self.square_size))
         self.draw_hovered_color()
 
-        if self.hovering is not None:
-            area = len(self.anchors[self.hovering]) / self.mapping.shape[0] / self.mapping.shape[1]
+        if self.hovered is not None:
+            area = len(self.targets[self.hovered]) / self.h / self.w
             surface = self.font12.render(
-                f"Anchor at ({self.hovering[1]}, {self.hovering[0]}),"\
-                    f" {len(self.anchors[self.hovering])}px"\
+                f"Source at ({self.hovered[1]}, {self.hovered[0]}),"\
+                    f" {len(self.targets[self.hovered])}px"\
                     f" ({int(100 * area)}% area),"\
-                    f" rgb{self.anchor_colors[self.hovering]}",
+                    f" rgb{self.colors[self.hovered]}",
                 True, WHITE, BACKGROUND_COLOR)
-            w = surface.get_width()
-            h = surface.get_height()
-            self.window.blit(surface, (self.width - w - self.padding, footery + self.square_size - h))
+            self.window.blit(surface, (
+                self.width - surface.get_width() - self.padding,
+                footery + self.square_size - surface.get_height()))
 
         pygame.display.flip()
 
@@ -239,50 +304,68 @@ class Window:
     def draw_hovered_color(self, flip=False):
         self.window.fill(self.get_hovered_color(), (
             self.padding + self.square_padding + self.square_size,
-            self.height_anchors + self.height_panes + 3 * self.padding,
+            self.height_sources + self.height_panes + 3 * self.padding,
             self.square_size,
             self.square_size))
         if flip:
             pygame.display.flip()
 
-    def get_anchor(self, x: int, y: int) -> tuple[int, int] | None:
+    def get_source(self, x: int, y: int) -> tuple[int, int] | None:
         if x > self.padding and x < self.width - self.padding\
-            and y > self.padding and y < self.padding + self.height_anchors:
+            and y > self.padding and y < self.padding + self.height_sources:
             i = (y - self.padding) // (self.square_size + self.square_padding)
             j = (x - self.padding) // (self.square_size + self.square_padding)
-            k = i * self.anchors_per_row + j
-            if k < len(self.anchors_ordered):
-                return self.anchors_ordered[k]
-        return self.get_anchor_from_output(x, y)
-
-    def get_anchor_from_output(self, x: int, y: int) -> tuple[int, int] | None:
-        if x < 2 * self.padding + self.surface_width:
+            k = i * self.sources_per_row + j
+            if k < len(self.sources):
+                return self.sources[k]
+        if x < 2 * self.padding + self.surfw:
             return None
-        if x > 2 * self.padding + 2 * self.surface_width:
+        if x > 2 * self.padding + 2 * self.surfw:
             return None
-        if y < self.height_anchors + 2 * self.padding:
+        if y < self.height_sources + 2 * self.padding:
             return None
         if y > self.height - self.padding:
             return None
-        x -= 2 * self.padding + self.surface_width
-        y -= self.height_anchors + 2 * self.padding
-        x *= self.mapping.shape[1] / self.surface_width
-        y *= self.mapping.shape[0] / self.surface_height
-        if int(y) >= self.mapping.shape[0] or int(x) >= self.mapping.shape[1]:
+        x -= 2 * self.padding + self.surfw
+        y -= self.height_sources + 2 * self.padding
+        x *= self.w / self.surfw
+        y *= self.h / self.surfh
+        if int(y) >= self.h or int(x) >= self.w:
             return None
-        return self.mapping[int(y), int(x), 1], self.mapping[int(y), int(x), 0]
+        source = (
+            self.mapping[int(y), int(x), 1],
+            self.mapping[int(y), int(x), 0])
+        if source in self.sources:
+            return source
+        return None
 
     def export(self):
-        f = lambda s: os.path.splitext(os.path.basename(s))[0]
-        filename = f"{f(self.bitmap_path)}_{f(self.ckpt_path)}_{int(1000*time.time())}.png"
-        altered_bitmap = numpy.copy(self.bitmap)
-        for anchor, color in self.anchor_colors.items():
-            altered_bitmap[*anchor] = color
-        PIL.Image.fromarray(altered_bitmap).save(filename)
-        print(f"Exported to {os.path.realpath(filename)}")
-    
-    def is_in_buffer(self, x: int, y: int) -> bool:
-        return x >= self.padding and x < self.padding + self.square_size and y >= self.height - self.padding - self.square_size and y <= self.height - self.padding
+        path = os.path.join(
+            os.path.dirname(self.ckpt_path),
+            os.path.splitext(os.path.basename(self.flow_path))[0]
+                + f"_{self.cursor:05d}_{int(1000*time.time())}.png")
+        has_default_color = False
+        for source in self.sources:
+            if self.colors[source] == self.default_colors[source]:
+                has_default_color = True
+                break
+        output_all = True
+        if has_default_color:
+            output_all = ask_export_format()
+        array = numpy.zeros((*self.mapping.shape[:2], 4), dtype=numpy.uint8)
+        for source in self.sources:
+            if not output_all\
+                and self.colors[source] == self.default_colors[source]:
+                continue
+            array[source[0], source[1]] = (*self.colors[source], 255)
+        PIL.Image.fromarray(array).save(path)
+        print(f"Exported to {path}")
+
+    def over_buffer(self, x: int, y: int) -> bool:
+        return x >= self.padding\
+            and x < self.padding + self.square_size\
+            and y >= self.height - self.padding - self.square_size\
+            and y <= self.height - self.padding
 
     def update(self) -> bool:
         should_draw = False
@@ -292,19 +375,22 @@ class Window:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
-                elif event.key == pygame.K_s and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                elif event.key == pygame.K_s\
+                    and pygame.key.get_mods() & pygame.KMOD_CTRL:
                     self.export()
-                elif event.key == pygame.K_c and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                elif event.key == pygame.K_c\
+                    and pygame.key.get_mods() & pygame.KMOD_CTRL:
                     self.buffer = self.get_hovered_color()
                     should_draw = True
                 elif event.key == pygame.K_v:
                     self.is_v_down = True
-                    if pygame.key.get_mods() & pygame.KMOD_CTRL and self.hovering is not None:
-                        self.anchor_colors[self.hovering] = self.buffer
+                    if pygame.key.get_mods() & pygame.KMOD_CTRL\
+                        and self.hovered is not None:
+                        self.colors[self.hovered] = self.buffer
                         should_draw = True
                 elif event.key == pygame.K_r:
-                    for anchor, color in self.default_anchor_colors.items():
-                        self.anchor_colors[anchor] = color
+                    for source, color in self.default_colors.items():
+                        self.colors[source] = color
                     should_draw = True
             elif event.type == pygame.KEYUP:
                 if event.key == pygame.K_v:
@@ -313,31 +399,32 @@ class Window:
                     self.is_ctrl_down = False
             elif event.type == pygame.MOUSEMOTION:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
-                new_hovering = self.get_anchor(mouse_x, mouse_y)
-                if new_hovering != self.hovering:
-                    if new_hovering is not None:
+                hn = self.get_source(mouse_x, mouse_y)
+                if hn != self.hovered:
+                    if hn is not None:
                         if pygame.mouse.get_pressed()[2]:
-                            self.anchor_colors[new_hovering] = self.default_anchor_colors[new_hovering]
-                        elif self.is_v_down and pygame.key.get_mods() & pygame.KMOD_CTRL:
-                            self.anchor_colors[new_hovering] = self.buffer
+                            self.colors[hn] = self.default_colors[hn]
+                        elif self.is_v_down\
+                            and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                            self.colors[hn] = self.buffer
                     should_draw = True
-                self.hovering = new_hovering
+                self.hovered = hn
                 if not should_draw:
                     self.draw_hovered_color(True)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
-                anchor = self.get_anchor(mouse_x, mouse_y)
-                if anchor is not None:
+                source = self.get_source(mouse_x, mouse_y)
+                if source is not None:
                     if event.button == pygame.BUTTON_LEFT:
-                        result = askcolor(self.anchor_colors[anchor])
+                        result = ask_color(self.colors[source])
                         if result is not None:
-                            self.anchor_colors[anchor] = result
+                            self.colors[source] = result
                             should_draw = True
                     elif event.button == pygame.BUTTON_RIGHT:
-                        self.anchor_colors[anchor] = self.default_anchor_colors[anchor]
+                        self.colors[source] = self.default_colors[source]
                         should_draw = True
-                elif self.is_in_buffer(mouse_x, mouse_y):
-                    result = askcolor(self.buffer)
+                elif self.over_buffer(mouse_x, mouse_y):
+                    result = ask_color(self.buffer)
                     if result is not None:
                         self.buffer = result
                         should_draw = True
@@ -349,8 +436,26 @@ class Window:
         pass
 
 
-def start(ckpt_path, bitmap_path):
-    window = Window(1600, ckpt_path, bitmap_path)
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("ckpt_path",
+        type=str,
+        help="path to checkpoint file")
+    parser.add_argument("bitmap_path",
+        type=str, default=None, nargs="?",
+        help="path to image file")
+    parser.add_argument("-m", "--max-sources-display",
+        type=int, default=264,
+        help="maximum number of sources to display")
+    parser.add_argument("-w", "--width",
+        type=int, default=1600,
+        help="window width")
+    args = parser.parse_args()
+    window = Window(
+        args.width,
+        args.ckpt_path,
+        args.bitmap_path,
+        args.max_sources_display)
     with window:
         try:
             window.draw()
@@ -358,14 +463,6 @@ def start(ckpt_path, bitmap_path):
                 time.sleep(.001)
         except KeyboardInterrupt:
             pass
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("ckpt_path", type=str, help="path to checkpoint file")
-    parser.add_argument("bitmap_path", type=str, help="path to image file")
-    args = parser.parse_args()
-    start(args.ckpt_path, args.bitmap_path)
 
 
 if __name__ == "__main__":

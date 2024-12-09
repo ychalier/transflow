@@ -43,6 +43,9 @@ def main():
         type=str, default=None,
         help="output path: if provided, path to export the output video (as "\
             "an MP4 file) ; otherwise, opens a temporary display window")
+    parser.add_argument("-ba", "--bitmap-alteration",
+        type=str, default=None,
+        help="path to a PNG file containing alteration to apply to bitmaps")
     parser.add_argument("-ef", "--export-flow",
         action="store_true",
         help="export computed flow to a file")
@@ -207,4 +210,5 @@ def main():
         seed=args.seed,
         seek_time=seek_time,
         bitmap_seek_time=parse_timestamp(args.bitmap_seek),
-        duration_time=duration_time)
+        duration_time=duration_time,
+        bitmap_alteration_path=args.bitmap_alteration)

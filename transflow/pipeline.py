@@ -173,7 +173,8 @@ def transfer(
         seed: int | None = None,
         seek_time: float | None = None,
         bitmap_seek_time: float | None = None,
-        duration_time: float | None = None):
+        duration_time: float | None = None,
+        bitmap_alteration_path: str | None = None):
 
     if safe:
         append_history()
@@ -315,7 +316,8 @@ def transfer(
         if output_bitmap:
             bitmap_source = BitmapSource.from_args(
                 bitmap_path, size, seek=ckpt_meta.get("cursor"), seed=seed,
-                seek_time=bitmap_seek_time)
+                seek_time=bitmap_seek_time,
+                alteration_path=bitmap_alteration_path)
             bitmap_queue = multiprocessing.Queue(maxsize=1)
             bitmap_process = SourceProcess(bitmap_source, bitmap_queue, shape_queue)
             bitmap_process.start()
@@ -324,6 +326,8 @@ def transfer(
             if fs_width != bs_width or fs_height != bs_height:
                 raise ValueError(f"Resolutions do not match: flow is {fs_width}x{fs_height} "\
                                  f"while bitmap is {bs_width}x{bs_height}.")
+        elif bitmap_alteration_path is not None:
+            warnings.warn("An alteration path was passed but no bitmap was provided")
 
         shape_queue.close()
 
