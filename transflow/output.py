@@ -83,7 +83,11 @@ class FFmpegVideoOutput(VideoOutput):
         self.process.stdin.close()
         self.process.wait()
         if self.execute:
-            os.startfile(self.path)
+            try:
+                os.startfile(self.path)
+            except AttributeError:
+                # This may occur depending on platform
+                pass
 
 
 class CvVideoOutput(VideoOutput):
