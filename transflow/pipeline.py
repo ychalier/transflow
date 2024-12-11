@@ -156,7 +156,7 @@ def transfer(
         flow_gain: str | None = None,
         size: str | None = None,
         acc_method: str = "map",
-        stack_background: str = "ffffff",
+        accumulator_background: str = "ffffff",
         stack_composer: str = "top",
         direction: str = "forward",
         round_flow: bool = False,
@@ -334,7 +334,7 @@ def transfer(
         if accumulator is None:
             accumulator = Accumulator.from_args(fs_width, fs_height, acc_method,
                 reset_mode, reset_alpha, reset_mask_path, heatmap_mode,
-                heatmap_args, stack_background, stack_composer)
+                heatmap_args, accumulator_background, stack_composer)
 
         if has_output:
             output = VideoOutput.from_args(

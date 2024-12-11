@@ -109,7 +109,7 @@ class Accumulator:
                   reset_mask_path: str | None = None,
                   heatmap_mode: HeatmapMode | str = "discrete",
                   heatmap_args: str | tuple[int|float] = "0:0:0:0",
-                  stack_background: str = "ffffff", stack_composer: str = "top"):
+                  bg_color: str = "ffffff", stack_composer: str = "top"):
         if isinstance(reset_mode, str):
             reset_mode = ResetMode.from_string(reset_mode)
         match method:
@@ -119,12 +119,16 @@ class Accumulator:
                     heatmap_mode, heatmap_args)
             case "stack":
                 return StackAccumulator(
-                    width, height, stack_background, stack_composer,
+                    width, height, bg_color, stack_composer,
                     heatmap_mode, heatmap_args)
             case "sum":
                 return SumAccumulator(
                     width, height, reset_mode, reset_alpha, reset_mask_path,
                     heatmap_mode, heatmap_args)
+            case "crumble":
+                return CrumbleAccumulator(width, height, reset_mode,
+                    reset_alpha, reset_mask_path, heatmap_mode, heatmap_args,
+                    bg_color)
         raise ValueError(f"Unknown accumulator method '{method}'")
 
     def get_heatmap_array(self) -> numpy.ndarray:
@@ -183,10 +187,9 @@ class MappingAccumulator(Accumulator):
             numpy.put(self.mapy, self.base_flat[where] + self.flow_flat[where],
                       self.mapy.flat[where], mode="clip")
         elif direction == FlowDirection.BACKWARD:
-            self.mapx = self.mapx[self.basey + self.flow_int[:,:,1],
-                                  self.basex + self.flow_int[:,:,0]]
-            self.mapy = self.mapy[self.basey + self.flow_int[:,:,1],
-                                  self.basex + self.flow_int[:,:,0]]
+            shift = (self.basey + self.flow_int[:,:,1], self.basex + self.flow_int[:,:,0])
+            self.mapx = self.mapx[shift]
+            self.mapy = self.mapy[shift]
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
         mapping = numpy.clip(self.mapy.astype(int), 0, self.height - 1) * self.width\
@@ -198,6 +201,76 @@ class MappingAccumulator(Accumulator):
 
     def get_accumulator_array(self) -> numpy.ndarray:
         return numpy.stack([self.mapx - self.basex, self.mapy - self.basey], axis=-1)
+
+
+class CrumbleAccumulator(MappingAccumulator):
+
+    def __init__(self, width: int, height: int,
+                 reset_mode: ResetMode = ResetMode.OFF, reset_alpha: float = .9,
+                 reset_mask_path: str | None = None,
+                 heatmap_mode: HeatmapMode | str = "discrete",
+                 heatmap_args: str | tuple[int|float] = "0:0:0:0",
+                 bg_color: str = "000000"):
+        if reset_mode not in [ResetMode.OFF, ResetMode.RANDOM]:
+            logging.warning(
+                "CrumbleAccumulator only works with Off or Random reset, not %s",
+                reset_mode)
+        MappingAccumulator.__init__(self, width, height, reset_mode,
+                                    reset_alpha, reset_mask_path, heatmap_mode,
+                                    heatmap_args)
+        self.bg_color = parse_hex_color(bg_color)
+        self.crumble_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8)
+    
+    def update(self, flow: numpy.ndarray, direction: FlowDirection):
+        self._update_flow(flow)
+        if self.reset_mode == ResetMode.RANDOM:
+            threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
+            where = numpy.where(
+                (self.heatmap == 0)
+                & (numpy.random.random(size=(self.height, self.width)) <= threshold))
+            self.mapx[where] = self.basex[where]
+            self.mapy[where] = self.basey[where]
+            self.crumble_mask[where] = 1
+        if direction == FlowDirection.FORWARD:
+            where_movements = numpy.nonzero(self.flow_flat)
+            w1 = numpy.nonzero(self.crumble_mask.flat)
+            w3 = numpy.intersect1d(where_movements[0], w1[0])
+            numpy.put(
+                self.mapx,
+                self.base_flat[w3] + self.flow_flat[w3],
+                self.mapx.flat[w3], mode="clip")
+            numpy.put(
+                self.mapy,
+                self.base_flat[w3] + self.flow_flat[w3],
+                self.mapy.flat[w3], mode="clip")
+            self.crumble_mask.flat[where_movements] = 0
+            self.crumble_mask.flat[self.base_flat[w3] + self.flow_flat[w3]] = 1
+        elif direction == FlowDirection.BACKWARD:
+            shift = (
+                self.basey + self.flow_int[:,:,1],
+                self.basex + self.flow_int[:,:,0])
+            w1 = numpy.nonzero(self.crumble_mask[shift])
+            w1_flat = numpy.ravel(w1[0] * self.width + w1[1])
+            w2 = numpy.nonzero(numpy.max(numpy.absolute(self.flow_int), axis=2))
+            w2_flat = numpy.ravel(w2[0] * self.width + w2[1])
+            w3 = numpy.intersect1d(w1_flat, w2_flat)
+            self.mapx[w1] = self.mapx[shift][w1]
+            self.mapy[w1] = self.mapy[shift][w1]
+            shift_matrix = numpy.concatenate(
+                [shift[0][:,:,numpy.newaxis], shift[1][:,:,numpy.newaxis]],
+                axis=2)[w2]
+            shift_flat = numpy.ravel(shift_matrix[:,0] * self.width + shift_matrix[:,1])
+            numpy.put(self.crumble_mask, shift_flat, 0)
+            self.crumble_mask.flat[w3] = 1
+
+    def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
+        mapping = numpy.clip(self.mapy.astype(int), 0, self.height - 1) * self.width\
+            + numpy.clip(self.mapx.astype(int), 0, self.width - 1)
+        out = bitmap\
+            .reshape((self.height * self.width, bitmap.shape[2]))[mapping.flat]\
+            .reshape(bitmap.shape)
+        out[self.crumble_mask == 0] = self.bg_color
+        return out
 
 
 class StackAccumulator(Accumulator):

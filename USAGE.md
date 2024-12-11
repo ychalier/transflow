@@ -188,15 +188,18 @@ Mergin Function | Description
 
 ## Accumulation Methods
 
-Flow are accumulated accross time. You can specify the accumulation method with the `-m, --acc-method` argument. Possible values are `map` (default), `sum` or `stack`. The accumulator is in charge of transforming frames from the bitmap source.
+Flow are accumulated accross time. You can specify the accumulation method with the `-m, --acc-method` argument. Possible values are `map` (default), `sum`, `stack` or `crumble`. The accumulator is in charge of transforming frames from the bitmap source.
 
-Method | Description
------- | -----------
-`map`  | Flows are applied to a quantized UV map. Looks grainy.
-`sum`  | Flows (backward only, see [Flow Direction](#flow-direction) section) are summed in a floating array. Looks smooth.
-`stack` | Pixels are considered as particles moving on a grid. Computation is VERY slow.
+Method | Description | Example
+------ | ----------- | -------
+`map`  | Flows are applied to a quantized UV map. Looks grainy. | ![](assets/acc/map.gif)
+`sum`  | Flows (backward only, see [Flow Direction](#flow-direction) section) are summed in a floating array. Looks smooth.| ![](assets/acc/sum.gif)
+`stack` | Pixels are considered as particles moving on a grid. Computation is VERY slow.| ![](assets/acc/stack.gif)
+`crumble` | Moved pixels leave an empty spot behind them.| ![](assets/acc/crumble.gif)
 
-**Stack Parameters.** An empty cell has a color defined by the `-sb, --stack-background` argument (black by default). A non-empty cell has a color determined by the function passed to the `-sc, --stack-composer` argument. Possible values are:
+**Background Color.** `stack` and `crumble` accumulator can contain empty spots, which are assigned a background color set with the `-ab, --accumulator-background` argument (white by default). If provided, the color must be expressed as an HEX value. For instance, for a green chroma key, one may use the `-ab 00ff00` argument.
+
+**Stack Parameters.** An empty cell has a color defined by the . A non-empty cell has a color determined by the function passed to the `-sc, --stack-composer` argument. Possible values are:
 - `top`: color of the last arrived pixel (default)
 - `add`: all pixels in stack are summed, value is clipped
 - `sub`: subtractive composition, as in painting
@@ -240,6 +243,9 @@ If specified, the reset mask loads an image and converts it to an array of float
 **Random Reset.** At each frame, values where the heatmap (see [Accumulator Heatmap](#accumulator-heatmap) section) is at 0 roll a random number between 0 and 1. If the value is below a threshold (either the `-ra` argument or the corresponding value in the reset mask if passed), the pixel at that place gets its original value back.
 
 **Linear Reset.** At each frame, the difference between the current location of a pixel and its original location is computed. Static pixels are moved back in the direction of their original location with a speed controlled by the `-ra` argument or the value in the reset mask array, if passed. 0 means no reset, 1 means instant reset.
+
+> [!NOTE]
+> Linear reset will not work with the `crumble` accumulator (see [Accumulation Methods](#accumulation-methods))
 
 ## Generative Bitmap Sources
 

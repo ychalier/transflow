@@ -117,12 +117,13 @@ def main():
         help="target video size, for webcams and generated bitmaps, "\
             "of the form WIDTHxHEIGHT")
     parser.add_argument("-m", "--acc-method",
-        type=str, default="map", choices=["map", "stack", "sum"],
+        type=str, default="map", choices=["map", "stack", "sum", "crumble"],
         help="accumulator method ('map' is default, 'stack' is very slow, "\
-            "'sum' only works with backward flows)")
-    parser.add_argument("-sb", "--stack-background",
+            "'sum' only works with backward flows, 'crumble' only works with "\
+            "forward flows)")
+    parser.add_argument("-ab", "--accumulator-background",
         type=str, default="ffffff",
-        help="background color used in stack remapper")
+        help="background color used in stack and crumble remapper")
     parser.add_argument("-sc", "--stack-composer",
         type=str, choices=["top", "add", "sub", "avg"], default="top",
         help="stack remapper compose function")
@@ -193,7 +194,7 @@ def main():
         flow_gain=args.flow_gain,
         size=args.size,
         acc_method=args.acc_method,
-        stack_background=args.stack_background,
+        accumulator_background=args.accumulator_background,
         stack_composer=args.stack_composer,
         direction=args.direction,
         round_flow=args.round_flow,
