@@ -171,6 +171,8 @@ import numpy
 numpy.save("blur.npy", numpy.ones((3, 3)) / 9)
 ```
 
+The script [kernels.py](kernels.py) can be used to generate basic kernels.
+
 ## Multiple Flow Sources
 
 Multiple flow sources can be specified and merged. A first source must be specified as the first positional argument, as usually, and will be used to determine defaults metrics such as output framerate. Extra flow sources can be specified using the `-f, --extra-flow` argument. You may provide one or more paths to valid flow inputs (video files, preprocessed archives, webcam indices). For each pair of frame, flows from all sources will be merged according to the operation specified with the `-sm, --flows-merging-function` argument, which, by default, is the sum.
