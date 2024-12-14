@@ -84,7 +84,7 @@ class FFmpegVideoOutput(VideoOutput):
         self.process.wait()
         if self.execute:
             try:
-                os.startfile(self.path)
+                os.startfile(os.path.realpath(self.path))
             except AttributeError:
                 # This may occur depending on platform
                 pass
