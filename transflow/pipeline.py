@@ -47,9 +47,7 @@ class SourceProcess(multiprocessing.Process):
                     self.source.height,
                     self.source.framerate,
                     self.source.direction if is_fs else None,
-                    self.source.length if is_fs else None,
-                    self.source.seek if is_fs else None,
-                    self.source.duration if is_fs else None
+                    self.source.length if is_fs else None
                 ))
                 try:
                     for item in self.source:
@@ -174,7 +172,8 @@ def transfer(
         seek_time: float | None = None,
         bitmap_seek_time: float | None = None,
         duration_time: float | None = None,
-        bitmap_alteration_path: str | None = None):
+        bitmap_alteration_path: str | None = None,
+        repeat: int = 1):
 
     if safe:
         append_history()
@@ -258,8 +257,8 @@ def transfer(
         flow_source = FlowSource.from_args(
             flow_path, use_mvs=use_mvs, mask_path=mask_path,
             kernel_path=kernel_path, cv_config=cv_config, flow_gain=flow_gain,
-            size=size, direction=direction, seek=ckpt_meta.get("cursor"),
-            seek_time=seek_time, duration_time=duration_time)
+            size=size, direction=direction, seek_ckpt=ckpt_meta.get("cursor"),
+            seek_time=seek_time, duration_time=duration_time, repeat=repeat)
 
         shape_queue = multiprocessing.Queue()
 
@@ -272,7 +271,7 @@ def transfer(
                 extra_flow_path, use_mvs=use_mvs, mask_path=mask_path,
                 kernel_path=kernel_path, cv_config=cv_config,
                 flow_gain=flow_gain, size=size, direction=direction,
-                seek=ckpt_meta.get("cursor"), seek_time=seek_time,
+                seek_ckpt=ckpt_meta.get("cursor"), seek_time=seek_time,
                 duration_time=duration_time))
             extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
             extra_flow_processes.append(SourceProcess(
@@ -286,8 +285,7 @@ def transfer(
             try:
                 shape_info = shape_queue.get(timeout=1)
                 if flow_sources_loaded == 0:
-                    (fs_width, fs_height, fs_framerate, fs_direction, fs_length,
-                     fs_seek, fs_duration) = shape_info
+                    (fs_width, fs_height, fs_framerate, fs_direction, fs_length) = shape_info
                 flow_sources_loaded += 1
                 if flow_sources_loaded >= flow_sources_to_load:
                     break
@@ -305,9 +303,7 @@ def transfer(
                 "height": fs_height,
                 "framerate": fs_framerate,
                 "direction": flow_source.direction.value,
-                "length": fs_length,
-                "seek": fs_seek,
-                "duration": fs_duration
+                "seek_time": seek_time,
             })
 
         if size is None:
@@ -348,7 +344,9 @@ def transfer(
 
         exception = False
         cursor = ckpt_meta.get("cursor", 0)
-        pbar = tqdm.tqdm(total=fs_duration, unit="frame")
+        pbar = tqdm.tqdm(
+            total=None if fs_length is None else fs_length - cursor,
+            unit="frame")
         while True:
             try:
                 flows = []

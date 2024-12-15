@@ -29,6 +29,9 @@ def main():
         type=str,
         nargs="*",
         help="merge multiple flow sources")
+    parser.add_argument("-r", "--repeat",
+        type=int, default=1,
+        help="repeat flow inputs (0 to loop indefinitely)")
     parser.add_argument("-sm", "--flows-merging-function",
         type=str, default="sum",
         choices=["first", "sum", "average", "difference", "product", "maskbin",
@@ -87,7 +90,7 @@ def main():
     parser.add_argument("-nx", "--no-execute",
         action="store_true",
         help="do not open the output video file when done")
-    parser.add_argument("-r", "--replace",
+    parser.add_argument("-re", "--replace",
         action="store_true",
         help="overwrite any existing output file (by default, a new filename "\
             "is generated to avoid conflicts and overwriting)")
@@ -212,4 +215,5 @@ def main():
         seek_time=seek_time,
         bitmap_seek_time=parse_timestamp(args.bitmap_seek),
         duration_time=duration_time,
-        bitmap_alteration_path=args.bitmap_alteration)
+        bitmap_alteration_path=args.bitmap_alteration,
+        repeat=args.repeat)

@@ -23,7 +23,7 @@ This document provides details on how to use the `transflow` module for performi
 - [Live Visualization](#live-visualization)
 - [Interrupting Processing](#interrupting-processing)
 - [Restart From Checkpoint](#restart-from-checkpoint)
-- [Seek And Duration](#seek-and-duration)
+- [Seek, Duration and Repeat](#seek-duration-and-repeat)
 
 ## Basic Flow Transfer
 
@@ -39,7 +39,7 @@ The first argument `flow.mp4` is the video to extract the optical flow from. The
 
 **Dimensions.** Flow and bitmap sources must have the same dimensions. Again, FFmpeg's [scale filter](https://trac.ffmpeg.org/wiki/Scaling) will help you with that.
 
-**Output Filename.** Unless the `-r, --replace` flag is passed, the program automatically generates unique filenames to output files to avoid naming conflicts, by adding a numerical suffix.
+**Output Filename.** Unless the `-re, --replace` flag is passed, the program automatically generates unique filenames to output files to avoid naming conflicts, by adding a numerical suffix.
 
 **Output Format.** Output codec can be specified with the `-vc, --vcodec` argument. Default value is `h264`. Possible values can be listed with the `ffmpeg -codecs` command.
 
@@ -361,8 +361,10 @@ Checkpoints allows for resuming computation at a given frame. It contains the ac
 
 Checkpoints files be passed as flow sources, as they contain data about which flow source was used and where to restart computation. Arguments must be passed again to resume computation in the exact same settings.
 
-## Seek And Duration
+## Seek, Duration and Repeat
 
 Flow source can be seeked with the `-ss, --seek` argument. Value must be of the form `HH:MM:SS` or `HH:MM:SS.FFF`. Bitmap source can be seeked in the same way, with the `-bss, --bitmap-seek` argument.
 
-Output duration can be set with the `-t, --duration` argument. Same format as seeking timestamps. You can also specify an end timestamp with the `-to, --to` argument and a value of the same format. Intent is similar to FFmpeg expression of [seeking](https://trac.ffmpeg.org/wiki/Seeking).
+A slice of the flow source can be selected with the `-t, --duration` argument, as the duration go from the starting point, with the same format as seeking timestamps. You can also specify an end timestamp instead with the `-to, --to` argument and a value of the same format. Intent is similar to FFmpeg expression of [seeking](https://trac.ffmpeg.org/wiki/Seeking).
+
+If you want to use the same flow input multiple times in a loop, you may specify the `-r, --repeat` argument with an integer value for how many times you want to use the flow. Default value is 1 (ie. no repetition). If this value is 0, the flow sources loops forever until either the bitmap source is exhausted or the user interrupts the execution.

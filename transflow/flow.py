@@ -4,6 +4,7 @@ import math
 import os
 import re
 import threading
+import warnings
 import zipfile
 
 import cv2
@@ -22,55 +23,94 @@ class FlowSource:
 
     def __init__(self, direction: FlowDirection, mask_path: str | None = None,
                  kernel_path: str | None = None, flow_gain: str | None = None,
-                 seek: int | None = None, seek_time: float | None = None,
-                 duration_time: float | None = None):
+                 seek_ckpt: int | None = None, seek_time: float | None = None,
+                 duration_time: float | None = None, repeat: int = 1):
         self.direction = direction
         self.width: int = None
         self.height: int = None
         self.framerate: float = None
-        self.length: int | None = None
         self.mask: numpy.ndarray | None = None\
             if mask_path is None else load_mask(mask_path, newaxis=True)
         self.kernel: numpy.ndarray | None = None\
             if kernel_path is None else numpy.load(kernel_path)
         self.flow_gain = None
         self.flow_gain_string = flow_gain
-        self.frame_index = -1
-        self.seek = seek
+        self.seek_ckpt = seek_ckpt
         self.seek_time = seek_time
         self.duration_time = duration_time
-        self.duration: int | None = None
+        self.frame_index = 0
+        self.frame_cursor = 0
+        self.is_stream: bool = False
+        self.length: int | None = None
+        self.start_frame: int = 0
+        self.end_frame: int = 0
+        self.repeat = repeat
 
     def set_metadata(self, width: int, height: int, framerate: float, length: int):
         self.width = width
         self.height = height
         self.framerate = framerate
-        self.length = length
-        if self.length <= 0:
-            self.length = None
-        if self.seek is None:
-            self.seek = 0
-        if self.seek_time is not None:
-            self.seek = int(self.seek_time * self.framerate)
+
+        if length <= 0:
+            length = None
+
+        self.is_stream = length == None
+        if self.is_stream and self.repeat > 1:
+            warnings.warn("Flow source is a stream, cannot repeat it!")
+            self.repeat = 1
+        if self.is_stream and self.seek_time is not None:
+            warnings.warn("Flow source is a stream, seek time is ignored!")
+            self.seek_time = None
+
+        if self.seek_time is not None and not self.is_stream:
+            self.start_frame = int(self.seek_time * self.framerate)
+        else:
+            self.start_frame = 0
+
         if self.duration_time is not None:
-            self.duration = min(
-                self.length - self.seek,
-                max(1, int(self.duration_time * self.framerate)))
-        elif self.length is not None:
-            self.duration = self.length - self.seek
+            self.end_frame = self.start_frame + int(self.duration_time * self.framerate)
+            if length is not None:
+                self.end_frame = min(self.end_frame, length)
+        else:
+            self.end_frame = length
+
+        if self.repeat == 0:
+            self.length = None
+        elif self.is_stream:
+            self.length = self.end_frame
+        else:
+            self.length = self.repeat * (self.end_frame - self.start_frame)
+
+        real_start_frame = self.start_frame
+        ckpt_start_frame = real_start_frame
+        if self.seek_ckpt is not None:
+            self.frame_index = self.seek_ckpt
+            ckpt_start_frame += self.seek_ckpt % (self.end_frame - self.start_frame)
+        self.start_frame = ckpt_start_frame
+        self.rewind()
+        self.start_frame = real_start_frame
 
     def __len__(self):
         return self.length
 
     def __next__(self) -> numpy.ndarray:
+        if self.length is not None and self.frame_index >= self.length:
+            raise StopIteration
+        if self.frame_cursor == self.end_frame:
+            self.rewind()
+        array = self.next()
         self.frame_index += 1
-        return self.next()
+        self.frame_cursor += 1
+        return array
 
     @property
     def t(self) -> float:
         return 0 if self.framerate is None else self.frame_index / self.framerate
 
     def next(self) -> numpy.ndarray:
+        raise NotImplementedError()
+
+    def rewind(self):
         raise NotImplementedError()
 
     def __iter__(self):
@@ -113,8 +153,8 @@ class FlowSource:
                   cv_config: str | None = None, flow_gain: str | None = None,
                   size: tuple[int, int] | None = None,
                   direction: FlowDirection | None = None,
-                  seek: int | None = None, seek_time: float | None = None,
-                  duration_time: float | None = None):
+                  seek_ckpt: int | None = None, seek_time: float | None = None,
+                  duration_time: float | None = None, repeat: int = 1):
         if "::" in flow_path:
             avformat, file = flow_path.split("::")
         else:
@@ -123,9 +163,10 @@ class FlowSource:
             "mask_path": mask_path,
             "kernel_path": kernel_path,
             "flow_gain": flow_gain,
-            "seek": seek,
+            "seek": seek_ckpt,
             "seek_time": seek_time,
-            "duration_time": duration_time
+            "duration_time": duration_time,
+            "repeat": repeat,
         }
         if file.endswith(".flow.zip"):
             return ArchiveFlowSource(file, **args)
@@ -147,14 +188,13 @@ class AvFlowSource(FlowSource):
                  mask_path: str | None = None, kernel_path: str | None = None,
                  flow_gain: str | None = None, seek: int | None = None,
                  seek_time: float | None = None,
-                 duration_time: float | None = None):
+                 duration_time: float | None = None, repeat: int = 1):
         FlowSource.__init__(self, FlowDirection.FORWARD, mask_path, kernel_path,
-                            flow_gain, seek, seek_time, duration_time)
+                            flow_gain, seek, seek_time, duration_time, repeat)
         self.file = file
         self.avformat = avformat
         self.container = None
         self.iterator = None
-        self.cursor = 0
 
     def setup(self):
         import av
@@ -169,15 +209,14 @@ class AvFlowSource(FlowSource):
             float(context.framerate) if context.framerate is not None else 30,
             self.container.streams.video[0].frames - 1
         )
-        if self.seek is not None:
-            for _ in range(self.seek):
-                next(self.iterator)
-                self.frame_index += 1
+
+    def rewind(self):
+        self.frame_cursor = self.start_frame
+        self.container.seek(0)
+        for _ in range(self.frame_cursor + 1):
+            next(self.iterator)
 
     def next(self) -> numpy.ndarray:
-        if self.duration is not None and self.cursor >= self.duration:
-            raise StopIteration
-        self.cursor += 1
         frame = next(self.iterator)
         vectors = frame.side_data.get("MOTION_VECTORS")
         flow = numpy.zeros((self.height, self.width, 2), dtype=int)
@@ -323,15 +362,15 @@ class CvFlowSource(FlowSource):
                  kernel_path: str | None = None,
                  flow_gain: str | None = None,
                  seek: int | None = None, seek_time: float | None = None,
-                 duration_time: float | None = None):
+                 duration_time: float | None = None, repeat: int = 1):
         FlowSource.__init__(self,
             direction if direction is not None else FlowDirection.FORWARD,
-            mask_path, kernel_path, flow_gain, seek, seek_time, duration_time)
+            mask_path, kernel_path, flow_gain, seek, seek_time, duration_time,
+            repeat)
         self.file = file
         self.config = config
         self.size = size
         self.capture = None
-        self.cursor = 0
         self.prev_gray = None
         self.prev_flow = None
 
@@ -358,32 +397,23 @@ class CvFlowSource(FlowSource):
             float(self.capture.get(cv2.CAP_PROP_FPS)),
             int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT)) - 1
         )
-        success, frame = self.capture.read()
-        if not success or frame is None:
-            raise RuntimeError(f"Could not open video at {self.file}")
-        self.prev_gray = self.to_gray(frame)
-        self.prev_flow = None
-        self.cursor = 1
         self.config.start()
-        if self.seek is not None:
-            for i in range(self.seek):
-                success, frame = self.capture.read()
-                if not success or frame is None:
-                    raise RuntimeError(f"Could not seek past frame {i}")
-                if i == self.seek - 1:
-                    self.prev_gray = self.to_gray(frame)
-                self.frame_index += 1
-                self.cursor += 1
+
+    def rewind(self):
+        self.frame_cursor = self.start_frame
+        self.capture.set(cv2.CAP_PROP_POS_MSEC, 0)
+        for i in range(self.frame_cursor + 1):
+            success, frame = self.capture.read()
+            if not success or frame is None:
+                raise RuntimeError(f"Could not open video at {self.file}")
+            if i == self.frame_cursor:
+                self.prev_gray = self.to_gray(frame)
+        self.prev_flow = None
 
     def next(self) -> numpy.ndarray:
-        if self.length is not None and self.cursor > self.length:
-            raise StopIteration
-        if self.duration is not None and self.cursor > self.seek + self.duration:
-            raise StopIteration
         success, frame = self.capture.read()
         if frame is None or not success:
             raise StopIteration
-        self.cursor += 1
         gray = cv2.cvtColor(
             cv2.resize(frame, dsize=(self.width, self.height),
                        interpolation=cv2.INTER_NEAREST),
@@ -420,12 +450,11 @@ class ArchiveFlowSource(FlowSource):
                  kernel_path: str | None = None,
                  flow_gain: str | None = None, seek: int | None = None,
                  seek_time: float | None = None,
-                 duration_time: float | None = None):
+                 duration_time: float | None = None, repeat: int = 1):
         FlowSource.__init__(self, FlowDirection.FORWARD, mask_path, kernel_path,
-                            flow_gain, seek, seek_time, duration_time)
+                            flow_gain, seek, seek_time, duration_time, repeat)
         self.path = path
         self.archive = None
-        self.index = 0
 
     def setup(self):
         self.archive = zipfile.ZipFile(self.path)
@@ -439,17 +468,13 @@ class ArchiveFlowSource(FlowSource):
             data["framerate"],
             len(self.archive.infolist()) - 1
         )
-        if self.seek is not None:
-            self.index = self.seek
+
+    def rewind(self):
+        self.frame_cursor = self.start_frame
 
     def next(self) -> numpy.ndarray:
-        if self.index >= self.length:
-            raise StopIteration
-        if self.index >= self.seek + self.duration:
-            raise StopIteration
-        with self.archive.open(f"{self.index:09d}.npy") as file:
+        with self.archive.open(f"{self.frame_cursor:09d}.npy") as file:
             flow = numpy.load(file)
-        self.index += 1
         return self.apply_fx(flow)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
