@@ -45,17 +45,17 @@ dist
 
 !assets/Deer.jpg
 !assets/Frame.png
-!assets/LagrangePolynomial.png
 !assets/Mask.png
-!assets/Output.gif
-!assets/Output.mp4
 !assets/River.gif
 !assets/River.mp4
-!assets/Www.gif
-!assets/Www.mp4
 !assets/acc
 !out/ExampleDeer.gif
 !out/ExampleDeer.mp4
 !www/assets/*
 
 draft
+
+configs/*
+!configs/blurred.json
+!configs/default.json
+!configs/fast.json

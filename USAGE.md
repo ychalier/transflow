@@ -110,6 +110,8 @@ If specified, the JSON file must follow the following format:
 }
 ```
 
+You may find examples in the [configs](configs) folder.
+
 ## Using Motion Vectors
 
 To fasten computation, you can use H264 motion vectors as a flow field. For this, you have to set the `-mv, --use-mvs` flag, and the video must be encoded in a specific way, to make sure frames are encoded relative to the previous frame only. Using FFmpeg, this can be achieved with the following command:

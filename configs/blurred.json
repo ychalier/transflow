@@ -1,0 +1,9 @@
+{
+    "pyr_scale": 0.5,
+    "levels": 3,
+    "winsize": 19,
+    "iterations": 3,
+    "poly_n": 7,
+    "poly_sigma": 1.5,
+    "flags": 0
+}
