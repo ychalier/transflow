@@ -622,13 +622,13 @@ async function main() {
     const motionSource = createTextureSource(params.motionType.value, params.motionSource.value, params.flowWidth.value, params.flowHeight.value, onTextureSourceReady);
     const bitmapSource = createTextureSource(params.bitmapType.value, params.bitmapSource.value, params.width.value, params.height.value, onTextureSourceReady);
 
-    const vertexShader = await createShader(gl, gl.VERTEX_SHADER, "base.vert");
-    const flowLucasKanadeShader = await createShader(gl, gl.FRAGMENT_SHADER, "flowLucasKanade.frag");
-    const flowHornSchunckShader = await createShader(gl, gl.FRAGMENT_SHADER, "flowHornSchunck.frag");
-    const flowPointMatchingShader = await createShader(gl, gl.FRAGMENT_SHADER, "flowPointMatching.frag");
-    const accShader = await createShader(gl, gl.FRAGMENT_SHADER, "acc.frag");
-    const copyShader = await createShader(gl, gl.FRAGMENT_SHADER, "copy.frag");
-    const remapShader = await createShader(gl, gl.FRAGMENT_SHADER, "remap.frag");
+    const vertexShader = await createShader(gl, gl.VERTEX_SHADER, "shaders/base.vert");
+    const flowLucasKanadeShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/flowLucasKanade.frag");
+    const flowHornSchunckShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/flowHornSchunck.frag");
+    const flowPointMatchingShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/flowPointMatching.frag");
+    const accShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/acc.frag");
+    const copyShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/copy.frag");
+    const remapShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/remap.frag");
 
     const pastProgram = createProgram(gl, vertexShader, copyShader);
     const flowLucasKanadeProgram = createProgram(gl, vertexShader, flowLucasKanadeShader);

@@ -47,8 +47,8 @@ The first argument `flow.mp4` is the video to extract the optical flow from. The
 
 Flow Source | Bitmap Source | Result
 ----------- | ------------- | ------
-[River.mp4](assets/River.mp4) | [Deer.jpg](assets/Deer.jpg) | [Output.mp4](assets/Output.mp4)
-[![River.mp4](assets/River.gif)](assets/River.mp4) | [![Deer.jpg](assets/Deer.jpg)](assets/Deer.jpg) | [![Output.mp4](assets/Output.gif)](assets/Output.mp4)
+[River.mp4](assets/River.mp4) | [Deer.jpg](assets/Deer.jpg) | [Output.mp4](out/ExampleDeer.mp4)
+[![River.mp4](assets/River.gif)](assets/River.mp4) | [![Deer.jpg](assets/Deer.jpg)](assets/Deer.jpg) | [![Output.mp4](out/ExampleDeer.gif)](out/ExampleDeer.mp4)
 
 The first step is to use a graphic editor to add a white frame around the deer. This creates the erasing effect when the white pixels move onto the colored ones.
 
@@ -80,7 +80,7 @@ A final detail could be to control the flow gain to ease the start and the end, 
 
 The formula is based on time `t`. The river video lasts for about 30 seconds. Such formulas can be obtained via [Lagrange interpolation](https://en.wikipedia.org/wiki/Lagrange_polynomial), I published a hacky tool for that, the [Online Lagrange Polynomial Editor](https://chalier.fr/lagrange/):
 
-[![](assets/LagrangePolynomial.png)](https://chalier.fr/lagrange/)
+[![](https://drive.chalier.fr/protected/transflow/lagrange-polynomial.png)](https://chalier.fr/lagrange/)
 
 ## Flow Estimation Parameters
 
@@ -194,10 +194,10 @@ Flow are accumulated accross time. You can specify the accumulation method with 
 
 Method | Description | Example
 ------ | ----------- | -------
-`map`  | Flows are applied to a quantized UV map. Looks grainy. | ![](assets/acc/map.gif)
-`sum`  | Flows (backward only, see [Flow Direction](#flow-direction) section) are summed in a floating array. Looks smooth.| ![](assets/acc/sum.gif)
-`stack` | Pixels are considered as particles moving on a grid. Computation is VERY slow.| ![](assets/acc/stack.gif)
-`crumble` | Moved pixels leave an empty spot behind them.| ![](assets/acc/crumble.gif)
+`map`  | Flows are applied to a quantized UV map. Looks grainy. | ![](https://drive.chalier.fr/protected/transflow/map.gif)
+`sum`  | Flows (backward only, see [Flow Direction](#flow-direction) section) are summed in a floating array. Looks smooth.| ![](https://drive.chalier.fr/protected/transflow/sum.gif)
+`stack` | Pixels are considered as particles moving on a grid. Computation is VERY slow.| ![](https://drive.chalier.fr/protected/transflow/stack.gif)
+`crumble` | Moved pixels leave an empty spot behind them.| ![](https://drive.chalier.fr/protected/transflow/crumble.gif)
 
 **Background Color.** `stack` and `crumble` accumulator can contain empty spots, which are assigned a background color set with the `-ab, --accumulator-background` argument (white by default). If provided, the color must be expressed as an HEX value. For instance, for a green chroma key, one may use the `-ab 00ff00` argument.
 

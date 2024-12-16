@@ -26,7 +26,7 @@ __pycache__
 
 assets/*
 profiles
-out
+out/*
 
 # CPP
 .vscode
@@ -54,5 +54,8 @@ dist
 !assets/Www.gif
 !assets/Www.mp4
 !assets/acc
+!out/ExampleDeer.gif
+!out/ExampleDeer.mp4
+!www/assets/*
 
 draft

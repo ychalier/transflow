@@ -6,7 +6,7 @@ This tool extracts [optical flow](https://en.wikipedia.org/wiki/Optical_flow) as
 
 Flow Source | Bitmap Source | Result
 ----------- | ------------- | ------
-[![River.mp4](assets/River.gif)](assets/River.mp4) | [![Deer.jpg](assets/Deer.jpg)](assets/Deer.jpg) | [![Output.mp4](assets/Output.gif)](assets/Output.mp4)
+[![River.mp4](assets/River.gif)](assets/River.mp4) | [![Deer.jpg](assets/Deer.jpg)](assets/Deer.jpg) | [![Output.mp4](out/ExampleDeer.gif)](out/ExampleDeer.mp4)
 
 Have a look at:
 - [The web demo](https://chalier.fr/transflow/)
