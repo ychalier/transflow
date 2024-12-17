@@ -59,10 +59,10 @@ Modified Bitmap Source | Reset Mask
 [Frame.png](assets/Frame.png) | [Mask.png](assets/Mask.png)
 [![Frame.png](assets/Frame.png)](assets/Frame.png) | [![Mask.png](assets/Mask.png)](assets/Mask.png)
 
-Then, all you need is this one command:
+Then, all you need is this one command (assuming input files are in the [assets](assets) folder, as in the basic repository structure):
 
 ```console
-transflow River.mp4 -d forward -b Frame.png -rm random -rk Mask.png -ha 0:0:0:0 -o Output.mp4
+transflow assets/River.mp4 -d forward -b assets/Frame.png -rm random -rk assets/Mask.png -ha 0:0:0:0 -o Output.mp4
 ```
 
 - The first argument is the flow source, the river video.

@@ -53,7 +53,7 @@ class FFmpegVideoOutput(VideoOutput):
 
     def __enter__(self):
         dirname = os.path.dirname(self.path)
-        if not os.path.isdir(dirname):
+        if not os.path.isdir(dirname) and dirname != "":
             os.makedirs(dirname)
         if self.safe:
             append_history(self.path)
