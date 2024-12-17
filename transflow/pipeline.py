@@ -339,6 +339,7 @@ def transfer(
                 vcodec, execute, replace, safe)
 
             output_queue = multiprocessing.Queue()
+            output_queue.cancel_join_thread()
             output_process = OutputProcess(output, output_queue)
             output_process.start()
 
@@ -390,11 +391,7 @@ def transfer(
                                       replace, cursor, accumulator, seed)
                 pbar.update(1)
             except (queue.Empty, queue.Full):
-                if (not flow_process.is_alive())\
-                    or (bitmap_process is not None and not bitmap_process.is_alive())\
-                    or (output_process is not None and not output_process.is_alive()):
-                    exception = True
-                    break
+                pass
             except KeyboardInterrupt:
                 exception = True
                 break
@@ -402,6 +399,12 @@ def transfer(
                 exception = True
                 traceback.print_exc()
                 break
+            finally:
+                if (not flow_process.is_alive())\
+                    or (bitmap_process is not None and not bitmap_process.is_alive())\
+                    or (output_process is not None and not output_process.is_alive()):
+                    exception = True
+                    break
         pbar.close()
         if (exception and safe) or checkpoint_end:
             export_checkpoint(flow_path, bitmap_path, output_path, replace,
