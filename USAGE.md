@@ -37,7 +37,7 @@ The first argument `flow.mp4` is the video to extract the optical flow from. The
 
 **Video Bitmap Source.** If the bitmap source is a video, the output will halt when the first source is exhausted. Output framerate is determined by the flow source, hence you might want to make sure both sources have matching framerates. FFmpeg's [fps filter](https://trac.ffmpeg.org/wiki/ChangingFrameRate) will help you with that.
 
-**Dimensions.** Flow and bitmap sources must have the same dimensions. Again, FFmpeg's [scale filter](https://trac.ffmpeg.org/wiki/Scaling) will help you with that.
+**Dimensions.** Flow and bitmap sources should have the same dimensions. Again, FFmpeg's [scale filter](https://trac.ffmpeg.org/wiki/Scaling) will help you with that. If the flow source is smaller than the bitmap source by an integer factor, it is scaled accordingly. Thus, a 320x180 video can be used as a flow source for a 1920x1080 bitmap. Non-integer scaling is not supported. The bitmap can not be smaller than the flow.
 
 **Output Filename.** Unless the `-re, --replace` flag is passed, the program automatically generates unique filenames to output files to avoid naming conflicts, by adding a numerical suffix.
 

@@ -133,6 +133,10 @@ flows_merging_functions: dict[str, typing.Callable[[list[numpy.ndarray]], numpy.
 }
 
 
+def upscale_flow(flow: numpy.ndarray, wf: int, hf: int) -> numpy.ndarray:
+    return numpy.kron(flow * (wf, hf), numpy.ones((hf, wf, 1))).astype(flow.dtype)
+
+
 def transfer(
         flow_path: str,
         bitmap_path: str | None,
@@ -308,10 +312,15 @@ def transfer(
 
         if size is None:
             size = fs_width, fs_height
+        
+        fs_width_factor = fs_height_factor = 1
 
         if output_bitmap:
             bitmap_source = BitmapSource.from_args(
-                bitmap_path, size, seek=ckpt_meta.get("cursor"), seed=seed,
+                bitmap_path,
+                size,
+                seek=ckpt_meta.get("cursor"),
+                seed=seed,
                 seek_time=bitmap_seek_time,
                 alteration_path=bitmap_alteration_path)
             bitmap_queue = multiprocessing.Queue(maxsize=1)
@@ -320,23 +329,42 @@ def transfer(
             bs_width, bs_height, bs_framerate, *_ = shape_queue.get()
 
             if fs_width != bs_width or fs_height != bs_height:
-                raise ValueError(f"Resolutions do not match: flow is {fs_width}x{fs_height} "\
-                                 f"while bitmap is {bs_width}x{bs_height}.")
+                if bs_width % fs_width != 0 or bs_height % fs_height != 0:
+                    raise ValueError(
+                        f"Resolutions do not match: "\
+                        f"flow is {fs_width}x{fs_height} "\
+                        f"while bitmap is {bs_width}x{bs_height}.")
+                fs_width_factor = bs_width // fs_width
+                fs_height_factor = bs_height // fs_height
+        
         elif bitmap_alteration_path is not None:
             warnings.warn("An alteration path was passed but no bitmap was provided")
 
         shape_queue.close()
 
         if accumulator is None:
-            accumulator = Accumulator.from_args(fs_width, fs_height, acc_method,
-                reset_mode, reset_alpha, reset_mask_path, heatmap_mode,
-                heatmap_args, accumulator_background, stack_composer)
+            accumulator = Accumulator.from_args(
+                fs_width * fs_width_factor, 
+                fs_height * fs_height_factor,
+                acc_method,
+                reset_mode,
+                reset_alpha,
+                reset_mask_path,
+                heatmap_mode,
+                heatmap_args,
+                accumulator_background,
+                stack_composer)
 
         if has_output:
             output = VideoOutput.from_args(
-                output_path, fs_width, fs_height,
+                output_path,
+                fs_width * fs_width_factor,
+                fs_height * fs_height_factor,
                 bs_framerate if bs_framerate is not None else fs_framerate,
-                vcodec, execute, replace, safe)
+                vcodec,
+                execute,
+                replace,
+                safe)
 
             output_queue = multiprocessing.Queue()
             output_queue.cancel_join_thread()
@@ -361,6 +389,8 @@ def transfer(
                 if break_now:
                     break
                 flow = merge_flows(flows)
+                if fs_width_factor != 1 or fs_height_factor != 1:
+                    flow = upscale_flow(flow, fs_width_factor, fs_height_factor)
                 if export_flow:
                     flow_output.write_array(numpy.round(flow).astype(int) if round_flow else flow)
                 accumulator.update(flow, fs_direction)
