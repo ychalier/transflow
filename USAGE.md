@@ -86,6 +86,9 @@ The formula is based on time `t`. The river video lasts for about 30 seconds. Su
 
 By default, Optical flow extraction relies on [OpenCV](https://opencv.org/)'s implementation of [Gunnar Farneback's algorithm](https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html#:~:text=Dense%20Optical%20Flow%20in%20OpenCV). Parameters for the flow estimation can be passed with the `-cc, --cv-config` as a path to a JSON file or the keyword `window`. If the keyword `window` is passed, a [Qt](https://pypi.org/project/PySide6/) window shows up to tune parameters live, which combines nicely with [live visualization](#live-visualization).
 
+> [!NOTE]
+> On Linux, you may have to install the `libxcb-cursor0` package for the Qt window to work.
+
 Here are descriptions from [OpenCV's documentation](https://docs.opencv.org/3.4/dc/d6b/group__video__track.html#:~:text=calcOpticalFlowFarneback()):
 
 Parameter | Default | Description

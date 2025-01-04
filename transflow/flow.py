@@ -242,6 +242,7 @@ class CvFlowConfigWindow(threading.Thread):
     def __init__(self, config: "CvFlowConfig"):
         threading.Thread.__init__(self)
         self.config = config
+        self.inputs = {}
 
     def run(self):
         import PySide6.QtCore
@@ -250,6 +251,8 @@ class CvFlowConfigWindow(threading.Thread):
         window = PySide6.QtWidgets.QWidget()
         layout = PySide6.QtWidgets.QVBoxLayout()
         layout.setContentsMargins(32, 32, 32, 32)
+
+        self.inputs: dict[str, PySide6.QtWidgets.QSpinBox | PySide6.QtWidgets.QDoubleSpinBox] = {}
 
         def add_to_layout(label: str, element: PySide6.QtWidgets.QWidget,
                           tooltip: str | None = None):
@@ -271,6 +274,7 @@ class CvFlowConfigWindow(threading.Thread):
         pyr_scale_input.valueChanged.connect(lambda: self.callback("pyr_scale", pyr_scale_input))
         add_to_layout("pyr_scale", pyr_scale_input, "image scale (<1) to build "\
                       "pyramids for each image")
+        self.inputs["pyr_scale"] = pyr_scale_input
 
         levels_input = PySide6.QtWidgets.QSpinBox()
         levels_input.setMinimum(1)
@@ -278,12 +282,14 @@ class CvFlowConfigWindow(threading.Thread):
         levels_input.valueChanged.connect(lambda: self.callback("levels", levels_input))
         add_to_layout("levels", levels_input, "number of pyramid layers "\
                       "including the initial image")
+        self.inputs["levels"] = levels_input
 
         winsize_input = PySide6.QtWidgets.QSpinBox()
         winsize_input.setValue(self.config.winsize)
         winsize_input.setMinimum(1)
         winsize_input.valueChanged.connect(lambda: self.callback("winsize", winsize_input))
         add_to_layout("winsize", winsize_input, "averaging window size")
+        self.inputs["winsize"] = winsize_input
 
         iterations_input = PySide6.QtWidgets.QSpinBox()
         iterations_input.setValue(self.config.iterations)
@@ -291,6 +297,7 @@ class CvFlowConfigWindow(threading.Thread):
         iterations_input.valueChanged.connect(lambda: self.callback("iterations", iterations_input))
         add_to_layout("iterations", iterations_input, "number of iterations "\
                       "the algorithm does at each pyramid level")
+        self.inputs["iterations"] = iterations_input
 
         poly_n_input = PySide6.QtWidgets.QSpinBox()
         poly_n_input.setValue(self.config.poly_n)
@@ -298,6 +305,7 @@ class CvFlowConfigWindow(threading.Thread):
         poly_n_input.valueChanged.connect(lambda: self.callback("poly_n", poly_n_input))
         add_to_layout("poly_n", poly_n_input, "size of the pixel neighborhood "\
                       "used to find polynomial expansion in each pixel")
+        self.inputs["poly_n"] = poly_n_input
 
         poly_sigma_input = PySide6.QtWidgets.QDoubleSpinBox()
         poly_sigma_input.setDecimals(2)
@@ -306,6 +314,38 @@ class CvFlowConfigWindow(threading.Thread):
         add_to_layout("poly_sigma", poly_sigma_input, "standard deviation of "\
             "the Gaussian that is used to smooth derivatives used as a basis "\
             "for the polynomial expansion")
+        self.inputs["poly_sigma"] = poly_sigma_input
+
+        reset_button = PySide6.QtWidgets.QPushButton("Reset")
+        reset_button.setMinimumWidth(100)
+        reset_button.clicked.connect(lambda: self.reset())
+        hlayout = PySide6.QtWidgets.QHBoxLayout()
+        hlayout.addWidget(reset_button)
+        layout.addLayout(hlayout)
+
+        def on_import_click():
+            path = PySide6.QtWidgets.QFileDialog.getOpenFileName(
+                parent=window,
+                caption="Export Config",
+                dir=os.getcwd(),
+                filter="JSON files (*.json)",
+                selectedFilter="*.json")[0]
+            if path:
+                self.config.to_file(path)
+        
+        import_button = PySide6.QtWidgets.QPushButton("Import")
+        import_button.setMinimumWidth(100)
+        import_button.clicked.connect(lambda: self.import_config(window))
+        hlayout = PySide6.QtWidgets.QHBoxLayout()
+        hlayout.addWidget(import_button)
+        layout.addLayout(hlayout)            
+        
+        export_button = PySide6.QtWidgets.QPushButton("Export")
+        export_button.setMinimumWidth(100)
+        export_button.clicked.connect(lambda: self.export_config(window))
+        hlayout = PySide6.QtWidgets.QHBoxLayout()
+        hlayout.addWidget(export_button)
+        layout.addLayout(hlayout)
 
         window.setLayout(layout)
 
@@ -317,6 +357,41 @@ class CvFlowConfigWindow(threading.Thread):
 
         window.show()
         app.exec()
+
+    def reset_inputs(self):
+        for key, value in self.config.to_dict().items():
+            if key not in self.inputs:
+                continue
+            self.inputs[key].setValue(value)
+
+    def import_config(self, window):
+        import PySide6.QtWidgets
+        path = PySide6.QtWidgets.QFileDialog.getOpenFileName(
+            parent=window,
+            caption="Import Config",
+            dir=os.getcwd(),
+            filter="JSON files (*.json)",
+            selectedFilter="*.json")[0]
+        if path:
+            other = CvFlowConfig.from_file(path)
+            for key, value in other.to_dict().items():
+                self.config.update(key, value)
+            self.reset_inputs()
+
+    def export_config(self, window):
+        import PySide6.QtWidgets
+        path = PySide6.QtWidgets.QFileDialog.getSaveFileName(
+            parent=window,
+            caption="Export Config",
+            dir=os.getcwd(),
+            filter="JSON files (*.json)",
+            selectedFilter="*.json")[0]
+        if path:
+            self.config.to_file(path)
+
+    def reset(self):
+        self.config.reset()
+        self.reset_inputs()
 
     def callback(self, attrname, element):
         self.config.update(attrname, element.value())
@@ -345,6 +420,30 @@ class CvFlowConfig:
 
     def update(self, attrname, value):
         self.__setattr__(attrname, value)
+    
+    def reset(self):
+        self.pyr_scale = 0.5
+        self.levels = 3
+        self.winsize = 15
+        self.iterations = 3
+        self.poly_n = 5
+        self.poly_sigma = 1.2
+        self.flags = 0
+
+    def to_dict(self):
+        return {
+            "pyr_scale": self.pyr_scale,
+            "levels": self.levels,
+            "winsize": self.winsize,
+            "iterations": self.iterations,
+            "poly_n": self.poly_n,
+            "poly_sigma": self.poly_sigma,
+            "flags": self.flags,
+        }
+    
+    def to_file(self, path: str):
+        with open(path, "w", encoding="utf8") as file:
+            json.dump(self.to_dict(), file, indent=4)
 
     @classmethod
     def from_file(cls, path: str):
