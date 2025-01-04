@@ -1,11 +1,14 @@
 import enum
 import logging
+import os
+import re
+import warnings
 
 import numpy
 
 from .flow import FlowDirection
 from .utils import parse_hex_color, compose_top, compose_additive,\
-    compose_subtractive, compose_average, load_mask
+    compose_subtractive, compose_average, load_image, load_mask
 
 
 @enum.unique
@@ -104,12 +107,19 @@ class Accumulator:
         raise NotImplementedError()
 
     @classmethod
-    def from_args(cls, width: int, height: int, method: str = "map",
-                  reset_mode: ResetMode | str = "off", reset_alpha: float = .9,
-                  reset_mask_path: str | None = None,
-                  heatmap_mode: HeatmapMode | str = "discrete",
-                  heatmap_args: str | tuple[int|float] = "0:0:0:0",
-                  bg_color: str = "ffffff", stack_composer: str = "top"):
+    def from_args(cls,
+            width: int,
+            height: int,
+            method: str = "map",
+            reset_mode: ResetMode | str = "off",
+            reset_alpha: float = .9,
+            reset_mask_path: str | None = None,
+            heatmap_mode: HeatmapMode | str = "discrete",
+            heatmap_args: str | tuple[int|float] = "0:0:0:0",
+            bg_color: str = "ffffff",
+            stack_composer: str = "top",
+            initial_canvas: str | None = None,
+            bitmap_mask_path: str | None = None):
         if isinstance(reset_mode, str):
             reset_mode = ResetMode.from_string(reset_mode)
         match method:
@@ -129,6 +139,9 @@ class Accumulator:
                 return CrumbleAccumulator(width, height, reset_mode,
                     reset_alpha, reset_mask_path, heatmap_mode, heatmap_args,
                     bg_color)
+            case "canvas":
+                return CanvasAccumulator(width, height, initial_canvas,
+                    bitmap_mask_path, heatmap_mode, heatmap_args)
         raise ValueError(f"Unknown accumulator method '{method}'")
 
     def get_heatmap_array(self) -> numpy.ndarray:
@@ -374,3 +387,58 @@ class SumAccumulator(Accumulator):
 
     def get_accumulator_array(self) -> numpy.ndarray:
         return numpy.copy(self.total_flow)
+
+
+class CanvasAccumulator(Accumulator):
+
+    def __init__(self,
+            width: int,
+            height: int,
+            initial_canvas: str | None = None,
+            bitmap_mask_path: str | None = None,
+            heatmap_mode: HeatmapMode | str = "discrete",
+            heatmap_args: str | tuple[int|float] = "0:0:0:0"):
+        Accumulator.__init__(self, width, height, heatmap_mode, heatmap_args)
+        self.canvas = 255 * numpy.ones((height, width, 3), dtype=numpy.uint8)
+        if initial_canvas is not None:
+            if re.match(r"#?[a-f0-9]{6}", initial_canvas):
+                self.canvas[:,:] = parse_hex_color(initial_canvas)
+            elif os.path.isfile(initial_canvas):
+                self.canvas = load_image(initial_canvas)
+            else:
+                warnings.warn(f"Could not use inital canvas argument {initial_canvas}")
+        self.bitmap_mask = None if bitmap_mask_path is None else load_mask(bitmap_mask_path)
+        self.last_flow_direction: FlowDirection | None = None
+
+    def update(self, flow: numpy.ndarray, direction: FlowDirection):
+        self._update_flow(flow)
+        self.last_flow_direction = direction
+         
+    def _canvas_set(self, where: tuple[numpy.ndarray], values: numpy.ndarray):
+        w = where[0] * 3
+        where_moved = (where[0] + self.flow_flat[where[0]]) * 3
+        self.canvas.flat[w] = values.flat[where_moved]
+        self.canvas.flat[w+1] = values.flat[where_moved+1]
+        self.canvas.flat[w+2] = values.flat[where_moved+2]
+
+    def _canvas_put(self, where: tuple[numpy.ndarray], values: numpy.ndarray):
+        w = where[0] * 3
+        where_moved = (where + self.flow_flat[where]) * 3
+        numpy.put(self.canvas, where_moved, values.flat[w])
+        numpy.put(self.canvas, where_moved+1, values.flat[w+1])
+        numpy.put(self.canvas, where_moved+2, values.flat[w+2])
+
+    def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
+        f = {
+            FlowDirection.FORWARD: self._canvas_put,
+            FlowDirection.BACKWARD: self._canvas_set
+        }[self.last_flow_direction]
+        if self.bitmap_mask is not None:
+            f(numpy.nonzero(self.flow_flat), self.canvas)
+            f(numpy.nonzero(numpy.multiply(self.flow_flat, self.bitmap_mask.flat)), bitmap)
+        else:
+            f(numpy.nonzero(self.flow_flat), bitmap)
+        return self.canvas
+
+    def get_accumulator_array(self) -> numpy.ndarray:
+        return self.canvas # TODO

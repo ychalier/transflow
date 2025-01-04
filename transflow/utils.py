@@ -4,11 +4,16 @@ import re
 import numpy
 
 
-def load_mask(mask_path: str, newaxis: bool = False) -> numpy.ndarray:
+def load_image(image_path: str) -> numpy.ndarray:
     import PIL.Image
-    image = PIL.Image.open(mask_path)
+    image = PIL.Image.open(image_path)
     arr = numpy.array(image)
     image.close()
+    return arr
+
+
+def load_mask(mask_path: str, newaxis: bool = False) -> numpy.ndarray:
+    arr = load_image(mask_path)
     if arr.ndim == 2:
         mask = arr / 255
     elif arr.ndim == 3:

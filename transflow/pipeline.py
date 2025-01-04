@@ -177,7 +177,9 @@ def transfer(
         bitmap_seek_time: float | None = None,
         duration_time: float | None = None,
         bitmap_alteration_path: str | None = None,
-        repeat: int = 1):
+        repeat: int = 1,
+        initial_canvas: str | None = None,
+        bitmap_mask_path: str | None = None):
 
     if safe:
         append_history()
@@ -353,7 +355,9 @@ def transfer(
                 heatmap_mode,
                 heatmap_args,
                 accumulator_background,
-                stack_composer)
+                stack_composer,
+                initial_canvas,
+                bitmap_mask_path)
 
         if has_output:
             output = VideoOutput.from_args(

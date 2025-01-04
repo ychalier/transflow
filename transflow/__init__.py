@@ -120,7 +120,8 @@ def main():
         help="target video size, for webcams and generated bitmaps, "\
             "of the form WIDTHxHEIGHT")
     parser.add_argument("-m", "--acc-method",
-        type=str, default="map", choices=["map", "stack", "sum", "crumble"],
+        type=str, default="map",
+        choices=["map", "stack", "sum", "crumble", "canvas"],
         help="accumulator method ('map' is default, 'stack' is very slow, "\
             "'sum' only works with backward flows, 'crumble' only works with "\
             "forward flows)")
@@ -168,6 +169,12 @@ def main():
     parser.add_argument("-to", "--to",
         type=str, default=None,
         help="end timestamp for flow source")
+    parser.add_argument("-ic", "--initial-canvas",
+        type=str, default=None,
+        help="set initial canvas for canvas accumulator, either a HEX color or a path to an image file")
+    parser.add_argument("-bm", "--bitmap-mask",
+        type=str, default=None,
+        help="path to a bitmap mask (black & white image) for canvas accumulator")
     args = parser.parse_args()
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
     duration_time = parse_timestamp(args.duration)
@@ -216,4 +223,6 @@ def main():
         bitmap_seek_time=parse_timestamp(args.bitmap_seek),
         duration_time=duration_time,
         bitmap_alteration_path=args.bitmap_alteration,
-        repeat=args.repeat)
+        repeat=args.repeat,
+        initial_canvas=args.initial_canvas,
+        bitmap_mask_path=args.bitmap_mask)
