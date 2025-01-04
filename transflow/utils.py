@@ -100,3 +100,12 @@ def absmax(arrays: list[numpy.ndarray]) -> numpy.ndarray:
     abs_stack = numpy.abs(stack)
     argmax = numpy.argmax(abs_stack, axis=0).reshape((1, w * h * 2))
     return numpy.take_along_axis(stack, argmax, 0).reshape(arrays[0].shape)
+
+
+def startfile(path: str):
+    import sys, subprocess
+    if sys.platform == "win32":
+        os.startfile(os.path.realpath(path))
+    else:
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        subprocess.call([opener, os.path.realpath(path)])

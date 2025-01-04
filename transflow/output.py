@@ -4,7 +4,7 @@ import subprocess
 import cv2
 import numpy
 
-from .utils import parse_hex_color, find_unique_path
+from .utils import parse_hex_color, find_unique_path, startfile
 
 
 def append_history(output_path):
@@ -83,11 +83,7 @@ class FFmpegVideoOutput(VideoOutput):
         self.process.stdin.close()
         self.process.wait()
         if self.execute:
-            try:
-                os.startfile(os.path.realpath(self.path))
-            except AttributeError:
-                # This may occur depending on platform
-                pass
+            startfile(self.path)
 
 
 class CvVideoOutput(VideoOutput):
