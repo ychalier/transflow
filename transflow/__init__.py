@@ -109,8 +109,7 @@ def main():
         type=str, default="map",
         choices=["map", "stack", "sum", "crumble", "canvas"],
         help="accumulator method ('map' is default, 'stack' is very slow, "\
-            "'sum' only works with backward flows, 'crumble' only works with "\
-            "forward flows)")
+            "'sum' only works with backward flows)")
     parser.add_argument("-ab", "--accumulator-background",
         type=str, default="ffffff",
         help="background color used in stack and crumble remapper")

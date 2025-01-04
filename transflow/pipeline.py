@@ -404,12 +404,7 @@ def transfer(
                 if export_flow:
                     flow_output.write_array(numpy.round(flow).astype(int) if round_flow else flow)
                 accumulator.update(flow, fs_direction)
-                if output_bitmap:
-                    bitmap = bitmap_queue.get(timeout=1)
-                    if bitmap is None:
-                        break
-                    output_queue.put(accumulator.apply(bitmap), timeout=1)
-                elif output_intensity:
+                if output_intensity:
                     flow_intensity = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
                     output_queue.put(
                         render1d(flow_intensity, render_scale, render_colors,
@@ -425,6 +420,11 @@ def transfer(
                         render2d(accumulator.get_accumulator_array(),
                                  render_scale, render_colors),
                         timeout=1)
+                elif output_bitmap:
+                    bitmap = bitmap_queue.get(timeout=1)
+                    if bitmap is None:
+                        break
+                    output_queue.put(accumulator.apply(bitmap), timeout=1)
                 cursor += 1
                 if checkpoint_every is not None and cursor % checkpoint_every == 0:
                     export_checkpoint(flow_path, bitmap_path, output_path,
