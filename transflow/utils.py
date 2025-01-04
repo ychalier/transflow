@@ -109,3 +109,16 @@ def startfile(path: str):
     else:
         opener = "open" if sys.platform == "darwin" else "xdg-open"
         subprocess.call([opener, os.path.realpath(path)])
+
+
+def parse_timestamp(timestamp: str | None) -> float | None:
+    if timestamp is None:
+        return None
+    a = re.match(r"(\d\d):(\d\d):(\d\d)(?:\.(\d\d\d))?", timestamp)
+    h = int(a.group(1))
+    m = int(a.group(2))
+    s = int(a.group(3))
+    ms = 0
+    if a.group(4) is not None:
+        ms = int(a.group(4))
+    return 3600 * h + 60 * m + s + ms/1000

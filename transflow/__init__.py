@@ -4,20 +4,6 @@
 import argparse
 
 
-def parse_timestamp(timestamp: str | None) -> float | None:
-    import re
-    if timestamp is None:
-        return None
-    a = re.match(r"(\d\d):(\d\d):(\d\d)(?:\.(\d\d\d))?", timestamp)
-    h = int(a.group(1))
-    m = int(a.group(2))
-    s = int(a.group(3))
-    ms = 0
-    if a.group(4) is not None:
-        ms = int(a.group(4))
-    return 3600 * h + 60 * m + s + ms/1000
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -176,6 +162,7 @@ def main():
         type=str, default=None,
         help="path to a bitmap mask (black & white image) for canvas accumulator")
     args = parser.parse_args()
+    from .utils import parse_timestamp
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
     duration_time = parse_timestamp(args.duration)
     if duration_time is None and (args.to is not None):
