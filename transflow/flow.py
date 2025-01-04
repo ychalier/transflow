@@ -58,7 +58,7 @@ class FlowSource:
         if self.is_stream and self.repeat > 1:
             warnings.warn("Flow source is a stream, cannot repeat it!")
             self.repeat = 1
-        if self.is_stream and self.seek_time is not None:
+        if self.is_stream and self.seek_time is not None and self.seek_time > 0:
             warnings.warn("Flow source is a stream, seek time is ignored!")
             self.seek_time = None
 

@@ -330,6 +330,11 @@ def transfer(
             bitmap_process.start()
             bs_width, bs_height, bs_framerate, *_ = shape_queue.get()
 
+            if bs_width == 0 or bs_height == 0:
+                raise ValueError(
+                    f"Encountered an error opening bitmap '{bitmap_path}', "\
+                    f"shape is ({bs_height}, {bs_width})")
+
             if fs_width != bs_width or fs_height != bs_height:
                 if bs_width % fs_width != 0 or bs_height % fs_height != 0:
                     raise ValueError(
@@ -340,7 +345,8 @@ def transfer(
                 fs_height_factor = bs_height // fs_height
         
         elif bitmap_alteration_path is not None:
-            warnings.warn("An alteration path was passed but no bitmap was provided")
+            warnings.warn(
+                "An alteration path was passed but no bitmap was provided")
 
         shape_queue.close()
 
