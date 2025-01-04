@@ -140,8 +140,9 @@ class Accumulator:
                     reset_alpha, reset_mask_path, heatmap_mode, heatmap_args,
                     bg_color)
             case "canvas":
-                return CanvasAccumulator(width, height, initial_canvas,
-                    bitmap_mask_path, heatmap_mode, heatmap_args)
+                return CanvasAccumulator(width, height, reset_mode, reset_alpha,
+                    reset_mask_path, heatmap_mode, heatmap_args, initial_canvas,
+                    bitmap_mask_path)
         raise ValueError(f"Unknown accumulator method '{method}'")
 
     def get_heatmap_array(self) -> numpy.ndarray:
@@ -394,25 +395,36 @@ class CanvasAccumulator(Accumulator):
     def __init__(self,
             width: int,
             height: int,
-            initial_canvas: str | None = None,
-            bitmap_mask_path: str | None = None,
+            reset_mode: ResetMode = ResetMode.OFF,
+            reset_alpha: float = .9,
+            reset_mask_path: str | None = None,
             heatmap_mode: HeatmapMode | str = "discrete",
-            heatmap_args: str | tuple[int|float] = "0:0:0:0"):
+            heatmap_args: str | tuple[int|float] = "0:0:0:0",
+            initial_canvas: str | None = None,
+            bitmap_mask_path: str | None = None):
         Accumulator.__init__(self, width, height, heatmap_mode, heatmap_args)
-        self.canvas = 255 * numpy.ones((height, width, 3), dtype=numpy.uint8)
+        self.reset_mode = reset_mode
+        self.reset_alpha = reset_alpha
+        self.reset_mask = None if reset_mask_path is None else load_mask(reset_mask_path)
+        self.initial_canvas = 255 * numpy.ones((height, width, 3), dtype=numpy.uint8)
         if initial_canvas is not None:
             if re.match(r"#?[a-f0-9]{6}", initial_canvas):
-                self.canvas[:,:] = parse_hex_color(initial_canvas)
+                self.initial_canvas[:,:] = parse_hex_color(initial_canvas)
             elif os.path.isfile(initial_canvas):
-                self.canvas = load_image(initial_canvas)
+                self.initial_canvas = load_image(initial_canvas)
             else:
                 warnings.warn(f"Could not use inital canvas argument {initial_canvas}")
+        self.canvas = self.initial_canvas.copy()
         self.bitmap_mask = None if bitmap_mask_path is None else load_mask(bitmap_mask_path)
         self.last_flow_direction: FlowDirection | None = None
 
     def update(self, flow: numpy.ndarray, direction: FlowDirection):
         self._update_flow(flow)
         self.last_flow_direction = direction
+        if self.reset_mode == ResetMode.RANDOM:
+            threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
+            where = numpy.where(numpy.random.random(size=(self.height, self.width)) <= threshold)
+            self.canvas[where] = self.initial_canvas[where]
          
     def _canvas_set(self, where: tuple[numpy.ndarray], values: numpy.ndarray):
         w = where[0] * 3
