@@ -160,6 +160,15 @@ def main():
     parser.add_argument("-bm", "--bitmap-mask",
         type=str, default=None,
         help="path to a bitmap mask (black & white image) for canvas accumulator")
+    parser.add_argument("-bi", "--bitmap-introduction-flags",
+        type=int, default=1,
+        help="bitmap introduction flags for canvas accumulator (1 for motion, 2 for static, 3 for both)")
+    parser.add_argument("-cr", "--crumble",
+        action="store_true",
+        help="enable crumble effect for the canvas accumulator")
+    parser.add_argument("-cri", "--initially-crumbled",
+        action="store_true",
+        help="start with empty crumble mask for the canvas accumulator, only revealing bitmap pixels at start")
     args = parser.parse_args()
     from .utils import parse_timestamp
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
@@ -211,4 +220,7 @@ def main():
         bitmap_alteration_path=args.bitmap_alteration,
         repeat=args.repeat,
         initial_canvas=args.initial_canvas,
-        bitmap_mask_path=args.bitmap_mask)
+        bitmap_mask_path=args.bitmap_mask,
+        crumble=args.crumble,
+        bitmap_introduction_flags=args.bitmap_introduction_flags,
+        initially_crumbled=args.initially_crumbled)

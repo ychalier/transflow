@@ -195,7 +195,7 @@ Mergin Function | Description
 
 ## Accumulation Methods
 
-Flow are accumulated accross time. You can specify the accumulation method with the `-m, --acc-method` argument. Possible values are `map` (default), `sum`, `stack` or `crumble`. The accumulator is in charge of transforming frames from the bitmap source.
+Flow are accumulated accross time. You can specify the accumulation method with the `-m, --acc-method` argument. Possible values are `map` (default), `sum`, `stack`, `crumble` or `canvas`. The accumulator is in charge of transforming frames from the bitmap source.
 
 Method | Description | Example
 ------ | ----------- | -------
@@ -203,6 +203,7 @@ Method | Description | Example
 `sum`  | Flows (backward only, see [Flow Direction](#flow-direction) section) are summed in a floating array. Looks smooth.| ![](https://drive.chalier.fr/protected/transflow/sum.gif)
 `stack` | Pixels are considered as particles moving on a grid. Computation is VERY slow.| ![](https://drive.chalier.fr/protected/transflow/stack.gif)
 `crumble` | Moved pixels leave an empty spot behind them.| ![](https://drive.chalier.fr/protected/transflow/crumble.gif)
+`canvas` | Paste moving pixels from the bitmap to a canvas, and applying the flow on the canvas | ![](https://drive.chalier.fr/protected/transflow/canvas.gif)
 
 **Background Color.** `stack` and `crumble` accumulator can contain empty spots, which are assigned a background color set with the `-ab, --accumulator-background` argument (white by default). If provided, the color must be expressed as an HEX value. For instance, for a green chroma key, one may use the `-ab 00ff00` argument.
 
@@ -211,6 +212,16 @@ Method | Description | Example
 - `add`: all pixels in stack are summed, value is clipped
 - `sub`: subtractive composition, as in painting
 - `avg`: average all pixels in stack
+
+**Canvas Parameters.** The canvas accumulator has potential for generalizing a lot of features, though it is not ready yet. So far, you may specify the following arguments:
+
+Argument | Default | Description
+-------- | ------- | -----------
+`-ic, --initial-canvas` | White | Either a HEX color or a path to an image. Will define the initial canvas image.
+`-bm, --bitmap-mask` | `None` | (Optionnal) A path to a black and white image. If set, only bitmap pixels from white regions in the mask will be introduced, otherwise, every moving bitmap pixels are considered.
+`-bi, --bitmap-introduction-flags` | 1 | If 1, moving bitmap pixels are pasted onto the canvas. If 2, bitmap pixels from the mask are pasted onto the canvas. If 3, the two previous effects apply.
+`-cr, --crumble` | `False` | Enable the crumbling effect: a moving pixels leaves an empty spot behind it. Moving pixels from the bitmap bypass this behavior.
+`-cri, --initially-crumbled` | `False` | If `True`, the whole canvas is originally considered empty. No action will occur until bitmap pixels arrive.
 
 ## Accumulator Heatmap
 
@@ -252,7 +263,7 @@ If specified, the reset mask loads an image and converts it to an array of float
 **Linear Reset.** At each frame, the difference between the current location of a pixel and its original location is computed. Static pixels are moved back in the direction of their original location with a speed controlled by the `-ra` argument or the value in the reset mask array, if passed. 0 means no reset, 1 means instant reset.
 
 > [!NOTE]
-> Linear reset will not work with the `crumble` accumulator (see [Accumulation Methods](#accumulation-methods))
+> Linear reset will not work with the `crumble` and the `canvas` accumulators (see [Accumulation Methods](#accumulation-methods))
 
 ## Generative Bitmap Sources
 

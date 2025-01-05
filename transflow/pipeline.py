@@ -179,7 +179,10 @@ def transfer(
         bitmap_alteration_path: str | None = None,
         repeat: int = 1,
         initial_canvas: str | None = None,
-        bitmap_mask_path: str | None = None):
+        bitmap_mask_path: str | None = None,
+        crumble: bool = False,
+        bitmap_introduction_flags: int = 1,
+        initially_crumbled: bool = False):
 
     if safe:
         append_history()
@@ -363,7 +366,10 @@ def transfer(
                 accumulator_background,
                 stack_composer,
                 initial_canvas,
-                bitmap_mask_path)
+                bitmap_mask_path,
+                crumble,
+                bitmap_introduction_flags,
+                initially_crumbled)
 
         if has_output:
             output = VideoOutput.from_args(

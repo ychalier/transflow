@@ -119,7 +119,10 @@ class Accumulator:
             bg_color: str = "ffffff",
             stack_composer: str = "top",
             initial_canvas: str | None = None,
-            bitmap_mask_path: str | None = None):
+            bitmap_mask_path: str | None = None,
+            crumble: bool = False,
+            bitmap_introduction_flags: int = 1,
+            initially_crumbled: bool = False):
         if isinstance(reset_mode, str):
             reset_mode = ResetMode.from_string(reset_mode)
         match method:
@@ -142,7 +145,8 @@ class Accumulator:
             case "canvas":
                 return CanvasAccumulator(width, height, reset_mode, reset_alpha,
                     reset_mask_path, heatmap_mode, heatmap_args, initial_canvas,
-                    bitmap_mask_path)
+                    bitmap_mask_path, crumble, bitmap_introduction_flags,
+                    initially_crumbled)
         raise ValueError(f"Unknown accumulator method '{method}'")
 
     def get_heatmap_array(self) -> numpy.ndarray:
@@ -439,6 +443,8 @@ class CanvasAccumulator(Accumulator):
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
             where = numpy.where(numpy.random.random(size=(self.height, self.width)) <= threshold)
             self.canvas[where] = self.initial_canvas[where]
+        elif self.reset_mode != ResetMode.OFF:
+            warnings.warn(f"Unsupported reset mode '{self.reset_mode}' for CanvasAccumulator")
          
     def put(self, target: numpy.ndarray, source: numpy.ndarray, values: numpy.ndarray):
         t3 = target * 3
@@ -457,16 +463,16 @@ class CanvasAccumulator(Accumulator):
             moving_target = moving_source + self.flow_flat[moving_source]
 
         wh = numpy.nonzero(self.crumble_mask.flat[moving_source])[0]
-        moving_visible_source = moving_source[wh]
+        moving_crumble_source = moving_source[wh]
         if self.direction == FlowDirection.BACKWARD:
-            moving_visible_target = moving_visible_source - self.flow_flat[moving_target][wh]
+            moving_crumble_target = moving_crumble_source - self.flow_flat[moving_target][wh]
         elif self.direction == FlowDirection.FORWARD:
-            moving_visible_target = moving_visible_source + self.flow_flat[moving_source][wh]
+            moving_crumble_target = moving_crumble_source + self.flow_flat[moving_source][wh]
 
         if self.bitmap_mask is None:
             moving_bitmap_source = moving_source
             moving_bitmap_target = moving_target
-            static_bitmap_source = numpy.array()
+            static_bitmap_source = numpy.array([])
         else:
             wh = numpy.nonzero(self.bitmap_mask.flat[moving_source])[0]
             moving_bitmap_source = moving_source[wh]
@@ -479,11 +485,11 @@ class CanvasAccumulator(Accumulator):
         aux = self.canvas.copy()
 
         if self.crumble:
-            self.put(moving_visible_source, moving_visible_source, self.initial_canvas)
-            self.crumble_mask.flat[moving_visible_source] = 0
-            self.crumble_mask.flat[moving_visible_target] = 1
+            self.put(moving_crumble_source, moving_crumble_source, self.initial_canvas)
+            self.crumble_mask.flat[moving_crumble_source] = 0
+            self.crumble_mask.flat[moving_crumble_target] = 1
 
-        self.put(moving_visible_target, moving_visible_source, aux)
+        self.put(moving_crumble_target, moving_crumble_source, aux)
 
         if self.bitmap_introduction_flags & BitmapIntroductionFlags.STATIC.value:
             self.put(static_bitmap_source, static_bitmap_source, bitmap)
