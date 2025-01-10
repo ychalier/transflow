@@ -1,9 +1,9 @@
 {
-    "pyr_scale": 0.5,
-    "levels": 3,
-    "winsize": 19,
-    "iterations": 3,
-    "poly_n": 7,
-    "poly_sigma": 1.5,
-    "flags": 0
+    "fb_pyr_scale": 0.5,
+    "fb_levels": 3,
+    "fb_winsize": 19,
+    "fb_iterations": 3,
+    "fb_poly_n": 7,
+    "fb_poly_sigma": 1.5,
+    "fb_flags": 0
 }
