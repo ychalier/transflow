@@ -28,9 +28,17 @@ class FlowMethod(enum.Enum):
     def from_string(cls, string: str):
         if string == "farneback":
             return FlowMethod.FARNEBACK
-        if string == "hornschunck":
+        if string == "horn-schunck":
             return FlowMethod.HORN_SCHUNCK
         raise ValueError(f"Invalid Flow Method: {string}")
+
+    @staticmethod
+    def to_string(method: "FlowMethod"):
+        if method == FlowMethod.FARNEBACK:
+            return "farneback"
+        if method == FlowMethod.HORN_SCHUNCK:
+            return "horn-schunck"
+        raise ValueError(f"Unknown flow method {method}")
 
 
 class FlowSource:
@@ -253,23 +261,108 @@ class AvFlowSource(FlowSource):
 
 class CvFlowConfigWindow(threading.Thread):
 
+    TEMPLATE = [
+        {
+            "name": "farneback",
+            "params": [
+                {
+                    "name": "fb_pyr_scale",
+                    "label": "Pyr Scale",
+                    "help": "image scale (<1) to build pyramids for each image",
+                    "type": float,
+                    "decimals": 2,
+                    "min": 0.01,
+                    "max": 0.99
+                },
+                {
+                    "name": "fb_levels",
+                    "label": "Levels",
+                    "help": "number of pyramid layers including the initial image",
+                    "type": int,
+                    "min": 1,
+                },
+                {
+                    "name": "fb_iterations",
+                    "label": "Iterations",
+                    "help": "number of iterations the algorithm does at each pyramid level",
+                    "type": int,
+                    "min": 1,
+                },
+                {
+                    "name": "fb_poly_n",
+                    "label": "Poly N",
+                    "help": "size of the pixel neighborhood used to find polynomial expansion in each pixel",
+                    "type": int,
+                    "min": 1,
+                },
+                {
+                    "name": "fb_poly_sigma",
+                    "label": "Poly Sigma",
+                    "help": "standard deviation of the Gaussian that is used to smooth derivatives used as a basis for the polynomial expansion",
+                    "type": float,
+                    "decimals": 2,
+                },
+            ]
+        },
+        {
+            "name": "horn-schunck",
+            "params": [
+                {
+                    "name": "hs_alpha",
+                    "label": "Alpha",
+                    "help": "Alpha",
+                    "type": float,
+                    "decimals": 3,
+                    "min": 0.001,
+                },
+                {
+                    "name": "hs_iterations",
+                    "label": "Max Iterations",
+                    "help": "Max Iterations",
+                    "type": int,
+                    "min": 0,
+                    "max": 300
+                },
+                {
+                    "name": "hs_decay",
+                    "label": "Decay",
+                    "help": "Decay",
+                    "type": float,
+                    "decimals": 3,
+                },
+                {
+                    "name": "hs_delta",
+                    "label": "Delta",
+                    "help": "Delta",
+                    "type": float,
+                    "decimals": 2,
+                },
+            ]
+        }
+    ]
+
     def __init__(self, config: "CvFlowConfig"):
         threading.Thread.__init__(self)
         self.config = config
         self.inputs = {}
+        self.widgets = {}
 
     def run(self):
         import PySide6.QtCore
         import PySide6.QtWidgets
         app = PySide6.QtWidgets.QApplication([])
         window = PySide6.QtWidgets.QWidget()
-        layout = PySide6.QtWidgets.QVBoxLayout()
-        layout.setContentsMargins(32, 32, 32, 32)
+        layout_main = PySide6.QtWidgets.QVBoxLayout()
+        layout_main.setContentsMargins(32, 32, 32, 32)
 
         self.inputs: dict[str, PySide6.QtWidgets.QSpinBox | PySide6.QtWidgets.QDoubleSpinBox] = {}
+        self.widgets: dict[str, PySide6.QtWidgets.QWidget] = {}
 
-        def add_to_layout(label: str, element: PySide6.QtWidgets.QWidget,
-                          tooltip: str | None = None):
+        def add_to_layout(
+                layout: PySide6.QtWidgets.QVBoxLayout,
+                label: str,
+                element: PySide6.QtWidgets.QWidget,
+                tooltip: str | None = None):
             element.setMinimumWidth(100)
             hlayout = PySide6.QtWidgets.QHBoxLayout()
             label_element = PySide6.QtWidgets.QLabel(label)
@@ -279,107 +372,60 @@ class CvFlowConfigWindow(threading.Thread):
             hlayout.addWidget(label_element)
             hlayout.addWidget(element)
             layout.addLayout(hlayout)
+        
+        self.method_input = PySide6.QtWidgets.QComboBox()
+        self.method_input.currentIndexChanged.connect(self.callback)
+        add_to_layout(layout_main, "method", self.method_input, "method")
 
-        fb_pyr_scale_input = PySide6.QtWidgets.QDoubleSpinBox()
-        fb_pyr_scale_input.setDecimals(2)
-        fb_pyr_scale_input.setRange(.01, .99)
-        fb_pyr_scale_input.setSingleStep(.01)
-        fb_pyr_scale_input.setValue(self.config.fb_pyr_scale)
-        fb_pyr_scale_input.valueChanged.connect(lambda: self.callback("fb_pyr_scale", fb_pyr_scale_input))
-        add_to_layout("fb_pyr_scale", fb_pyr_scale_input, "image scale (<1) to build "\
-                      "pyramids for each image")
-        self.inputs["fb_pyr_scale"] = fb_pyr_scale_input
-
-        fb_levels_input = PySide6.QtWidgets.QSpinBox()
-        fb_levels_input.setMinimum(1)
-        fb_levels_input.setValue(self.config.fb_levels)
-        fb_levels_input.valueChanged.connect(lambda: self.callback("fb_levels", fb_levels_input))
-        add_to_layout("fb_levels", fb_levels_input, "number of pyramid layers "\
-                      "including the initial image")
-        self.inputs["fb_levels"] = fb_levels_input
-
-        fb_winsize_input = PySide6.QtWidgets.QSpinBox()
-        fb_winsize_input.setValue(self.config.fb_winsize)
-        fb_winsize_input.setMinimum(1)
-        fb_winsize_input.valueChanged.connect(lambda: self.callback("fb_winsize", fb_winsize_input))
-        add_to_layout("fb_winsize", fb_winsize_input, "averaging window size")
-        self.inputs["fb_winsize"] = fb_winsize_input
-
-        fb_iterations_input = PySide6.QtWidgets.QSpinBox()
-        fb_iterations_input.setValue(self.config.fb_iterations)
-        fb_iterations_input.setMinimum(1)
-        fb_iterations_input.valueChanged.connect(lambda: self.callback("fb_iterations", fb_iterations_input))
-        add_to_layout("fb_iterations", fb_iterations_input, "number of iterations "\
-                      "the algorithm does at each pyramid level")
-        self.inputs["fb_iterations"] = fb_iterations_input
-
-        fb_poly_n_input = PySide6.QtWidgets.QSpinBox()
-        fb_poly_n_input.setValue(self.config.fb_poly_n)
-        fb_poly_n_input.setMinimum(1)
-        fb_poly_n_input.valueChanged.connect(lambda: self.callback("fb_poly_n", fb_poly_n_input))
-        add_to_layout("fb_poly_n", fb_poly_n_input, "size of the pixel neighborhood "\
-                      "used to find polynomial expansion in each pixel")
-        self.inputs["fb_poly_n"] = fb_poly_n_input
-
-        fb_poly_sigma_input = PySide6.QtWidgets.QDoubleSpinBox()
-        fb_poly_sigma_input.setDecimals(2)
-        fb_poly_sigma_input.setValue(self.config.fb_poly_sigma)
-        fb_poly_sigma_input.valueChanged.connect(lambda: self.callback("fb_poly_sigma", fb_poly_sigma_input))
-        add_to_layout("fb_poly_sigma", fb_poly_sigma_input, "standard deviation of "\
-            "the Gaussian that is used to smooth derivatives used as a basis "\
-            "for the polynomial expansion")
-        self.inputs["fb_poly_sigma"] = fb_poly_sigma_input
-
-        hs_alpha_input = PySide6.QtWidgets.QDoubleSpinBox()
-        hs_alpha_input.setMinimum(0.001)
-        hs_alpha_input.setDecimals(3)
-        hs_alpha_input.setValue(self.config.hs_alpha)
-        hs_alpha_input.valueChanged.connect(lambda: self.callback("hs_alpha", hs_alpha_input))
-        add_to_layout("hs_alpha", hs_alpha_input, "Horn-Schunck alpha")
-        self.inputs["hs_alpha"] = hs_alpha_input
-
-        hs_iterations_input = PySide6.QtWidgets.QSpinBox()
-        hs_iterations_input.setValue(self.config.hs_iterations)
-        hs_iterations_input.valueChanged.connect(lambda: self.callback("hs_iterations", hs_iterations_input))
-        add_to_layout("hs_iterations", hs_iterations_input, "Horn-Schunck iterations")
-        self.inputs["hs_iterations"] = hs_iterations_input
-
-        hs_decay_input = PySide6.QtWidgets.QDoubleSpinBox()
-        hs_decay_input.setDecimals(3)
-        hs_decay_input.setValue(self.config.hs_decay)
-        hs_decay_input.valueChanged.connect(lambda: self.callback("hs_decay", hs_decay_input))
-        add_to_layout("hs_decay", hs_decay_input, "Horn-Schunck decay")
-        self.inputs["hs_decay"] = hs_decay_input
-
-        hs_delta_input = PySide6.QtWidgets.QDoubleSpinBox()
-        hs_delta_input.setDecimals(3)
-        hs_delta_input.setValue(self.config.hs_delta)
-        hs_delta_input.valueChanged.connect(lambda: self.callback("hs_delta", hs_delta_input))
-        add_to_layout("hs_delta", hs_delta_input, "Horn-Schunck delta")
-        self.inputs["hs_delta"] = hs_delta_input
+        for method in self.TEMPLATE:
+            self.method_input.addItem(method["name"])
+            layout = PySide6.QtWidgets.QVBoxLayout()
+            layout.setContentsMargins(0, 0, 0, 0)
+            widget = PySide6.QtWidgets.QWidget()
+            widget.setLayout(layout)
+            layout_main.addWidget(widget)
+            self.widgets[method["name"]] = widget
+            for param in method["params"]:
+                if param["type"] == int:
+                    widget_element = PySide6.QtWidgets.QSpinBox()
+                elif param["type"] == float:
+                    widget_element = PySide6.QtWidgets.QDoubleSpinBox()
+                    widget_element.setDecimals(param["decimals"])
+                    widget_element.setSingleStep(1 / (10 ** param["decimals"]))
+                else:
+                    raise ValueError(f"Invalid parameter type {param['type']}")
+                if "min" in param:
+                    widget_element.setMinimum(param["min"])
+                if "max" in param:
+                    widget_element.setMaximum(param["max"])
+                widget_element.setValue(getattr(self.config, param["name"]))
+                widget_element.valueChanged.connect(self.callback)
+                add_to_layout(layout, param["label"], widget_element, param["help"])
+                self.inputs[param["name"]] = widget_element
 
         reset_button = PySide6.QtWidgets.QPushButton("Reset")
         reset_button.setMinimumWidth(100)
         reset_button.clicked.connect(lambda: self.reset())
         hlayout = PySide6.QtWidgets.QHBoxLayout()
         hlayout.addWidget(reset_button)
-        layout.addLayout(hlayout)
+        layout_main.addLayout(hlayout)
         
         import_button = PySide6.QtWidgets.QPushButton("Import")
         import_button.setMinimumWidth(100)
         import_button.clicked.connect(lambda: self.import_config(window))
         hlayout = PySide6.QtWidgets.QHBoxLayout()
         hlayout.addWidget(import_button)
-        layout.addLayout(hlayout)            
+        layout_main.addLayout(hlayout)            
         
         export_button = PySide6.QtWidgets.QPushButton("Export")
         export_button.setMinimumWidth(100)
         export_button.clicked.connect(lambda: self.export_config(window))
         hlayout = PySide6.QtWidgets.QHBoxLayout()
         hlayout.addWidget(export_button)
-        layout.addLayout(hlayout)
+        layout_main.addLayout(hlayout)
 
-        window.setLayout(layout)
+        self.callback()
+        window.setLayout(layout_main)
 
         window.setWindowTitle("OpenCV Config")
         window.setWindowFlag(PySide6.QtCore.Qt.WindowType.WindowCloseButtonHint, False)
@@ -390,8 +436,10 @@ class CvFlowConfigWindow(threading.Thread):
         window.show()
         app.exec()
 
-    def reset_inputs(self):
+    def set_inputs_from_config(self):
         for key, value in self.config.to_dict().items():
+            if key == "method":
+                self.method_input.setCurrentIndex([m["name"] for m in self.TEMPLATE].index(value))
             if key not in self.inputs:
                 continue
             self.inputs[key].setValue(value)
@@ -403,12 +451,12 @@ class CvFlowConfigWindow(threading.Thread):
             caption="Import Config",
             dir=os.getcwd(),
             filter="JSON files (*.json)",
-            selectedFilter="*.json")[0]
+            selectedFilter="JSON files (*.json)")[0]
         if path:
             other = CvFlowConfig.from_file(path)
             for key, value in other.to_dict().items():
                 self.config.update(key, value)
-            self.reset_inputs()
+            self.set_inputs_from_config()
 
     def export_config(self, window):
         import PySide6.QtWidgets
@@ -417,21 +465,28 @@ class CvFlowConfigWindow(threading.Thread):
             caption="Export Config",
             dir=os.getcwd(),
             filter="JSON files (*.json)",
-            selectedFilter="*.json")[0]
+            selectedFilter="JSON files (*.json)")[0]
         if path:
             self.config.to_file(path)
 
     def reset(self):
         self.config.reset()
-        self.reset_inputs()
+        self.set_inputs_from_config()
 
-    def callback(self, attrname, element):
-        self.config.update(attrname, element.value())
+    def callback(self):
+        method_name = self.TEMPLATE[self.method_input.currentIndex()]["name"]
+        method = FlowMethod.from_string(method_name)
+        self.config.update("method", method)
+        for widget_name, widget in self.widgets.items():
+            widget.setVisible(method_name == widget_name)
+        for name, widget in self.inputs.items():
+            self.config.update(name, widget.value())
 
 
 class CvFlowConfig:
 
     def __init__(self,
+            method: str | FlowMethod = "farneback",
             fb_pyr_scale: float = 0.5,
             fb_levels: int = 3,
             fb_winsize: int = 15,
@@ -444,6 +499,7 @@ class CvFlowConfig:
             hs_decay: float = 0,
             hs_delta: float = 1,
             show_window: bool = False):
+        self.method = FlowMethod.from_string(method) if isinstance(method, str) else method
         self.fb_pyr_scale = fb_pyr_scale
         self.fb_levels = fb_levels
         self.fb_winsize = fb_winsize
@@ -465,9 +521,12 @@ class CvFlowConfig:
         self.window.start()
 
     def update(self, attrname, value):
+        if attrname == "method" and isinstance(value, str):
+            value = FlowMethod.from_string(value)
         self.__setattr__(attrname, value)
     
     def reset(self):
+        self.method = FlowMethod.FARNEBACK
         self.fb_pyr_scale = 0.5
         self.fb_levels = 3
         self.fb_winsize = 15
@@ -482,6 +541,7 @@ class CvFlowConfig:
 
     def to_dict(self):
         return {
+            "method": FlowMethod.to_string(self.method),
             "fb_pyr_scale": self.fb_pyr_scale,
             "fb_levels": self.fb_levels,
             "fb_winsize": self.fb_winsize,
@@ -515,8 +575,8 @@ def calc_optical_flow_horn_schunck(
         decay: float = 0,
         delta: float = 1):
     import scipy.ndimage
-    a = cv2.GaussianBlur(prev_grey, (5, 5), 0)
-    b = cv2.GaussianBlur(next_grey, (5, 5), 0)
+    a = cv2.GaussianBlur(prev_grey.astype(numpy.float64), (5, 5), 0)
+    b = cv2.GaussianBlur(next_grey.astype(numpy.float64), (5, 5), 0)
     if flow is None:
         u = numpy.zeros(a.shape)
         v = numpy.zeros(a.shape)
@@ -531,17 +591,16 @@ def calc_optical_flow_horn_schunck(
     ey = scipy.ndimage.convolve(a, y_kernel) + scipy.ndimage.convolve(b, y_kernel)
     et = scipy.ndimage.convolve(b, t_kernel) - scipy.ndimage.convolve(a, t_kernel)
     for _ in range(max_iters):
-        try:
-            u_avg = scipy.ndimage.convolve(u, avg_kernel)
-            v_avg = scipy.ndimage.convolve(v, avg_kernel)
-            c = (ex * u_avg + ey * v_avg + et) / (4 * alpha**2 + ex**2 + ey**2)
-            prev = u
-            u = u_avg - ex * c
-            v = v_avg - ey * c
-            if delta is not None and numpy.linalg.norm(u - prev, 2) < delta:
-                break
-        except numpy.linalg.LinAlgError:
-            # Overflows might happen
+        u_avg = scipy.ndimage.convolve(u, avg_kernel)
+        v_avg = scipy.ndimage.convolve(v, avg_kernel)
+        c = numpy.divide(
+            numpy.multiply(ex, u_avg) + numpy.multiply(ey, v_avg) + et,
+            alpha ** 2 + numpy.pow(ex, 2) + numpy.pow(ey, 2)
+        )
+        prev = u
+        u = u_avg - numpy.multiply(ex, c)
+        v = v_avg - numpy.multiply(ey, c)
+        if delta is not None and numpy.linalg.norm(u - prev, 2) < delta:
             break
     return numpy.stack([u, v], axis=-1)
 
@@ -559,8 +618,7 @@ class CvFlowSource(FlowSource):
             seek: int | None = None,
             seek_time: float | None = None,
             duration_time: float | None = None,
-            repeat: int = 1,
-            method: FlowMethod = FlowMethod.HORN_SCHUNCK):
+            repeat: int = 1):
         FlowSource.__init__(self,
             direction if direction is not None else FlowDirection.FORWARD,
             mask_path, kernel_path, flow_gain, seek, seek_time, duration_time,
@@ -568,7 +626,6 @@ class CvFlowSource(FlowSource):
         self.file = file
         self.config = config
         self.size = size
-        self.method = method
         self.capture = None
         self.prev_gray = None
         self.prev_flow = None
@@ -623,7 +680,7 @@ class CvFlowSource(FlowSource):
             left, right = gray, self.prev_gray
         else:
             raise ValueError(f"Invalid flow direction '{self.direction}'")
-        if self.method == FlowMethod.FARNEBACK:
+        if self.config.method == FlowMethod.FARNEBACK:
             flow = cv2.calcOpticalFlowFarneback(
                 prev=left,
                 next=right,
@@ -636,7 +693,7 @@ class CvFlowSource(FlowSource):
                 poly_sigma=self.config.fb_poly_sigma,
                 flags=self.config.fb_flags,
             )
-        elif self.method == FlowMethod.HORN_SCHUNCK:
+        elif self.config.method == FlowMethod.HORN_SCHUNCK:
             flow = calc_optical_flow_horn_schunck(
                 prev_grey=left,
                 next_grey=right,

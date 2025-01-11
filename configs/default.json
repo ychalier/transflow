@@ -1,4 +1,5 @@
 {
+    "method": "farneback",
     "fb_pyr_scale": 0.5,
     "fb_levels": 3,
     "fb_winsize": 15,
