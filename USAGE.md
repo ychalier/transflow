@@ -6,7 +6,7 @@ This document provides details on how to use the `transflow` module for performi
 
 - [Basic Flow Transfer](#basic-flow-transfer)
 - [Detailed Example](#detailed-example)
-- [Flow Estimation Parameters](#flow-estimation-parameters)
+- [Flow Estimation Methods](#flow-estimation-methods)
 - [Using Motion Vectors](#using-motion-vectors)
 - [Flow Direction](#flow-direction)
 - [Flow Preprocessing](#flow-preprocessing)
@@ -82,38 +82,63 @@ The formula is based on time `t`. The river video lasts for about 30 seconds. Su
 
 [![](https://drive.chalier.fr/protected/transflow/lagrange-polynomial.png)](https://chalier.fr/lagrange/)
 
-## Flow Estimation Parameters
+## Flow Estimation Methods
 
-By default, Optical flow extraction relies on [OpenCV](https://opencv.org/)'s implementation of [Gunnar Farneback's algorithm](https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html#:~:text=Dense%20Optical%20Flow%20in%20OpenCV). Parameters for the flow estimation can be passed with the `-cc, --cv-config` as a path to a JSON file or the keyword `window`. If the keyword `window` is passed, a [Qt](https://pypi.org/project/PySide6/) window shows up to tune parameters live, which combines nicely with [live visualization](#live-visualization).
+By default, Optical flow extraction relies on [OpenCV](https://opencv.org/)'s implementation of [Gunnar Farneback's algorithm](#gunnar-farnebäck). Other methods can be used, such as [Lukas-Kanade](#lukas-kanade) or [Horn-Schunck](#horn-schunck). To use a different method or change their parameters, the path to a JSON configuration file can be passed with the `-cc, --cv-config` argument. If the keyword `window` is passed to this argument, a [Qt](https://pypi.org/project/PySide6/) window shows up to tune parameters live, which combines nicely with [live visualization](#live-visualization).
 
 > [!NOTE]
 > On Linux, you may have to install the `libxcb-cursor0` package for the Qt window to work.
 
-Here are descriptions from [OpenCV's documentation](https://docs.opencv.org/3.4/dc/d6b/group__video__track.html#:~:text=calcOpticalFlowFarneback()):
-
-Parameter | Default | Description
---------- | ------- | -----------
-`pyr_scale` | 0.5 | the image scale (<1) to build pyramids for each image; pyr_scale=0.5 means a classical pyramid, where each next layer is twice smaller than the previous one. 
-`levels` | 3 | number of pyramid layers including the initial image; levels=1 means that no extra layers are created and only the original images are used. 
-`winsize` | 15 | averaging window size; larger values increase the algorithm robustness to image noise and give more chances for fast motion detection, but yield more blurred motion field.
-`iterations` | 3 | number of iterations the algorithm does at each pyramid level.
-`poly_n` | 5 | size of the pixel neighborhood used to find polynomial expansion in each pixel; larger values mean that the image will be approximated with smoother surfaces, yielding more robust algorithm and more blurred motion field, typically poly_n =5 or 7.
-`poly_sigma` | 1.2 | standard deviation of the Gaussian that is used to smooth derivatives used as a basis for the polynomial expansion; for poly_n=5, you can set poly_sigma=1.1, for poly_n=7, a good value would be poly_sigma=1.5.
-
-If specified, the JSON file must follow the following format:
+You may find sample config files in the [configs](configs) folder. They follow the following format:
 
 ```json
 {
-    "pyr_scale": 0.5,
-    "levels": 3,
-    "winsize": 15,
-    "iterations": 3,
-    "poly_n": 5,
-    "poly_sigma": 1.2
+    "method": "farneback",
+    "fb_pyr_scale": 0.5,
+    "fb_levels": 3,
+    "fb_winsize": 15,
+    "fb_iterations": 3,
+    "fb_poly_n": 5,
+    "fb_poly_sigma": 1.2
 }
 ```
 
-You may find examples in the [configs](configs) folder.
+### Gunnar Farnebäck
+
+Default method, fast, precise. Uses [OpenCV implementation](https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html#:~:text=Dense%20Optical%20Flow%20in%20OpenCV). To use it, add the `"method": "farneback"` attribute in the config file.
+
+Parameter | Default | Description
+--------- | ------- | -----------
+`fb_pyr_scale` | 0.5 | the image scale (<1) to build pyramids for each image; pyr_scale=0.5 means a classical pyramid, where each next layer is twice smaller than the previous one
+`fb_levels` | 3 | number of pyramid layers including the initial image; levels=1 means that no extra layers are created and only the original images are used
+`fb_winsize` | 15 | averaging window size; larger values increase the algorithm robustness to image noise and give more chances for fast motion detection, but yield more blurred motion field
+`fb_iterations` | 3 | number of iterations the algorithm does at each pyramid level
+`fb_poly_n` | 5 | size of the pixel neighborhood used to find polynomial expansion in each pixel; larger values mean that the image will be approximated with smoother surfaces, yielding more robust algorithm and more blurred motion field, typically poly_n =5 or 7
+`fb_poly_sigma` | 1.2 | standard deviation of the Gaussian that is used to smooth derivatives used as a basis for the polynomial expansion; for poly_n=5, you can set poly_sigma=1.1, for poly_n=7, a good value would be poly_sigma=1.5
+
+### Horn-Schunck
+
+Slow, grainy (unless letting the algorithm converge, which is very slow). Custom implementation of the [Horn-Schunck method](https://en.wikipedia.org/wiki/Horn%E2%80%93Schunck_method). To use it, add the `"method": "horn-schunck"` attribute in the config file.
+
+Parameter | Default | Description
+--------- | ------- | -----------
+`hs_alpha` | 1 | regularization constant; larger values lead to smoother flow
+`hs_iterations` | 3 | maximum number of iterations the algorithm does; may stop earlier if convergence is achieved (see `hs_delta` parameter); large value (>100) required for precise computations
+`hs_decay` | 0 | initial flow estimation (before any iteration) is based on previous flow scaled by hs_decay; set hs_decay=0 for no initialization; set hs_decay=1 for re-using whole previous flow; set hs_decay=0.95 for a geometric decay; using hs_decay>0 introduces an inertia effect
+`hs_delta` | 1 | convergence threshold; stops when the L2 norm of the difference of the flows between two consecutive iterations drops below
+
+### Lukas-Kanade
+
+Slow if dense, (really) fast if sparse. Adapted from [OpenCV implementation](https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html#:~:text=Lucas-Kanade%20Optical%20Flow%20in%20OpenCV). To use it, add the `"method": "lukas-kanade"` attribute in the config file.
+
+> [!TIP]
+> Normally, Lukas-Kanade only computes optical flow for a fixed set of points. To obtain a dense field, we simply pass every pixel as a target, which is slow. Performance can balanced with sparsity, by only computing the flow one every 2/3/4/… pixel and broadcasting the result to the whole macroblock. To do this, see the `lk_step` parameter.
+
+Parameter | Default | Description
+--------- | ------- | -----------
+`lk_window_size` | 15 | size of the search window at each pyramid level
+`lk_max_level` | 2 | 0-based maximal pyramid level number; if set to 0, pyramids are not used (single level), if set to 1, two levels are used, and so on; if pyramids are passed to input then algorithm will use as many levels as pyramids have but no more than maxLevel
+`lk_step` | 1 | size of macroblocks for estimating the flow; set lk_step=1 for a dense flow; set lk_step=16 for 16*16 macroblocks
 
 ## Using Motion Vectors
 
@@ -360,6 +385,8 @@ In the [control.py](control.py) GUI, you see pixel sources in the header, ordere
 ## Live Visualization
 
 If the `-o` argument is omitted, ie. no output file is provided, a window will show processed frames as they are produced. The window can be closed by pressing the ESC key. This allows for checking an output before going all-in on a one hour render.
+
+If the `-o` argument is specified, you can still preview the output by setting the `-po, --preview-output` flag.
 
 ## Interrupting Processing
 

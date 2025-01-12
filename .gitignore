@@ -60,3 +60,5 @@ configs/*
 !configs/default.json
 !configs/fast.json
 !configs/minimal.json
+!configs/horn-schunck.json
+!configs/lukas-kanade.json

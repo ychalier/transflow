@@ -1,0 +1,6 @@
+{
+    "method": "lukas-kanade",
+    "lk_window_size": 15,
+    "lk_max_level": 2,
+    "lk_step": 4
+}

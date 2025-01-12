@@ -1,0 +1,7 @@
+{
+    "method": "horn-schunck",
+    "hs_alpha": 1,
+    "hs_iterations": 3,
+    "hs_decay": 0,
+    "hs_delta": 1
+}

@@ -315,7 +315,7 @@ class CvFlowConfigWindow(threading.Thread):
                 {
                     "name": "hs_alpha",
                     "label": "Alpha",
-                    "help": "Alpha",
+                    "help": "regularization constant; larger values lead to smoother flow",
                     "type": float,
                     "decimals": 3,
                     "min": 0.001,
@@ -323,22 +323,22 @@ class CvFlowConfigWindow(threading.Thread):
                 {
                     "name": "hs_iterations",
                     "label": "Max Iterations",
-                    "help": "Max Iterations",
+                    "help": "maximum number of iterations the algorithm does; may stop earlier if convergence is achieved (see `hs_delta` parameter); large value (>100) required for precise computations",
                     "type": int,
                     "min": 0,
-                    "max": 300
+                    "max": 1000
                 },
                 {
                     "name": "hs_decay",
                     "label": "Decay",
-                    "help": "Decay",
+                    "help": "initial flow estimation (before any iteration) is based on previous flow scaled by hs_decay; set hs_decay=0 for no initialization; set hs_decay=1 for re-using whole previous flow; set hs_decay=0.95 for a geometric decay; using hs_decay>0 introduces an inertia effect",
                     "type": float,
                     "decimals": 3,
                 },
                 {
                     "name": "hs_delta",
                     "label": "Delta",
-                    "help": "Delta",
+                    "help": "convergence threshold; stops when the L2 norm of the difference of the flows between two consecutive iterations drops below",
                     "type": float,
                     "decimals": 2,
                 },
@@ -357,14 +357,14 @@ class CvFlowConfigWindow(threading.Thread):
                 {
                     "name": "lk_max_level",
                     "label": "Max Level",
-                    "help": "0-based maximal pyramid level number; if set to 0, pyramids are not used (single level), if set to 1, two levels are used, and so on; if pyramids are passed to input then algorithm will use as many levels as pyramids have but no more than maxLevel.",
+                    "help": "0-based maximal pyramid level number; if set to 0, pyramids are not used (single level), if set to 1, two levels are used, and so on; if pyramids are passed to input then algorithm will use as many levels as pyramids have but no more than maxLevel",
                     "type": int,
                     "min": 0
                 },
                 {
                     "name": "lk_step",
                     "label": "Step",
-                    "help": "Step",
+                    "help": "size of macroblocks for estimating the flow; set lk_step=1 for a dense flow; set lk_step=16 for 16*16 macroblocks",
                     "type": int,
                     "min": 1
                 }
