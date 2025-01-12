@@ -169,6 +169,9 @@ def main():
     parser.add_argument("-cri", "--initially-crumbled",
         action="store_true",
         help="start with empty crumble mask for the canvas accumulator, only revealing bitmap pixels at start")
+    parser.add_argument("-po", "--preview-output",
+        action="store_true",
+        help="preview output while exporting")
     args = parser.parse_args()
     from .utils import parse_timestamp
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
@@ -223,4 +226,5 @@ def main():
         bitmap_mask_path=args.bitmap_mask,
         crumble=args.crumble,
         bitmap_introduction_flags=args.bitmap_introduction_flags,
-        initially_crumbled=args.initially_crumbled)
+        initially_crumbled=args.initially_crumbled,
+        preview_output=args.preview_output)

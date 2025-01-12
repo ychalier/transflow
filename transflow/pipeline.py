@@ -182,14 +182,16 @@ def transfer(
         bitmap_mask_path: str | None = None,
         crumble: bool = False,
         bitmap_introduction_flags: int = 1,
-        initially_crumbled: bool = False):
+        initially_crumbled: bool = False,
+        preview_output: bool = False):
 
     if safe:
         append_history()
 
     shape_queue = flow_queue = bitmap_queue = flow_process = bitmap_process\
-        = output_queue = output_process = flow_output = bs_framerate\
-        = accumulator = None
+        = flow_output = bs_framerate = accumulator = None
+    output_queues: list[multiprocessing.Queue] = []
+    output_processes: list[OutputProcess] = []
 
     if extra_flow_paths is None:
         extra_flow_paths: list[str] = []
@@ -210,8 +212,8 @@ def transfer(
             q.close()
         if bitmap_queue is not None:
             bitmap_queue.close()
-        if output_queue is not None:
-            output_queue.put(None)
+        for q in output_queues:
+            q.put(None)
         if flow_process is not None:
             flow_process.kill()
         for p in extra_flow_processes:
@@ -224,8 +226,8 @@ def transfer(
             p.join()
         if bitmap_process is not None:
             bitmap_process.join()
-        if output_process is not None:
-            output_process.join()
+        for p in output_processes:
+            p.join()
 
     try:
 
@@ -386,20 +388,26 @@ def transfer(
                 initially_crumbled)
 
         if has_output:
-            output = VideoOutput.from_args(
-                output_path,
+            vout_args = (
                 fs_width * fs_width_factor,
                 fs_height * fs_height_factor,
                 bs_framerate if bs_framerate is not None else fs_framerate,
                 vcodec,
                 execute,
                 replace,
-                safe)
-
-            output_queue = multiprocessing.Queue()
-            output_queue.cancel_join_thread()
-            output_process = OutputProcess(output, output_queue)
-            output_process.start()
+                safe
+            )
+            output_paths = [output_path]
+            if output_path is not None and preview_output:
+                output_paths.append(None)
+            for path in output_paths:
+                output = VideoOutput.from_args(path, *vout_args)
+                oq = multiprocessing.Queue()
+                oq.cancel_join_thread()
+                output_queues.append(oq)
+                op = OutputProcess(output, oq)
+                op.start()
+                output_processes.append(op)
 
         exception = False
         cursor = ckpt_meta.get("cursor", 0)
@@ -424,27 +432,22 @@ def transfer(
                 if export_flow:
                     flow_output.write_array(numpy.round(flow).astype(int) if round_flow else flow)
                 accumulator.update(flow, fs_direction)
+                out_frame = None
                 if output_intensity:
                     flow_intensity = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
-                    output_queue.put(
-                        render1d(flow_intensity, render_scale, render_colors,
-                                 render_binary),
-                        timeout=1)
+                    out_frame = render1d(flow_intensity, render_scale, render_colors, render_binary)
                 elif output_heatmap:
-                    output_queue.put(
-                        render1d(accumulator.get_heatmap_array(), render_scale,
-                                 render_colors, render_binary),
-                        timeout=1)
+                    out_frame = render1d(accumulator.get_heatmap_array(), render_scale, render_colors, render_binary)
                 elif output_accumulator:
-                    output_queue.put(
-                        render2d(accumulator.get_accumulator_array(),
-                                 render_scale, render_colors),
-                        timeout=1)
+                    out_frame = render2d(accumulator.get_accumulator_array(), render_scale, render_colors),
                 elif output_bitmap:
                     bitmap = bitmap_queue.get(timeout=1)
                     if bitmap is None:
                         break
-                    output_queue.put(accumulator.apply(bitmap), timeout=1)
+                    out_frame = accumulator.apply(bitmap)
+                if out_frame is not None:
+                    for oq in output_queues:
+                        oq.put(out_frame, timeout=1)
                 cursor += 1
                 if checkpoint_every is not None and cursor % checkpoint_every == 0:
                     export_checkpoint(flow_path, bitmap_path, output_path,
@@ -461,8 +464,9 @@ def transfer(
                 break
             finally:
                 if (not flow_process.is_alive())\
+                    or any(not p.is_alive() for p in extra_flow_processes)\
                     or (bitmap_process is not None and not bitmap_process.is_alive())\
-                    or (output_process is not None and not output_process.is_alive()):
+                    or any(not p.is_alive() for p in output_processes):
                     exception = True
                     break
         pbar.close()
