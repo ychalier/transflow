@@ -302,6 +302,9 @@ def transfer(
                 if flow_process.is_alive() and all(p.is_alive() for p in extra_flow_processes):
                     continue
                 raise RuntimeError("Flow process died during initialization.") from exc
+            except KeyboardInterrupt:
+                close()
+                return
 
         if export_flow:
             archive_path = get_secondary_output_path(flow_path, output_path, ".flow.zip")
@@ -331,7 +334,18 @@ def transfer(
             bitmap_queue = multiprocessing.Queue(maxsize=1)
             bitmap_process = SourceProcess(bitmap_source, bitmap_queue, shape_queue)
             bitmap_process.start()
-            bs_width, bs_height, bs_framerate, *_ = shape_queue.get()
+
+            while True:
+                try:
+                    bs_width, bs_height, bs_framerate, *_ = shape_queue.get(timeout=1)
+                    break
+                except queue.Empty as exc:
+                    if bitmap_process.is_alive():
+                        continue
+                    raise RuntimeError("Bitmap process died during initialization.") from exc
+                except KeyboardInterrupt:
+                    close()
+                    return
 
             if bs_width == 0 or bs_height == 0:
                 raise ValueError(
