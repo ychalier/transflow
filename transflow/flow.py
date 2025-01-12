@@ -23,6 +23,7 @@ class FlowDirection(enum.Enum):
 class FlowMethod(enum.Enum):
     FARNEBACK = 0
     HORN_SCHUNCK = 1
+    LUKAS_KANADE = 2
 
     @classmethod
     def from_string(cls, string: str):
@@ -30,6 +31,8 @@ class FlowMethod(enum.Enum):
             return FlowMethod.FARNEBACK
         if string == "horn-schunck":
             return FlowMethod.HORN_SCHUNCK
+        if string == "lukas-kanade":
+            return FlowMethod.LUKAS_KANADE
         raise ValueError(f"Invalid Flow Method: {string}")
 
     @staticmethod
@@ -38,6 +41,8 @@ class FlowMethod(enum.Enum):
             return "farneback"
         if method == FlowMethod.HORN_SCHUNCK:
             return "horn-schunck"
+        if method == FlowMethod.LUKAS_KANADE:
+            return "lukas-kanade"
         raise ValueError(f"Unknown flow method {method}")
 
 
@@ -338,6 +343,32 @@ class CvFlowConfigWindow(threading.Thread):
                     "decimals": 2,
                 },
             ]
+        },
+        {
+            "name": "lukas-kanade",
+            "params": [
+                {
+                    "name": "lk_window_size",
+                    "label": "Window Size",
+                    "help": "size of the search window at each pyramid level",
+                    "type": int,
+                    "min": 1
+                },
+                {
+                    "name": "lk_max_level",
+                    "label": "Max Level",
+                    "help": "0-based maximal pyramid level number; if set to 0, pyramids are not used (single level), if set to 1, two levels are used, and so on; if pyramids are passed to input then algorithm will use as many levels as pyramids have but no more than maxLevel.",
+                    "type": int,
+                    "min": 0
+                },
+                {
+                    "name": "lk_step",
+                    "label": "Step",
+                    "help": "Step",
+                    "type": int,
+                    "min": 1
+                }
+            ]
         }
     ]
 
@@ -498,6 +529,9 @@ class CvFlowConfig:
             hs_iterations: int = 3,
             hs_decay: float = 0,
             hs_delta: float = 1,
+            lk_window_size: int = 15,
+            lk_max_level: int = 2,
+            lk_step: int = 1,
             show_window: bool = False):
         self.method = FlowMethod.from_string(method) if isinstance(method, str) else method
         self.fb_pyr_scale = fb_pyr_scale
@@ -511,6 +545,9 @@ class CvFlowConfig:
         self.hs_iterations = hs_iterations
         self.hs_decay = hs_decay
         self.hs_delta = hs_delta
+        self.lk_window_size = lk_window_size
+        self.lk_max_level = lk_max_level
+        self.lk_step = lk_step
         self.show_window = show_window
         self.window: CvFlowConfigWindow = None
 
@@ -538,6 +575,9 @@ class CvFlowConfig:
         self.hs_iterations = 3
         self.hs_decay = 0.95
         self.hs_delta = 1
+        self.lk_window_size = 15
+        self.lk_max_level = 2
+        self.lk_step = 1
 
     def to_dict(self):
         return {
@@ -553,6 +593,9 @@ class CvFlowConfig:
             "hs_iterations": self.hs_iterations,
             "hs_decay": self.hs_decay,
             "hs_delta": self.hs_delta,
+            "lk_window_size": self.lk_window_size,
+            "lk_max_level": self.lk_max_level,
+            "lk_step": self.lk_step
         }
     
     def to_file(self, path: str):
@@ -603,6 +646,35 @@ def calc_optical_flow_horn_schunck(
         if delta is not None and numpy.linalg.norm(u - prev, 2) < delta:
             break
     return numpy.stack([u, v], axis=-1)
+
+
+def calc_optical_flow_lukas_kanade(
+        prev_grey: numpy.ndarray,
+        next_grey: numpy.ndarray,
+        win_size: int,
+        max_level: int,
+        step: int) -> numpy.ndarray:
+    m, n = prev_grey.shape
+    p0 = numpy.stack(
+        numpy.meshgrid(
+            numpy.arange(0, prev_grey.shape[1], step),
+            numpy.arange(0, prev_grey.shape[0], step),
+            indexing="xy"),
+        axis=-1)\
+        .astype(numpy.float32)
+    p, q = p0.shape[:2]
+    p0 = p0.reshape((p * q, 1, 2))
+    p1 = cv2.calcOpticalFlowPyrLK(
+        prev_grey,
+        next_grey,
+        p0,
+        None,
+        winSize=(win_size, win_size),
+        maxLevel=max_level)[0]
+    flow = p1.reshape((p, q, 2)) - p0.reshape((p, q, 2))
+    if step == 1:
+        return flow
+    return numpy.kron(flow, numpy.ones((step, step, 1)))[0:m,0:n,:].astype(flow.dtype)
 
 
 class CvFlowSource(FlowSource):
@@ -702,6 +774,14 @@ class CvFlowSource(FlowSource):
                 max_iters=self.config.hs_iterations,
                 decay=self.config.hs_decay,
                 delta=self.config.hs_delta,
+            )
+        elif self.config.method == FlowMethod.LUKAS_KANADE:
+            flow = calc_optical_flow_lukas_kanade(
+                prev_grey=left,
+                next_grey=right,
+                win_size=self.config.lk_window_size,
+                max_level=self.config.lk_max_level,
+                step=self.config.lk_step
             )
         self.prev_gray = gray
         self.prev_flow = flow
