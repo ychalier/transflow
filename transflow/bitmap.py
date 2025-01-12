@@ -2,6 +2,7 @@ import os
 import random
 import re
 import typing
+import warnings
 
 import cv2
 import numpy
@@ -11,12 +12,13 @@ from .utils import parse_hex_color
 
 class BitmapSource:
 
-    def __init__(self, alteration_path: str | None):
+    def __init__(self, alteration_path: str | None, length: int | None = None):
         self.alteration_path: str | None = alteration_path
         self.width: int = None
         self.height: int = None
         self.framerate: int | None = None
         self.alteration: tuple[list[int], list[int]] | None = None
+        self.length: int | None = length
 
     def __enter__(self) -> typing.Self:
         return self
@@ -59,7 +61,7 @@ class BitmapSource:
     def from_args(cls, path: str, size: tuple[int, int] | None = None,
                   seek: int | None = None, seed: int | None = None,
                   seek_time: float | None = None,
-                  alteration_path: str | None = None):
+                  alteration_path: str | None = None, repeat: int = 1):
         ext = os.path.splitext(path)[1]
         stillm = re.match(r"(color|noise|bwnoise|cnoise|gradient|#?[0-9a-f]{6})(:\d+:\d+)?",
                           path.lower().strip())
@@ -88,14 +90,14 @@ class BitmapSource:
         elif os.path.isfile(path) and ext in {".jpg", ".jpeg", ".png"}:
             return ImageBitmapSource(path, alteration_path)
         else:
-            return CvBitmapSource(path, seek, seek_time, alteration_path)
+            return CvBitmapSource(path, seek, seek_time, alteration_path, repeat)
 
 
 class StillBitmapSource(BitmapSource):
 
     def __init__(self, width: int | None = None, height: int | None = None,
                  seed: int | None = None, alteration_path: str | None = None):
-        BitmapSource.__init__(self, alteration_path)
+        BitmapSource.__init__(self, alteration_path, length=None)
         self.width = width
         self.height = height
         self.seed = seed
@@ -252,34 +254,53 @@ class CvBitmapSource(BitmapSource):
 
     def __init__(self, path: str, seek: int | None = None,
                  seek_time: float | None = None,
-                 alteration_path: str | None = None):
+                 alteration_path: str | None = None, repeat: int = 1):
         BitmapSource.__init__(self, alteration_path)
         self.path = path
         self.capture = None
         self.seek = seek
         self.seek_time = seek_time
+        self.repeat = repeat
+        self.loop_index = 1
+    
+    def rewind(self):
+        self.capture.set(cv2.CAP_PROP_POS_MSEC, 0)
+        if self.seek is not None:
+            for _ in range(self.seek):
+                self.capture.read()
 
     def __enter__(self):
+        self.setup()
         self.capture = cv2.VideoCapture(self.path)
         self.width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.framerate = self.capture.get(cv2.CAP_PROP_FPS)
+        frame_count = self.capture.get(cv2.CAP_PROP_FRAME_COUNT)
+        if self.repeat > 0 and frame_count is not None and int(frame_count) > 0:
+            self.length = int(frame_count) * self.repeat
         if self.seek_time is not None:
             self.seek = int(self.seek_time * self.framerate)
-        if self.seek is not None:
-            for _ in range(self.seek):
-                self.capture.read()
-        self.setup()
+            if self.length is not None:
+                self.length -= self.seek * self.repeat
+        self.rewind()
         return self
 
     def __next__(self) -> numpy.ndarray:
         assert self.capture is not None
         if not self.capture.isOpened():
+            warnings.warn("Attempt to read frame from bitmap capture, which was not opened")
             raise StopIteration
-        success, frame = self.capture.read()
-        if not success or frame is None:
+        while True:
+            success, frame = self.capture.read()
+            if success and frame is not None:
+                break
+            if self.repeat == 0 or self.loop_index < self.repeat:
+                self.loop_index += 1
+                self.rewind()
+                continue
             raise StopIteration
         return self.alter(numpy.array(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.capture.release()
+

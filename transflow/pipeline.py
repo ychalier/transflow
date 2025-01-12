@@ -46,8 +46,8 @@ class SourceProcess(multiprocessing.Process):
                     self.source.width,
                     self.source.height,
                     self.source.framerate,
-                    self.source.direction if is_fs else None,
-                    self.source.length if is_fs else None
+                    self.source.length,
+                    self.source.direction if is_fs else None
                 ))
                 try:
                     for item in self.source:
@@ -178,6 +178,7 @@ def transfer(
         duration_time: float | None = None,
         bitmap_alteration_path: str | None = None,
         repeat: int = 1,
+        bitmap_repeat: int = 1,
         initial_canvas: str | None = None,
         bitmap_mask_path: str | None = None,
         crumble: bool = False,
@@ -296,7 +297,7 @@ def transfer(
             try:
                 shape_info = shape_queue.get(timeout=1)
                 if flow_sources_loaded == 0:
-                    (fs_width, fs_height, fs_framerate, fs_direction, fs_length) = shape_info
+                    (fs_width, fs_height, fs_framerate, fs_length, fs_direction) = shape_info
                 flow_sources_loaded += 1
                 if flow_sources_loaded >= flow_sources_to_load:
                     break
@@ -332,14 +333,15 @@ def transfer(
                 seek=ckpt_meta.get("cursor"),
                 seed=seed,
                 seek_time=bitmap_seek_time,
-                alteration_path=bitmap_alteration_path)
+                alteration_path=bitmap_alteration_path,
+                repeat=bitmap_repeat)
             bitmap_queue = multiprocessing.Queue(maxsize=1)
             bitmap_process = SourceProcess(bitmap_source, bitmap_queue, shape_queue)
             bitmap_process.start()
 
             while True:
                 try:
-                    bs_width, bs_height, bs_framerate, *_ = shape_queue.get(timeout=1)
+                    bs_width, bs_height, bs_framerate, bs_length, *_ = shape_queue.get(timeout=1)
                     break
                 except queue.Empty as exc:
                     if bitmap_process.is_alive():
@@ -411,9 +413,18 @@ def transfer(
 
         exception = False
         cursor = ckpt_meta.get("cursor", 0)
-        pbar = tqdm.tqdm(
-            total=None if fs_length is None else fs_length - cursor,
-            unit="frame")
+
+        expected_length = None
+        if fs_length is not None and bs_length is not None:
+            expected_length = min(fs_length, bs_length)
+        elif fs_length is not None:
+            expected_length = fs_length
+        elif bs_length is not None:
+            expected_length = bs_length
+        if expected_length is not None:
+            expected_length -= cursor
+
+        pbar = tqdm.tqdm(total=expected_length, unit="frame")
         while True:
             try:
                 flows = []

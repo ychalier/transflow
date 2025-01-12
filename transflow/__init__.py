@@ -35,6 +35,9 @@ def main():
     parser.add_argument("-ba", "--bitmap-alteration",
         type=str, default=None,
         help="path to a PNG file containing alteration to apply to bitmaps")
+    parser.add_argument("-br", "--bitmap-repeat",
+        type=int, default=1,
+        help="repeat bitmap inputs (0 to loop indefinitely)")
     parser.add_argument("-ef", "--export-flow",
         action="store_true",
         help="export computed flow to a file")
@@ -222,6 +225,7 @@ def main():
         duration_time=duration_time,
         bitmap_alteration_path=args.bitmap_alteration,
         repeat=args.repeat,
+        bitmap_repeat=args.bitmap_repeat,
         initial_canvas=args.initial_canvas,
         bitmap_mask_path=args.bitmap_mask,
         crumble=args.crumble,
