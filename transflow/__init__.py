@@ -85,7 +85,7 @@ def main():
             "is generated to avoid conflicts and overwriting)")
     parser.add_argument("-fm", "--flow-mask",
         type=str, default=None,
-        help="path to an image to applay a per-pixel flow gain")
+        help="path to an image to applay a per-pixel flow scale")
     parser.add_argument("-fk", "--flow-kernel",
         type=str, default=None,
         help="path to a NPY file storing a convolution kernel to apply on the "\
@@ -95,15 +95,16 @@ def main():
         help="path to a JSON file containing settings for OpenCV's Farneback "\
             "algorithm or 'window' to use a live control window; "\
             "if None, a default config is used")
-    parser.add_argument("-fg", "--flow-gain",
+    parser.add_argument("-ff", "--flow-filters",
         type=str, default=None,
-        help="multiply the flow at each frame; can be a constant or a Python "\
-            "expression (will be passed to the `eval` function) depending on "\
+        help="list of flow filters, separated by semicolons; available filters "\
+            "are scale, threshold and clip; all take an expression as argument "\
+            "which can either be a constant or a Pythonic expression based on "\
             "the variable `t`, the frame timestamp in seconds")
     parser.add_argument("-rf", "--round-flow",
         action="store_true",
         help="export preprocessed flow as integer values (faster and lighter, "\
-            "but may introduce artefacts when combined with flow gain)")
+            "but may introduce artefacts)")
     parser.add_argument("-sz", "--size",
         type=str, default=None,
         help="target video size, for webcams and generated bitmaps, "\
@@ -202,7 +203,7 @@ def main():
         kernel_path=args.flow_kernel,
         reset_mask_path=args.reset_mask,
         cv_config=args.cv_config,
-        flow_gain=args.flow_gain,
+        flow_filters=args.flow_filters,
         size=args.size,
         acc_method=args.acc_method,
         accumulator_background=args.accumulator_background,

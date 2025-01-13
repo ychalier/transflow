@@ -155,7 +155,7 @@ def transfer(
         kernel_path: str | None = None,
         reset_mask_path: str | None = None,
         cv_config: str | None = None,
-        flow_gain: str | None = None,
+        flow_filters: str | None = None,
         size: str | None = None,
         acc_method: str = "map",
         accumulator_background: str = "ffffff",
@@ -268,9 +268,10 @@ def transfer(
 
         flow_source = FlowSource.from_args(
             flow_path, use_mvs=use_mvs, mask_path=mask_path,
-            kernel_path=kernel_path, cv_config=cv_config, flow_gain=flow_gain,
-            size=size, direction=direction, seek_ckpt=ckpt_meta.get("cursor"),
-            seek_time=seek_time, duration_time=duration_time, repeat=repeat)
+            kernel_path=kernel_path, cv_config=cv_config,
+            flow_filters=flow_filters, size=size, direction=direction,
+            seek_ckpt=ckpt_meta.get("cursor"), seek_time=seek_time,
+            duration_time=duration_time, repeat=repeat)
 
         shape_queue = multiprocessing.Queue()
 
@@ -282,7 +283,7 @@ def transfer(
             extra_flow_sources.append(FlowSource.from_args(
                 extra_flow_path, use_mvs=use_mvs, mask_path=mask_path,
                 kernel_path=kernel_path, cv_config=cv_config,
-                flow_gain=flow_gain, size=size, direction=direction,
+                flow_filters=flow_filters, size=size, direction=direction,
                 seek_ckpt=ckpt_meta.get("cursor"), seek_time=seek_time,
                 duration_time=duration_time))
             extra_flow_queues.append(multiprocessing.Queue(maxsize=1))

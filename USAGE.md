@@ -10,8 +10,7 @@ This document provides details on how to use the `transflow` module for performi
 - [Using Motion Vectors](#using-motion-vectors)
 - [Flow Direction](#flow-direction)
 - [Flow Preprocessing](#flow-preprocessing)
-- [Flow Gain](#flow-gain)
-- [Flow Convolution Kernel](#flow-convolution-kernel)
+- [Flow Transformations](#flow-transformations)
 - [Multiple Flow Sources](#multiple-flow-sources)
 - [Accumulation Methods](#accumulation-methods)
 - [Accumulator Heatmap](#accumulator-heatmap)
@@ -72,10 +71,10 @@ transflow assets/River.mp4 -d forward -b assets/Frame.png -rm random -rk assets/
 - The `-rk` argument specifies the path to the mask image created: the brightest its pixels are, the more likely they will heal.
 - The `-ha` argument is required for the effect to work. It forces the heatmap to be always zero, ensuring the reset effect occurs everywhere everytime (see [Accumulator Heatmap](#accumulator-heatmap) section).
 
-A final detail could be to control the flow gain to ease the start and the end, and add a peak flow time. This can be achieved with the `-fg` argument (see [Flow Gain](#flow-gain) section). Simply add the following to the above command:
+A final detail could be to control the flow scale to ease the start and the end, and add a peak flow time. This can be achieved with the `-ff` argument (see [Flow Filters](#flow-filters) section). Simply add the following to the above command:
 
 ```console
--fg "max(0, -.0000061191*t**5+.0003680860*t**4-.0075620960*t**3+.0609758832*t**2-.0717236701*t+.0079797631)"
+-ff "scale=max(0, -.0000061191*t**5+.0003680860*t**4-.0075620960*t**3+.0609758832*t**2-.0717236701*t+.0079797631)"
 ```
 
 The formula is based on time `t`. The river video lasts for about 30 seconds. Such formulas can be obtained via [Lagrange interpolation](https://en.wikipedia.org/wiki/Lagrange_polynomial), I published a hacky tool for that, the [Online Lagrange Polynomial Editor](https://chalier.fr/lagrange/):
@@ -184,15 +183,30 @@ transflow myvideo.flow.zip -b image.jpg -o output.mp4
 
 If the `-rf, --round-flow` argument is specified, the output flow will be integers instead of floats. This greatly reduces file size and processing speed, at the cost of quantization artefacts.
 
-## Flow Gain
+## Flow Transformations
 
-The flow can be scaled in multiple ways.
+### Flow Filters
 
-**Single Value.** Using the `-fg, --flow-gain` parameter, you can specify a constant (float) or an expression depending on `t`, the frame timestamp in seconds. Python's [`math`](https://docs.python.org/3/library/math.html) is available when evaluating the expression. For instance, `-fg "1-math.exp(-.5*t)"` can be used to fake a slow start in the first seconds.
+The flow matrix can be modified by applying several filters, with the `-ff, --flow-filters` argument. You may specify a filter with the syntax `name=arg1:arg2:arg3:…`. Mulitple filters can be specified, simply separate them with a semicolon `;`.
 
-**Applying A Mask.** You can pass the path to an image file with the `-fm, --flow-mask`. The image luminance will be scaled between 0 (black) and 1 (white) and multiplied element-wise to the flow array.
+Filter | Arguments | Description
+------ | --------- | -----------
+`scale` | `float` or Time-based expression | Multiply the whole matrix with a value
+`threshold` | `float` or Time-based expression | Every flow vector with a magnitude below the threshold (in pixels) is set to 0
+`clip` | `float` or Time-based expression | Every flow vector with a magnitude above the threshold (in pixels) is scaled to this maximum magnitude
 
-## Flow Convolution Kernel
+For instance, the argument `-ff scale=2;clip=5` will multiply the flow by 2 and scale down vectors with magnitude greater than 5 pixels.
+
+Time-based expression means that instead of a floating constant, you can pass a Pythonic expression based on the variable `t` that will be evaluated at runtime by replacing `t` with the current frame timestamp in seconds. Python's [`math`](https://docs.python.org/3/library/math.html) is available when evaluating the expression. For instance, `-ff "scale=1-math.exp(-.5*t)"` can be used to fake a slow start in the first seconds.
+
+> [!NOTE]
+> The magnitude of flow vectors is computed as their L2 norm. Values are in pixels.
+
+### Applying A Mask
+
+You can pass the path to an image file with the `-fm, --flow-mask`. The image luminance will be scaled between 0 (black) and 1 (white) and multiplied element-wise to the flow array.
+
+### Flow Convolution Kernel
 
 Flow can be filtered with convolution kernels by specifying the path to a kernel file with the `-fk, --flow-kernel` argument. A kernel file is a [NumPy export](https://numpy.org/doc/stable/reference/generated/numpy.save.html) of an [`ndarray`](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy-ndarray), in NumPy `.npy` format. For instance, the following script generates a basic blur filter:
 

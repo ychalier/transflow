@@ -46,10 +46,71 @@ class FlowMethod(enum.Enum):
         raise ValueError(f"Unknown flow method {method}")
 
 
+class FlowFilter:
+
+    def __init__(self):
+        pass
+
+    def apply(self, flow: numpy.ndarray, t: float) -> None:
+        raise NotImplementedError()
+    
+    @staticmethod
+    def parse_expression(expression_string: str):
+        return eval("lambda t: " + expression_string)
+    
+    @classmethod
+    def from_args(cls, filter_name: str, filter_args: tuple[str]):
+        if filter_name == "scale":
+            return ScaleFlowFilter(filter_args)
+        if filter_name == "threshold":
+            return ThresholdFlowFilter(filter_args)
+        if filter_name == "clip":
+            return ClipFlowFilter(filter_args)
+        raise ValueError(f"Unknown filter name '{filter_name}'")
+
+
+class ScaleFlowFilter(FlowFilter):
+
+    def __init__(self, filter_args: tuple[str]):
+        self.expr = self.parse_expression(filter_args[0])
+    
+    def apply(self, flow: numpy.ndarray, t: float):
+        flow *= self.expr(t)
+
+
+class ThresholdFlowFilter(FlowFilter):
+
+    def __init__(self, filter_args: tuple[str]):
+        self.expr = self.parse_expression(filter_args[0])
+    
+    def apply(self, flow: numpy.ndarray, t: float):
+        height, width, _ = flow.shape
+        norm = numpy.linalg.norm(flow.reshape(height * width, 2), axis=1).reshape((height, width))
+        threshold = self.expr(t)
+        where = numpy.where(norm <= threshold)
+        flow[where] = 0
+
+
+class ClipFlowFilter(FlowFilter):
+
+    def __init__(self, filter_args: tuple[str]):
+        self.expr = self.parse_expression(filter_args[0])
+    
+    def apply(self, flow: numpy.ndarray, t: float):
+        height, width, _ = flow.shape
+        norm = numpy.linalg.norm(flow.reshape(height * width, 2), axis=1).reshape((height, width))
+        factors = numpy.ones((height, width))
+        threshold = self.expr(t)
+        where = numpy.where(norm >= threshold)
+        factors[where] = threshold / norm[where]
+        flow[:,:,0] *= factors
+        flow[:,:,1] *= factors
+
+
 class FlowSource:
 
     def __init__(self, direction: FlowDirection, mask_path: str | None = None,
-                 kernel_path: str | None = None, flow_gain: str | None = None,
+                 kernel_path: str | None = None, flow_filters: str | None = None,
                  seek_ckpt: int | None = None, seek_time: float | None = None,
                  duration_time: float | None = None, repeat: int = 1):
         self.direction = direction
@@ -60,8 +121,8 @@ class FlowSource:
             if mask_path is None else load_mask(mask_path, newaxis=True)
         self.kernel: numpy.ndarray | None = None\
             if kernel_path is None else numpy.load(kernel_path)
-        self.flow_gain = None
-        self.flow_gain_string = flow_gain
+        self.flow_filters = None
+        self.flow_filters_string = flow_filters
         self.seek_ckpt = seek_ckpt
         self.seek_time = seek_time
         self.duration_time = duration_time
@@ -145,8 +206,17 @@ class FlowSource:
 
     def __enter__(self):
         self.setup()
-        if self.flow_gain_string is not None:
-            self.flow_gain = eval(f"lambda t: {self.flow_gain_string}")
+
+        if self.flow_filters_string is not None:
+            self.flow_filters: list[FlowFilter] = []
+            for filter_string in self.flow_filters_string.strip().split(";"):
+                if filter_string.split() == "":
+                    continue
+                i = filter_string.index("=")
+                self.flow_filters.append(FlowFilter.from_args(
+                    filter_string[:i].strip(),
+                    filter_string[i+1:].strip().split(":")))
+        
         return self
 
     def setup(self):
@@ -156,11 +226,9 @@ class FlowSource:
         pass
 
     def apply_fx(self, flow: numpy.ndarray) -> numpy.ndarray:
-        try:
-            ff = 1 if self.flow_gain is None else self.flow_gain(self.t)
-        except ZeroDivisionError:
-            ff = 0
-        flow *= ff
+        if self.flow_filters:
+            for flow_filter in self.flow_filters:
+                flow_filter.apply(flow, self.t)
         if self.mask is None:
             flow_masked = flow
         else:
@@ -175,13 +243,19 @@ class FlowSource:
         return numpy.stack([flow_filtered_x, flow_filtered_y], axis=-1)
 
     @classmethod
-    def from_args(cls, flow_path: str, use_mvs: bool = False,
-                  mask_path: str | None = None, kernel_path: str | None = None,
-                  cv_config: str | None = None, flow_gain: str | None = None,
-                  size: tuple[int, int] | None = None,
-                  direction: FlowDirection | None = None,
-                  seek_ckpt: int | None = None, seek_time: float | None = None,
-                  duration_time: float | None = None, repeat: int = 1):
+    def from_args(cls,
+            flow_path: str,
+            use_mvs: bool = False,
+            mask_path: str | None = None,
+            kernel_path: str | None = None,
+            cv_config: str | None = None,
+            flow_filters: str | None = None,
+            size: tuple[int, int] | None = None,
+            direction: FlowDirection | None = None,
+            seek_ckpt: int | None = None,
+            seek_time: float | None = None,
+            duration_time: float | None = None,
+            repeat: int = 1):
         if "::" in flow_path:
             avformat, file = flow_path.split("::")
         else:
@@ -189,7 +263,7 @@ class FlowSource:
         args = {
             "mask_path": mask_path,
             "kernel_path": kernel_path,
-            "flow_gain": flow_gain,
+            "flow_filters": flow_filters,
             "seek": seek_ckpt,
             "seek_time": seek_time,
             "duration_time": duration_time,
@@ -213,11 +287,11 @@ class AvFlowSource(FlowSource):
 
     def __init__(self, file: str, avformat: str | None = None,
                  mask_path: str | None = None, kernel_path: str | None = None,
-                 flow_gain: str | None = None, seek: int | None = None,
+                 flow_filters: str | None = None, seek: int | None = None,
                  seek_time: float | None = None,
                  duration_time: float | None = None, repeat: int = 1):
         FlowSource.__init__(self, FlowDirection.FORWARD, mask_path, kernel_path,
-                            flow_gain, seek, seek_time, duration_time, repeat)
+                            flow_filters, seek, seek_time, duration_time, repeat)
         self.file = file
         self.avformat = avformat
         self.container = None
@@ -686,14 +760,14 @@ class CvFlowSource(FlowSource):
             direction: FlowDirection | None = None,
             mask_path: str | None = None,
             kernel_path: str | None = None,
-            flow_gain: str | None = None,
+            flow_filters: str | None = None,
             seek: int | None = None,
             seek_time: float | None = None,
             duration_time: float | None = None,
             repeat: int = 1):
         FlowSource.__init__(self,
             direction if direction is not None else FlowDirection.FORWARD,
-            mask_path, kernel_path, flow_gain, seek, seek_time, duration_time,
+            mask_path, kernel_path, flow_filters, seek, seek_time, duration_time,
             repeat)
         self.file = file
         self.config = config
@@ -795,11 +869,11 @@ class ArchiveFlowSource(FlowSource):
 
     def __init__(self, path: str, mask_path: str | None = None,
                  kernel_path: str | None = None,
-                 flow_gain: str | None = None, seek: int | None = None,
+                 flow_filters: str | None = None, seek: int | None = None,
                  seek_time: float | None = None,
                  duration_time: float | None = None, repeat: int = 1):
         FlowSource.__init__(self, FlowDirection.FORWARD, mask_path, kernel_path,
-                            flow_gain, seek, seek_time, duration_time, repeat)
+                            flow_filters, seek, seek_time, duration_time, repeat)
         self.path = path
         self.archive = None
 
