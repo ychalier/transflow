@@ -2,6 +2,7 @@ import enum
 import json
 import math
 import os
+import random
 import re
 import threading
 import warnings
@@ -55,8 +56,12 @@ class FlowFilter:
         raise NotImplementedError()
     
     @staticmethod
-    def parse_expression(expression_string: str):
-        return eval("lambda t: " + expression_string)
+    def parse_expression(expression_string: str, vars: tuple[str] = ("t",)):
+        if len(vars) == 1:
+            vars_str = vars[0]
+        else:
+            vars_str = ",".join(vars)
+        return eval(f"lambda {vars_str}: " + expression_string)
     
     @classmethod
     def from_args(cls, filter_name: str, filter_args: tuple[str]):
@@ -66,6 +71,8 @@ class FlowFilter:
             return ThresholdFlowFilter(filter_args)
         if filter_name == "clip":
             return ClipFlowFilter(filter_args)
+        if filter_name == "polar":
+            return PolarFlowFilter(filter_args)
         raise ValueError(f"Unknown filter name '{filter_name}'")
 
 
@@ -105,6 +112,22 @@ class ClipFlowFilter(FlowFilter):
         factors[where] = threshold / norm[where]
         flow[:,:,0] *= factors
         flow[:,:,1] *= factors
+
+
+class PolarFlowFilter(FlowFilter):
+
+    def __init__(self, filter_args: tuple[str]):
+        self.expr_radius = self.parse_expression(filter_args[0], ("t", "r", "a"))
+        self.expr_theta = self.parse_expression(filter_args[1], ("t", "r", "a"))
+    
+    def apply(self, flow: numpy.ndarray, t: float):
+        height, width, _ = flow.shape
+        radius = numpy.linalg.norm(flow.reshape(height * width, 2), axis=1).reshape((height, width))
+        theta = numpy.atan2(flow[:,:,1], flow[:,:,0])
+        new_radius = self.expr_radius(t, radius, theta)
+        new_theta = self.expr_theta(t, radius, theta)
+        flow[:,:,1] = new_radius * numpy.sin(new_theta)
+        flow[:,:,0] = new_radius * numpy.cos(new_theta)
 
 
 class FlowSource:

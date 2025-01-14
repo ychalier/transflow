@@ -191,13 +191,20 @@ The flow matrix can be modified by applying several filters, with the `-ff, --fl
 
 Filter | Arguments | Description
 ------ | --------- | -----------
-`scale` | `float` or Time-based expression | Multiply the whole matrix with a value
-`threshold` | `float` or Time-based expression | Every flow vector with a magnitude below the threshold (in pixels) is set to 0
-`clip` | `float` or Time-based expression | Every flow vector with a magnitude above the threshold (in pixels) is scaled to this maximum magnitude
+`scale` | `lambda(t)` | Multiply the whole matrix with a value
+`threshold` | `lambda(t)` | Every flow vector with a magnitude below the threshold (in pixels) is set to 0
+`clip` | `lambda(t)` | Every flow vector with a magnitude above the threshold (in pixels) is scaled to this maximum magnitude
+`polar` | `lambda(t,r,a)`, `lambda(t,r,a)` | Directly set flow values in polar coordinates; first argument determines the radius; second determines the angle, in radians
 
-For instance, the argument `-ff scale=2;clip=5` will multiply the flow by 2 and scale down vectors with magnitude greater than 5 pixels.
+Arguments can be floating constants, or Pythonic expressions based on some variables, evaluated at runtime. `t` is the current frame timestamp in seconds. `r` is the flow vector magnitude (the radius in polar coordinates). `a` is the flow vector angle in radians (the angle in polar coordinates). Python's [`math`](https://docs.python.org/3/library/math.html), [`random`]() and [`numpy`]() modules are available when evaluating the expression.
 
-Time-based expression means that instead of a floating constant, you can pass a Pythonic expression based on the variable `t` that will be evaluated at runtime by replacing `t` with the current frame timestamp in seconds. Python's [`math`](https://docs.python.org/3/library/math.html) is available when evaluating the expression. For instance, `-ff "scale=1-math.exp(-.5*t)"` can be used to fake a slow start in the first seconds.
+A few examples:
+
+- `-ff threshold=2` nullifies any vector with magnitude lower or equal to 2 pixels.
+- `-ff scale=2;clip=5` multiplies the flow by 2 and scales down vectors with magnitude greater than 5 pixels.
+- `-ff scale=1-math.exp(-.5*t)` fakes a slow start in the first seconds.
+- `-ff polar=r:a` does nothing.
+- `-ff polar=r:0` forces horizontal movement, to the left with backward flow, to the right with forward flow.
 
 > [!NOTE]
 > The magnitude of flow vectors is computed as their L2 norm. Values are in pixels.
