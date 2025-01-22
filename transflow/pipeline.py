@@ -190,7 +190,7 @@ def transfer(
         append_history()
 
     shape_queue = flow_queue = bitmap_queue = flow_process = bitmap_process\
-        = flow_output = bs_framerate = accumulator = None
+        = flow_output = bs_framerate = bs_length = accumulator = None
     output_queues: list[multiprocessing.Queue] = []
     output_processes: list[OutputProcess] = []
 
