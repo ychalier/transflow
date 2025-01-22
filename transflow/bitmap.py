@@ -87,7 +87,7 @@ class BitmapSource:
                     return GradientBitmapSource(width, height, seed)
                 case _:
                     raise ValueError(f"Unknown bitmap source '{stillm.group(1)}'")
-        elif os.path.isfile(path) and ext in {".jpg", ".jpeg", ".png"}:
+        elif os.path.isfile(path) and ext.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".ico", ".tiff"}:
             return ImageBitmapSource(path, alteration_path)
         else:
             return CvBitmapSource(path, seek, seek_time, alteration_path, repeat)
