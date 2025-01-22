@@ -641,5 +641,5 @@ def calc_optical_flow_liteflownet(
     tenOne = torch.FloatTensor(numpy.ascontiguousarray(prev_frame[:, :, ::-1].transpose(2, 0, 1).astype(numpy.float32) * (1.0 / 255.0)))
     tenTwo = torch.FloatTensor(numpy.ascontiguousarray(next_frame[:, :, ::-1].transpose(2, 0, 1).astype(numpy.float32) * (1.0 / 255.0)))
     tenOutput = estimate(netNetwork, tenOne, tenTwo)
-    flow = numpy.array(tenOutput.numpy(force=True).transpose(1, 2, 0), numpy.float32)
+    flow = numpy.ascontiguousarray(numpy.array(tenOutput.numpy(force=True).transpose(1, 2, 0), numpy.float32))
     return flow
