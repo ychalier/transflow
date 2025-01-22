@@ -83,7 +83,7 @@ The formula is based on time `t`. The river video lasts for about 30 seconds. Su
 
 ## Flow Estimation Methods
 
-By default, Optical flow extraction relies on [OpenCV](https://opencv.org/)'s implementation of [Gunnar Farneback's algorithm](#gunnar-farnebäck). Other methods can be used, such as [Lukas-Kanade](#lukas-kanade) or [Horn-Schunck](#horn-schunck). To use a different method or change their parameters, the path to a JSON configuration file can be passed with the `-cc, --cv-config` argument. If the keyword `window` is passed to this argument, a [Qt](https://pypi.org/project/PySide6/) window shows up to tune parameters live, which combines nicely with [live visualization](#live-visualization).
+By default, Optical flow extraction relies on [OpenCV](https://opencv.org/)'s implementation of [Gunnar Farneback's algorithm](#gunnar-farnebäck). Other methods can be used, such as [Lukas-Kanade](#lukas-kanade), [Horn-Schunck](#horn-schunck) or [LiteFlowNet](#liteflownet). To use a different method or change their parameters, the path to a JSON configuration file can be passed with the `-cc, --cv-config` argument. If the keyword `window` is passed to this argument, a [Qt](https://pypi.org/project/PySide6/) window shows up to tune parameters live, which combines nicely with [live visualization](#live-visualization).
 
 > [!NOTE]
 > On Linux, you may have to install the `libxcb-cursor0` package for the Qt window to work.
@@ -138,6 +138,15 @@ Parameter | Default | Description
 `lk_window_size` | 15 | size of the search window at each pyramid level
 `lk_max_level` | 2 | 0-based maximal pyramid level number; if set to 0, pyramids are not used (single level), if set to 1, two levels are used, and so on; if pyramids are passed to input then algorithm will use as many levels as pyramids have but no more than maxLevel
 `lk_step` | 1 | size of macroblocks for estimating the flow; set lk_step=1 for a dense flow; set lk_step=16 for 16*16 macroblocks
+
+### LiteFlowNet
+
+**Requires the [CuPy](https://cupy.dev/) and [PyTorch](https://pytorch.org/) modules.**
+
+Statistical approach based on neural networks. Very accurate results, medium performances. Adapted from [sniklaus/pytorch-liteflownet](https://github.com/sniklaus/pytorch-liteflownet), which is adapted from [twhui/LiteFlowNet](https://github.com/twhui/LiteFlowNet), which is the official implementation of [LiteFlowNet: A Lightweight Convolutional Neural Network for Optical Flow Estimation](https://arxiv.org/pdf/1805.07036) by Tak-Wai Hui, Xiaoou Tang and Chen Change Loy for CVPR 2018.
+
+> [!TIP]
+> Tested on Windows 11 with Python 3.12, `cupy==13.3.0` and `torch==2.7.0`.
 
 ## Using Motion Vectors
 

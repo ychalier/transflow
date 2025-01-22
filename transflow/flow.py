@@ -25,6 +25,7 @@ class FlowMethod(enum.Enum):
     FARNEBACK = 0
     HORN_SCHUNCK = 1
     LUKAS_KANADE = 2
+    LITEFLOWNET = 3
 
     @classmethod
     def from_string(cls, string: str):
@@ -34,6 +35,8 @@ class FlowMethod(enum.Enum):
             return FlowMethod.HORN_SCHUNCK
         if string == "lukas-kanade":
             return FlowMethod.LUKAS_KANADE
+        if string == "liteflownet":
+            return FlowMethod.LITEFLOWNET
         raise ValueError(f"Invalid Flow Method: {string}")
 
     @staticmethod
@@ -44,6 +47,8 @@ class FlowMethod(enum.Enum):
             return "horn-schunck"
         if method == FlowMethod.LUKAS_KANADE:
             return "lukas-kanade"
+        if method == FlowMethod.LITEFLOWNET:
+            return "liteflownet"
         raise ValueError(f"Unknown flow method {method}")
 
 
@@ -466,6 +471,10 @@ class CvFlowConfigWindow(threading.Thread):
                     "min": 1
                 }
             ]
+        },
+        {
+            "name": "liteflownet",
+            "params": []
         }
     ]
 
@@ -797,15 +806,8 @@ class CvFlowSource(FlowSource):
         self.size = size
         self.capture = None
         self.prev_gray = None
+        self.prev_rgb = None
         self.prev_flow = None
-
-    def to_gray(self, frame: numpy.ndarray) -> numpy.ndarray:
-        return cv2.cvtColor(
-            cv2.resize(
-                frame,
-                dsize=(self.width, self.height),
-                interpolation=cv2.INTER_NEAREST),
-            cv2.COLOR_BGR2GRAY)
 
     def setup(self):
         if re.match(r"\d+", self.file):
@@ -832,27 +834,30 @@ class CvFlowSource(FlowSource):
             if not success or frame is None:
                 raise RuntimeError(f"Could not open video at {self.file}")
             if i == self.frame_cursor:
-                self.prev_gray = self.to_gray(frame)
+                resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
+                self.prev_gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+                self.prev_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         self.prev_flow = None
 
     def next(self) -> numpy.ndarray:
         success, frame = self.capture.read()
         if frame is None or not success:
             raise StopIteration
-        gray = cv2.cvtColor(
-            cv2.resize(frame, dsize=(self.width, self.height),
-                       interpolation=cv2.INTER_NEAREST),
-            cv2.COLOR_BGR2GRAY)
+        resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
+        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         if self.direction == FlowDirection.FORWARD:
-            left, right = self.prev_gray, gray
+            left_gray, right_gray = self.prev_gray, gray
+            left_rgb, right_rgb = self.prev_rgb, rgb
         elif self.direction == FlowDirection.BACKWARD:
-            left, right = gray, self.prev_gray
+            left_gray, right_gray = gray, self.prev_gray
+            left_rgb, right_rgb = rgb, self.prev_rgb
         else:
             raise ValueError(f"Invalid flow direction '{self.direction}'")
         if self.config.method == FlowMethod.FARNEBACK:
             flow = cv2.calcOpticalFlowFarneback(
-                prev=left,
-                next=right,
+                prev=left_gray,
+                next=right_gray,
                 flow=self.prev_flow,
                 pyr_scale=self.config.fb_pyr_scale,
                 levels=self.config.fb_levels,
@@ -864,8 +869,8 @@ class CvFlowSource(FlowSource):
             )
         elif self.config.method == FlowMethod.HORN_SCHUNCK:
             flow = calc_optical_flow_horn_schunck(
-                prev_grey=left,
-                next_grey=right,
+                prev_grey=left_gray,
+                next_grey=right_gray,
                 flow=self.prev_flow,
                 alpha=self.config.hs_alpha,
                 max_iters=self.config.hs_iterations,
@@ -874,13 +879,20 @@ class CvFlowSource(FlowSource):
             )
         elif self.config.method == FlowMethod.LUKAS_KANADE:
             flow = calc_optical_flow_lukas_kanade(
-                prev_grey=left,
-                next_grey=right,
+                prev_grey=left_gray,
+                next_grey=right_gray,
                 win_size=self.config.lk_window_size,
                 max_level=self.config.lk_max_level,
                 step=self.config.lk_step
             )
+        elif self.config.method == FlowMethod.LITEFLOWNET:
+            try:
+                from .liteflownet import calc_optical_flow_liteflownet
+            except Exception as err:
+                raise ImportError("LiteFlowNet method cannot be used. Are 'cupy' and 'torch' modules installed correctly?") from err
+            flow = calc_optical_flow_liteflownet(left_rgb, right_rgb)
         self.prev_gray = gray
+        self.prev_rgb = rgb
         self.prev_flow = flow
         return self.apply_fx(flow)
 
