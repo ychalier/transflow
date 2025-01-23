@@ -184,7 +184,8 @@ def transfer(
         crumble: bool = False,
         bitmap_introduction_flags: int = 1,
         initially_crumbled: bool = False,
-        preview_output: bool = False):
+        preview_output: bool = False,
+        lock_expr: str | None = None):
 
     if safe:
         append_history()
@@ -265,13 +266,23 @@ def transfer(
 
         if size is not None:
             size = tuple(map(int, re.split(r"[^\d]", size)))
+            
+        fs_args = {
+            "use_mvs": use_mvs,
+            "mask_path": mask_path,
+            "kernel_path": kernel_path,
+            "cv_config": cv_config,
+            "flow_filters": flow_filters,
+            "size": size,
+            "direction": direction,
+            "seek_ckpt": ckpt_meta.get("cursor"),
+            "seek_time": seek_time,
+            "duration_time": duration_time,
+            "repeat": repeat,
+            "lock_expr": lock_expr
+        }
 
-        flow_source = FlowSource.from_args(
-            flow_path, use_mvs=use_mvs, mask_path=mask_path,
-            kernel_path=kernel_path, cv_config=cv_config,
-            flow_filters=flow_filters, size=size, direction=direction,
-            seek_ckpt=ckpt_meta.get("cursor"), seek_time=seek_time,
-            duration_time=duration_time, repeat=repeat)
+        flow_source = FlowSource.from_args(flow_path, **fs_args)
 
         shape_queue = multiprocessing.Queue()
 
@@ -280,12 +291,7 @@ def transfer(
         flow_process.start()
 
         for extra_flow_path in extra_flow_paths:
-            extra_flow_sources.append(FlowSource.from_args(
-                extra_flow_path, use_mvs=use_mvs, mask_path=mask_path,
-                kernel_path=kernel_path, cv_config=cv_config,
-                flow_filters=flow_filters, size=size, direction=direction,
-                seek_ckpt=ckpt_meta.get("cursor"), seek_time=seek_time,
-                duration_time=duration_time))
+            extra_flow_sources.append(FlowSource.from_args(extra_flow_path, **fs_args))
             extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
             extra_flow_processes.append(SourceProcess(
                 extra_flow_sources[-1], extra_flow_queues[-1], shape_queue))

@@ -176,6 +176,9 @@ def main():
     parser.add_argument("-po", "--preview-output",
         action="store_true",
         help="preview output while exporting")
+    parser.add_argument("-lo", "--lock",
+        type=str, default=None,
+        help="Expression to lock the flow, based on the variable `t`, the frame timestamp in seconds")
     args = parser.parse_args()
     from .utils import parse_timestamp
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
@@ -232,4 +235,5 @@ def main():
         crumble=args.crumble,
         bitmap_introduction_flags=args.bitmap_introduction_flags,
         initially_crumbled=args.initially_crumbled,
-        preview_output=args.preview_output)
+        preview_output=args.preview_output,
+        lock_expr=args.lock)

@@ -137,10 +137,16 @@ class PolarFlowFilter(FlowFilter):
 
 class FlowSource:
 
-    def __init__(self, direction: FlowDirection, mask_path: str | None = None,
-                 kernel_path: str | None = None, flow_filters: str | None = None,
-                 seek_ckpt: int | None = None, seek_time: float | None = None,
-                 duration_time: float | None = None, repeat: int = 1):
+    def __init__(self,
+            direction: FlowDirection,
+            mask_path: str | None = None,
+            kernel_path: str | None = None,
+            flow_filters: str | None = None,
+            seek_ckpt: int | None = None,
+            seek_time: float | None = None,
+            duration_time: float | None = None,
+            repeat: int = 1,
+            lock_expr: str | None = None):
         self.direction = direction
         self.width: int = None
         self.height: int = None
@@ -161,8 +167,12 @@ class FlowSource:
         self.start_frame: int = 0
         self.end_frame: int = 0
         self.repeat = repeat
+        self.prev_flow = None
+        self.lock_expr = lock_expr
 
     def set_metadata(self, width: int, height: int, framerate: float, length: int):
+        self.lock_expr = None if self.lock_expr is None else FlowFilter.parse_expression(self.lock_expr)
+        
         self.width = width
         self.height = height
         self.framerate = framerate
@@ -253,7 +263,11 @@ class FlowSource:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         pass
 
-    def apply_fx(self, flow: numpy.ndarray) -> numpy.ndarray:
+    def post_process(self, flow: numpy.ndarray) -> numpy.ndarray:
+        if self.lock_expr is not None and self.prev_flow is not None and self.lock_expr(self.t):
+            flow = self.prev_flow
+        else:
+            self.prev_flow = flow
         if self.flow_filters:
             for flow_filter in self.flow_filters:
                 flow_filter.apply(flow, self.t)
@@ -283,7 +297,8 @@ class FlowSource:
             seek_ckpt: int | None = None,
             seek_time: float | None = None,
             duration_time: float | None = None,
-            repeat: int = 1):
+            repeat: int = 1,
+            lock_expr: str | None = None):
         if "::" in flow_path:
             avformat, file = flow_path.split("::")
         else:
@@ -292,10 +307,11 @@ class FlowSource:
             "mask_path": mask_path,
             "kernel_path": kernel_path,
             "flow_filters": flow_filters,
-            "seek": seek_ckpt,
+            "seek_ckpt": seek_ckpt,
             "seek_time": seek_time,
             "duration_time": duration_time,
             "repeat": repeat,
+            "lock_expr": lock_expr
         }
         if file.endswith(".flow.zip"):
             return ArchiveFlowSource(file, **args)
@@ -313,13 +329,8 @@ class FlowSource:
 
 class AvFlowSource(FlowSource):
 
-    def __init__(self, file: str, avformat: str | None = None,
-                 mask_path: str | None = None, kernel_path: str | None = None,
-                 flow_filters: str | None = None, seek: int | None = None,
-                 seek_time: float | None = None,
-                 duration_time: float | None = None, repeat: int = 1):
-        FlowSource.__init__(self, FlowDirection.FORWARD, mask_path, kernel_path,
-                            flow_filters, seek, seek_time, duration_time, repeat)
+    def __init__(self, file: str, avformat: str | None = None, **src_args):
+        FlowSource.__init__(self, FlowDirection.FORWARD, **src_args)
         self.file = file
         self.avformat = avformat
         self.container = None
@@ -360,7 +371,7 @@ class AvFlowSource(FlowSource):
             dx = mv.motion_x / mv.motion_scale
             dy = mv.motion_y / mv.motion_scale
             flow[i0:i1, j0:j1] = -dx, -dy
-        return self.apply_fx(flow)
+        return self.post_process(flow)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.container.close()
@@ -785,29 +796,18 @@ def calc_optical_flow_lukas_kanade(
 
 class CvFlowSource(FlowSource):
 
-    def __init__(self,
-            file: str,
-            config: CvFlowConfig,
-            size: tuple[int, int] | None = None,
-            direction: FlowDirection | None = None,
-            mask_path: str | None = None,
-            kernel_path: str | None = None,
-            flow_filters: str | None = None,
-            seek: int | None = None,
-            seek_time: float | None = None,
-            duration_time: float | None = None,
-            repeat: int = 1):
+    def __init__(self, file: str, config: CvFlowConfig,
+        size: tuple[int, int] | None = None,
+        direction: FlowDirection | None = None, **src_args):
         FlowSource.__init__(self,
             direction if direction is not None else FlowDirection.FORWARD,
-            mask_path, kernel_path, flow_filters, seek, seek_time, duration_time,
-            repeat)
+            **src_args)
         self.file = file
         self.config = config
         self.size = size
         self.capture = None
         self.prev_gray = None
         self.prev_rgb = None
-        self.prev_flow = None
 
     def setup(self):
         if re.match(r"\d+", self.file):
@@ -858,7 +858,7 @@ class CvFlowSource(FlowSource):
             flow = cv2.calcOpticalFlowFarneback(
                 prev=left_gray,
                 next=right_gray,
-                flow=self.prev_flow,
+                flow=self.prev_flow.copy() if self.prev_flow is not None else None,
                 pyr_scale=self.config.fb_pyr_scale,
                 levels=self.config.fb_levels,
                 winsize=self.config.fb_winsize,
@@ -871,7 +871,7 @@ class CvFlowSource(FlowSource):
             flow = calc_optical_flow_horn_schunck(
                 prev_grey=left_gray,
                 next_grey=right_gray,
-                flow=self.prev_flow,
+                flow=self.prev_flow.copy() if self.prev_flow is not None else None,
                 alpha=self.config.hs_alpha,
                 max_iters=self.config.hs_iterations,
                 decay=self.config.hs_decay,
@@ -893,8 +893,7 @@ class CvFlowSource(FlowSource):
             flow = calc_optical_flow_liteflownet(left_rgb, right_rgb)
         self.prev_gray = gray
         self.prev_rgb = rgb
-        self.prev_flow = flow
-        return self.apply_fx(flow)
+        return self.post_process(flow)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.capture.release()
@@ -902,13 +901,8 @@ class CvFlowSource(FlowSource):
 
 class ArchiveFlowSource(FlowSource):
 
-    def __init__(self, path: str, mask_path: str | None = None,
-                 kernel_path: str | None = None,
-                 flow_filters: str | None = None, seek: int | None = None,
-                 seek_time: float | None = None,
-                 duration_time: float | None = None, repeat: int = 1):
-        FlowSource.__init__(self, FlowDirection.FORWARD, mask_path, kernel_path,
-                            flow_filters, seek, seek_time, duration_time, repeat)
+    def __init__(self, path: str, **src_args):
+        FlowSource.__init__(self, FlowDirection.FORWARD, **src_args)
         self.path = path
         self.archive = None
 
@@ -931,7 +925,7 @@ class ArchiveFlowSource(FlowSource):
     def next(self) -> numpy.ndarray:
         with self.archive.open(f"{self.frame_cursor:09d}.npy") as file:
             flow = numpy.load(file)
-        return self.apply_fx(flow)
+        return self.post_process(flow)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.archive.close()

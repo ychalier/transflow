@@ -218,6 +218,10 @@ A few examples:
 > [!NOTE]
 > The magnitude of flow vectors is computed as their L2 norm. Values are in pixels.
 
+### Flow Locking
+
+You can lock the flow (to mimic the P-frames duplication effect) with the `-lo, --lock` argument. You can pass it a Pythonic expression based on the variable `t`, the time in seconds. `math` and `random` modules are available during evaluation. The output of the epxression is evaluated with Python's if statement: integer value 0 means the flow in unlocked, value 1 means the flow is locked.
+
 ### Applying A Mask
 
 You can pass the path to an image file with the `-fm, --flow-mask`. The image luminance will be scaled between 0 (black) and 1 (white) and multiplied element-wise to the flow array.
