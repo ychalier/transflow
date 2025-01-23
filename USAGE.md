@@ -146,7 +146,7 @@ Parameter | Default | Description
 Statistical approach based on neural networks. Very accurate results, medium performances. Adapted from [sniklaus/pytorch-liteflownet](https://github.com/sniklaus/pytorch-liteflownet), which is adapted from [twhui/LiteFlowNet](https://github.com/twhui/LiteFlowNet), which is the official implementation of [LiteFlowNet: A Lightweight Convolutional Neural Network for Optical Flow Estimation](https://arxiv.org/pdf/1805.07036) by Tak-Wai Hui, Xiaoou Tang and Chen Change Loy for CVPR 2018.
 
 > [!TIP]
-> Tested on Windows 11 with Python 3.12, `cupy==13.3.0` and `torch==2.7.0`.
+> Tested on Windows 11 with Python 3.12, `cupy==13.3.0` and `torch==2.7.0`. Torch must be compiled with CUDA enabled: first download [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) then run the appropriate command from [PyTorch Shortcuts](https://pytorch.org/get-started/locally/). Make sure to select the correct CUDA version. 
 
 ## Using Motion Vectors
 
