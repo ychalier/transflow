@@ -146,7 +146,7 @@ Parameter | Default | Description
 Statistical approach based on neural networks. Very accurate results, medium performances. Adapted from [sniklaus/pytorch-liteflownet](https://github.com/sniklaus/pytorch-liteflownet), which is adapted from [twhui/LiteFlowNet](https://github.com/twhui/LiteFlowNet), which is the official implementation of [LiteFlowNet: A Lightweight Convolutional Neural Network for Optical Flow Estimation](https://arxiv.org/pdf/1805.07036) by Tak-Wai Hui, Xiaoou Tang and Chen Change Loy for CVPR 2018.
 
 > [!TIP]
-> Tested on Windows 11 with Python 3.12, `cupy==13.3.0` and `torch==2.7.0`. Torch must be compiled with CUDA enabled: first download [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) then run the appropriate command from [PyTorch Shortcuts](https://pytorch.org/get-started/locally/). Make sure to select the correct CUDA version. 
+> Tested on Debian 12 (bookworm) and Windows 11 with Python 3.12, `cupy==13.3.0` and `torch==2.7.0`. Torch must be compiled with CUDA enabled: first download [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) then run the appropriate command from [PyTorch Shortcuts](https://pytorch.org/get-started/locally/). Make sure to select the correct CUDA version. 
 
 ## Using Motion Vectors
 
@@ -221,6 +221,8 @@ A few examples:
 ### Flow Locking
 
 You can lock the flow (to mimic the P-frames duplication effect) with the `-lo, --lock` argument. You can pass it a Pythonic expression based on the variable `t`, the time in seconds. `math` and `random` modules are available during evaluation. The output of the epxression is evaluated with Python's if statement: integer value 0 means the flow in unlocked, value 1 means the flow is locked.
+
+For instance, if you want to lock the flow after two seconds for one second, you may use the following argument: `-lo "t>=2 and t<=3"`.
 
 ### Applying A Mask
 
@@ -400,7 +402,6 @@ In order to know in advance which pixels to alter, you may use the [control.py](
     ```console
     transflow flow.mp4 -b image.jpg -ba flow_12345_1730000000000.png
     ```
-
 
 In the [control.py](control.py) GUI, you see pixel sources in the header, ordered by their target area, decreasing: this means the first (top left) source covers the most area. Hovering on it highlights its target zone. Clicking on it opens a color picker to edit its color. Other bindings:
 - Left click: change color
