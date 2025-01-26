@@ -178,7 +178,10 @@ def main():
         help="preview output while exporting")
     parser.add_argument("-lo", "--lock",
         type=str, default=None,
-        help="Expression to lock the flow, based on the variable `t`, the frame timestamp in seconds")
+        help="Expression to lock the flow. In lock mode 'stay', a list of couples (start_t, duration). In lock mode 'skip', an expression based on variable `t`. Timings are the output frame timestamps, in seconds.")
+    parser.add_argument("-lm", "--lock-mode",
+        type=str, default="stay", choices=["skip", "stay"],
+        help="When the flow is locked, either pause the source ('stay') or continue reading it ('skip')")
     args = parser.parse_args()
     from .utils import parse_timestamp
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
@@ -236,4 +239,5 @@ def main():
         bitmap_introduction_flags=args.bitmap_introduction_flags,
         initially_crumbled=args.initially_crumbled,
         preview_output=args.preview_output,
-        lock_expr=args.lock)
+        lock_expr=args.lock,
+        lock_mode=args.lock_mode)

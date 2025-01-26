@@ -220,9 +220,10 @@ A few examples:
 
 ### Flow Locking
 
-You can lock the flow (to mimic the P-frames duplication effect) with the `-lo, --lock` argument. You can pass it a Pythonic expression based on the variable `t`, the time in seconds. `math` and `random` modules are available during evaluation. The output of the epxression is evaluated with Python's if statement: integer value 0 means the flow in unlocked, value 1 means the flow is locked.
+You can lock the flow (to mimic the P-frames duplication effect) with the `-lo, --lock` argument. Two modes are available, which can be specified with the `-lm, --lock-mode` argument.
 
-For instance, if you want to lock the flow after two seconds for one second, you may use the following argument: `-lo "t>=2 and t<=3"`.
+- **`stay` (default):** the `-lo` argument is a list of couples of the form `(time_start, duration)`. Timings correspond to the output frame timestamp, and are all expressed in seconds. When locked, the flow source is paused. When unlocked, it resumes from where it was paused. For instance, if you want to lock the flow twice for one second, at two different moments, you may use the following argument: `-lm stay -lo "(1,1),(4,1)"`.
+- **`skip`:** the `-lo` argument is a Pythonic expression based on the variable `t`, the time in seconds. `math` and `random` modules are available during evaluation. When locked, the flow source is still iterated. When unlocked, it skips all frames encountered while locked. The output of the epxression is evaluated with Python's if statement: integer value 0 means the flow in unlocked, value 1 means the flow is locked. For instance, if you want to lock the flow after two seconds for one second, you may use the following argument: `-lm skip -lo "t>=2 and t<=3"`.
 
 ### Applying A Mask
 

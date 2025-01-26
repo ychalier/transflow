@@ -11,7 +11,7 @@ import warnings
 import numpy
 import tqdm
 
-from .flow import FlowSource, FlowDirection
+from .flow import FlowSource, FlowDirection, LockMode
 from .bitmap import BitmapSource
 from .accumulator import Accumulator
 from .output import VideoOutput, ZipOutput, NumpyOutput, render1d, render2d
@@ -137,6 +137,19 @@ def upscale_flow(flow: numpy.ndarray, wf: int, hf: int) -> numpy.ndarray:
     return numpy.kron(flow * (wf, hf), numpy.ones((hf, wf, 1))).astype(flow.dtype)
 
 
+def get_expected_length(fs_length: int | None, bs_length: int | None, cursor: int) -> int | None:
+    expected_length = None
+    if fs_length is not None and bs_length is not None:
+        expected_length = min(fs_length, bs_length)
+    elif fs_length is not None:
+        expected_length = fs_length
+    elif bs_length is not None:
+        expected_length = bs_length
+    if expected_length is not None:
+        expected_length -= cursor
+    return expected_length
+
+
 def transfer(
         flow_path: str,
         bitmap_path: str | None,
@@ -185,7 +198,8 @@ def transfer(
         bitmap_introduction_flags: int = 1,
         initially_crumbled: bool = False,
         preview_output: bool = False,
-        lock_expr: str | None = None):
+        lock_expr: str | None = None,
+        lock_mode: str | LockMode = LockMode.STAY):
 
     if safe:
         append_history()
@@ -279,7 +293,8 @@ def transfer(
             "seek_time": seek_time,
             "duration_time": duration_time,
             "repeat": repeat,
-            "lock_expr": lock_expr
+            "lock_expr": lock_expr,
+            "lock_mode": lock_mode
         }
 
         flow_source = FlowSource.from_args(flow_path, **fs_args)
@@ -421,17 +436,7 @@ def transfer(
         exception = False
         cursor = ckpt_meta.get("cursor", 0)
 
-        expected_length = None
-        if fs_length is not None and bs_length is not None:
-            expected_length = min(fs_length, bs_length)
-        elif fs_length is not None:
-            expected_length = fs_length
-        elif bs_length is not None:
-            expected_length = bs_length
-        if expected_length is not None:
-            expected_length -= cursor
-
-        pbar = tqdm.tqdm(total=expected_length, unit="frame")
+        pbar = tqdm.tqdm(total=get_expected_length(fs_length, bs_length, cursor), unit="frame")
         while True:
             try:
                 flows = []

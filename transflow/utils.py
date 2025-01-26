@@ -122,3 +122,11 @@ def parse_timestamp(timestamp: str | None) -> float | None:
     if a.group(4) is not None:
         ms = int(a.group(4))
     return 3600 * h + 60 * m + s + ms/1000
+
+
+def parse_lambda_expression(expr_string: str, vars: tuple[str] = ("t", )):
+    if len(vars) == 1:
+        vars_str = vars[0]
+    else:
+        vars_str = ",".join(vars)
+    return eval(f"lambda {vars_str}: " + expr_string)
