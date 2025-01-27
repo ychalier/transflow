@@ -162,6 +162,7 @@ def transfer(
         reset_alpha: float = .9,
         heatmap_mode: str = "discrete",
         heatmap_args: str = "0:4:2:1",
+        heatmap_reset_threshold: float | None = None,
         execute: bool = False,
         replace: bool = False,
         mask_path: str | None = None,
@@ -396,18 +397,19 @@ def transfer(
             accumulator = Accumulator.from_args(
                 fs_width * fs_width_factor, 
                 fs_height * fs_height_factor,
-                acc_method,
-                reset_mode,
-                reset_alpha,
-                reset_mask_path,
-                heatmap_mode,
-                heatmap_args,
-                accumulator_background,
-                stack_composer,
-                initial_canvas,
-                bitmap_mask_path,
-                crumble,
-                bitmap_introduction_flags)
+                method=acc_method,
+                reset_mode=reset_mode,
+                reset_alpha=reset_alpha,
+                reset_mask_path=reset_mask_path,
+                heatmap_mode=heatmap_mode,
+                heatmap_args=heatmap_args,
+                heatmap_reset_threshold=heatmap_reset_threshold,
+                bg_color=accumulator_background,
+                stack_composer=stack_composer,
+                initial_canvas=initial_canvas,
+                bitmap_mask_path=bitmap_mask_path,
+                crumble=crumble,
+                bitmap_introduction_flags=bitmap_introduction_flags)
 
         if has_output:
             vout_args = (

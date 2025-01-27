@@ -48,15 +48,22 @@ class ResetMode(enum.Enum):
 
 class Accumulator:
 
-    def __init__(self, width: int, height: int,
-                 heatmap_mode: HeatmapMode | str = "discrete",
-                 heatmap_args: str | tuple[int|float] = "0:0:0:0"):
+    def __init__(self,
+            width: int,
+            height: int,
+            heatmap_mode: HeatmapMode | str = "discrete",
+            heatmap_args: str | tuple[int|float] = "0:0:0:0",
+            heatmap_reset_threshold: float | None = None,
+            reset_mode: ResetMode | str = "off",
+            reset_alpha: float = .9,
+            reset_mask_path: str | None = None):
         self.width = width
         self.height = height
         self.flow_int: numpy.ndarray = None
         self.flow_flat: numpy.ndarray = None
         self.heatmap_mode = HeatmapMode.from_string(heatmap_mode)\
             if isinstance(heatmap_mode, str) else heatmap_mode
+        self.heatmap_reset_threshold = heatmap_reset_threshold if heatmap_reset_threshold is not None else float("inf")
         if self.heatmap_mode == HeatmapMode.DISCRETE:
             self.heatmap = numpy.zeros((self.height, self.width), dtype=int)
             x = tuple(map(int, heatmap_args.split(":")))\
@@ -83,6 +90,9 @@ class Accumulator:
                 self.fx_max[i, j] = width - j - 1
                 self.fy_min[i, j] = -i
                 self.fy_max[i, j] = height - i - 1
+        self.reset_mode = reset_mode if isinstance (reset_mode, ResetMode) else ResetMode.from_string(reset_mode)
+        self.reset_alpha = reset_alpha
+        self.reset_mask = None if reset_mask_path is None else load_mask(reset_mask_path)
 
     def _update_flow(self, flow: numpy.ndarray):
         numpy.clip(flow[:,:,0], self.fx_min, self.fx_max, flow[:,:,0])
@@ -116,35 +126,43 @@ class Accumulator:
             reset_mask_path: str | None = None,
             heatmap_mode: HeatmapMode | str = "discrete",
             heatmap_args: str | tuple[int|float] = "0:0:0:0",
+            heatmap_reset_threshold: float | None = None,
             bg_color: str = "ffffff",
             stack_composer: str = "top",
             initial_canvas: str | None = None,
             bitmap_mask_path: str | None = None,
             crumble: bool = False,
             bitmap_introduction_flags: int = 1):
+        args = {
+            "heatmap_mode": heatmap_mode,
+            "heatmap_args": heatmap_args,
+            "heatmap_reset_threshold": heatmap_reset_threshold,
+            "reset_mode": reset_mode,
+            "reset_alpha": reset_alpha,
+            "reset_mask_path": reset_mask_path,
+        }
         if isinstance(reset_mode, str):
             reset_mode = ResetMode.from_string(reset_mode)
         match method:
             case "map":
-                return MappingAccumulator(
-                    width, height, reset_mode, reset_alpha, reset_mask_path,
-                    heatmap_mode, heatmap_args)
+                return MappingAccumulator(width, height, **args)
             case "stack":
                 return StackAccumulator(
-                    width, height, bg_color, stack_composer,
-                    heatmap_mode, heatmap_args)
+                    width, height,
+                    bg_color,
+                    stack_composer,
+                    **args)
             case "sum":
-                return SumAccumulator(
-                    width, height, reset_mode, reset_alpha, reset_mask_path,
-                    heatmap_mode, heatmap_args)
+                return SumAccumulator(width, height, **args)
             case "crumble":
-                return CrumbleAccumulator(width, height, reset_mode,
-                    reset_alpha, reset_mask_path, heatmap_mode, heatmap_args,
-                    bg_color)
+                return CrumbleAccumulator(width, height, bg_color, **args)
             case "canvas":
-                return CanvasAccumulator(width, height, reset_mode, reset_alpha,
-                    reset_mask_path, heatmap_mode, heatmap_args, initial_canvas,
-                    bitmap_mask_path, crumble, bitmap_introduction_flags)
+                return CanvasAccumulator(width, height,
+                    initial_canvas,
+                    bitmap_mask_path,
+                    crumble,
+                    bitmap_introduction_flags,
+                    **args)
         raise ValueError(f"Unknown accumulator method '{method}'")
 
     def get_heatmap_array(self) -> numpy.ndarray:
@@ -158,18 +176,11 @@ class Accumulator:
 
 class MappingAccumulator(Accumulator):
 
-    def __init__(self, width: int, height: int,
-                 reset_mode: ResetMode = ResetMode.OFF, reset_alpha: float = .9,
-                 reset_mask_path: str | None = None,
-                 heatmap_mode: HeatmapMode | str = "discrete",
-                 heatmap_args: str | tuple[int|float] = "0:0:0:0"):
-        Accumulator.__init__(self, width, height, heatmap_mode, heatmap_args)
-        self.reset_mode = reset_mode
-        self.reset_alpha = reset_alpha
-        shape = (self.height, self.width)
-        self.reset_mask = None if reset_mask_path is None else load_mask(reset_mask_path)
+    def __init__(self, width: int, height: int, **acc_args):
+        Accumulator.__init__(self, width, height, **acc_args)
         self.base_flat = numpy.arange(self.height * self.width)
         assert self.base_flat.dtype == int, self.base_flat.dtype
+        shape = (self.height, self.width)
         self.basex = numpy.broadcast_to(numpy.arange(self.width), shape).copy()
         self.basey = numpy.broadcast_to(numpy.arange(self.height)[:,numpy.newaxis], shape).copy()
         self.mapx = self.basex.astype(float)
@@ -180,12 +191,12 @@ class MappingAccumulator(Accumulator):
         if self.reset_mode == ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
             where = numpy.where(
-                (self.heatmap == 0)
+                (self.heatmap <= self.heatmap_reset_threshold)
                 & (numpy.random.random(size=(self.height, self.width)) <= threshold))
             self.mapx[where] = self.basex[where]
             self.mapy[where] = self.basey[where]
         elif self.reset_mode == ResetMode.LINEAR:
-            where = numpy.where(self.heatmap == 0)
+            where = numpy.where(self.heatmap <= self.heatmap_reset_threshold)
             if self.reset_mask is None:
                 self.mapx[where] = (1 - self.reset_alpha) * self.mapx[where]\
                     + self.reset_alpha * self.basex[where]
@@ -221,19 +232,12 @@ class MappingAccumulator(Accumulator):
 
 class CrumbleAccumulator(MappingAccumulator):
 
-    def __init__(self, width: int, height: int,
-                 reset_mode: ResetMode = ResetMode.OFF, reset_alpha: float = .9,
-                 reset_mask_path: str | None = None,
-                 heatmap_mode: HeatmapMode | str = "discrete",
-                 heatmap_args: str | tuple[int|float] = "0:0:0:0",
-                 bg_color: str = "000000"):
-        if reset_mode not in [ResetMode.OFF, ResetMode.RANDOM]:
+    def __init__(self, width: int, height: int, bg_color: str = "000000", **acc_args):
+        MappingAccumulator.__init__(self, width, height, **acc_args)
+        if self.reset_mode not in [ResetMode.OFF, ResetMode.RANDOM]:
             logging.warning(
                 "CrumbleAccumulator only works with Off or Random reset, not %s",
-                reset_mode)
-        MappingAccumulator.__init__(self, width, height, reset_mode,
-                                    reset_alpha, reset_mask_path, heatmap_mode,
-                                    heatmap_args)
+                self.reset_mode)
         self.bg_color = parse_hex_color(bg_color)
         self.crumble_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8)
     
@@ -242,7 +246,7 @@ class CrumbleAccumulator(MappingAccumulator):
         if self.reset_mode == ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
             where = numpy.where(
-                (self.heatmap == 0)
+                (self.heatmap <= self.heatmap_reset_threshold)
                 & (numpy.random.random(size=(self.height, self.width)) <= threshold))
             self.mapx[where] = self.basex[where]
             self.mapy[where] = self.basey[where]
@@ -292,10 +296,8 @@ class CrumbleAccumulator(MappingAccumulator):
 class StackAccumulator(Accumulator):
 
     def __init__(self, width: int, height: int, bg_color: str = "ffffff",
-                 composer: str = "top",
-                 heatmap_mode: HeatmapMode | str = "discrete",
-                 heatmap_args: str | tuple[int|float] = "0:0:0:0"):
-        Accumulator.__init__(self, width, height, heatmap_mode, heatmap_args)
+                 composer: str = "top", **acc_args):
+        Accumulator.__init__(self, width, height, **acc_args)
         self.bg_color = parse_hex_color(bg_color)
         self.composer = {
             "top": compose_top,
@@ -351,16 +353,9 @@ class StackAccumulator(Accumulator):
 
 class SumAccumulator(Accumulator):
 
-    def __init__(self, width: int, height: int,
-                 reset_mode: ResetMode = ResetMode.OFF, reset_alpha: float = .9,
-                 reset_mask_path: str | None = None,
-                 heatmap_mode: HeatmapMode | str = "discrete",
-                 heatmap_args: str | tuple[int|float] = "0:0:0:0"):
-        Accumulator.__init__(self, width, height, heatmap_mode, heatmap_args)
+    def __init__(self, width: int, height: int, **acc_args):
+        Accumulator.__init__(self, width, height, **acc_args)
         self.total_flow = numpy.zeros((height, width, 2), dtype=float)
-        self.reset_mode = reset_mode
-        self.reset_alpha = reset_alpha
-        self.reset_mask = None if reset_mask_path is None else load_mask(reset_mask_path)
         shape = (height, width)
         self.basex = numpy.broadcast_to(numpy.arange(self.width), shape).copy()
         self.basey = numpy.broadcast_to(numpy.arange(self.height)[:,numpy.newaxis], shape).copy()
@@ -370,10 +365,12 @@ class SumAccumulator(Accumulator):
             logging.warning("SumAccumulator only works with backward flow, not %s", direction)
         self._update_flow(flow)
         if self.reset_mode == ResetMode.RANDOM:
+            # TODO: heatmap?
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
             where = numpy.where(numpy.random.random(size=(self.height, self.width)) <= threshold)
             self.total_flow[where] = 0
         elif self.reset_mode == ResetMode.LINEAR:
+            # TODO: heatmap?
             if self.reset_mask is None:
                 self.total_flow = (1 - self.reset_alpha) * self.total_flow
             else:
@@ -404,19 +401,12 @@ class CanvasAccumulator(Accumulator):
     def __init__(self,
             width: int,
             height: int,
-            reset_mode: ResetMode = ResetMode.OFF,
-            reset_alpha: float = .9,
-            reset_mask_path: str | None = None,
-            heatmap_mode: HeatmapMode | str = "discrete",
-            heatmap_args: str | tuple[int|float] = "0:0:0:0",
             initial_canvas: str | None = None,
             bitmap_mask_path: str | None = None,
             crumble: bool = False,
-            bitmap_introduction_flags: int = 1):
-        Accumulator.__init__(self, width, height, heatmap_mode, heatmap_args)
-        self.reset_mode = reset_mode
-        self.reset_alpha = reset_alpha
-        self.reset_mask = None if reset_mask_path is None else load_mask(reset_mask_path)
+            bitmap_introduction_flags: int = 1,
+            **acc_args):
+        Accumulator.__init__(self, width, height, **acc_args)
         self.initial_canvas = 255 * numpy.ones((height, width, 3), dtype=numpy.uint8)
         if initial_canvas is not None:
             if re.match(r"#?[a-f0-9]{6}", initial_canvas):
@@ -437,8 +427,9 @@ class CanvasAccumulator(Accumulator):
         self.direction = direction
         if self.reset_mode == ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
-            below_threshold = numpy.random.random(size=(self.height, self.width)) <= threshold            
-            where = numpy.where((1-below_threshold) + self.heatmap == 0)
+            below_threshold = numpy.random.random(size=(self.height, self.width)) <= threshold
+            below_heatmap = self.heatmap <= self.heatmap_reset_threshold
+            where = numpy.nonzero(numpy.multiply(below_threshold, below_heatmap))
             self.canvas[where] = self.initial_canvas[where]
             self.mask[where] = 0
         elif self.reset_mode != ResetMode.OFF:
@@ -499,6 +490,6 @@ class CanvasAccumulator(Accumulator):
 
     def get_accumulator_array(self) -> numpy.ndarray:
         a = numpy.zeros((self.height, self.width, 2))
-        a[:,:,0] = self.crumble_mask
-        a[:,:,1] = self.crumble_mask
+        a[:,:,0] = self.mask
+        a[:,:,1] = self.mask
         return a

@@ -76,6 +76,9 @@ def main():
         type=str, default="0:4:2:1",
         help="in discrete mode, args are min:max:add:sub (ints), "\
             "in continuous mode, args are max:decay:treshold (floats)")
+    parser.add_argument("-hr", "--heatmap-reset-threshold",
+        type=float, default=None,
+        help="heatmap threshold for reset effects")
     parser.add_argument("-nx", "--no-execute",
         action="store_true",
         help="do not open the output video file when done")
@@ -200,6 +203,7 @@ def main():
         reset_alpha=args.reset_alpha,
         heatmap_mode=args.heatmap_mode,
         heatmap_args=args.heatmap_args,
+        heatmap_reset_threshold=args.heatmap_reset_threshold,
         execute=not args.no_execute,
         replace=args.replace,
         mask_path=args.flow_mask,
