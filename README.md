@@ -26,7 +26,7 @@ The process should be straightforward.
 1. Download the [latest release](https://github.com/ychalier/transflow/releases)
 2. Install it with `pip`:
    ```console
-   pip install ~/Downloads/transflow-1.7.0.tar.gz
+   pip install ~/Downloads/transflow-1.7.1.tar.gz
    ```
 3. Test installation:
    ```console

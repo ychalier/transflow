@@ -218,7 +218,7 @@ class FlowSource:
         else:
             self.length = self.repeat * (self.end_frame - self.start_frame)
 
-        if self.length is not None and self.lock_mode == LockMode.STAY:
+        if self.length is not None and self.lock_mode == LockMode.STAY and self.lock_expr is not None:
             for _, lock_duration in self.lock_expr:
                 self.length += int(lock_duration * framerate)
 
