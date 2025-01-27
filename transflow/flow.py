@@ -393,9 +393,9 @@ class AvFlowSource(FlowSource):
         )
 
     def rewind(self):
-        self.frame_cursor = self.start_frame
+        self.input_frame_index = self.start_frame
         self.container.seek(0)
-        for _ in range(self.frame_cursor + 1):
+        for _ in range(self.input_frame_index + 1):
             next(self.iterator)
 
     def next(self) -> numpy.ndarray:
@@ -964,10 +964,10 @@ class ArchiveFlowSource(FlowSource):
         )
 
     def rewind(self):
-        self.frame_cursor = self.start_frame
+        self.input_frame_index = self.start_frame
 
     def next(self) -> numpy.ndarray:
-        with self.archive.open(f"{self.frame_cursor:09d}.npy") as file:
+        with self.archive.open(f"{self.input_frame_index:09d}.npy") as file:
             flow = numpy.load(file)
         return flow
 
