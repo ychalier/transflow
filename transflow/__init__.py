@@ -170,9 +170,6 @@ def main():
     parser.add_argument("-cr", "--crumble",
         action="store_true",
         help="enable crumble effect for the canvas accumulator")
-    parser.add_argument("-cri", "--initially-crumbled",
-        action="store_true",
-        help="start with empty crumble mask for the canvas accumulator, only revealing bitmap pixels at start")
     parser.add_argument("-po", "--preview-output",
         action="store_true",
         help="preview output while exporting")
@@ -237,7 +234,6 @@ def main():
         bitmap_mask_path=args.bitmap_mask,
         crumble=args.crumble,
         bitmap_introduction_flags=args.bitmap_introduction_flags,
-        initially_crumbled=args.initially_crumbled,
         preview_output=args.preview_output,
         lock_expr=args.lock,
         lock_mode=args.lock_mode)

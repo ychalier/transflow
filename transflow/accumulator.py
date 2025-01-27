@@ -121,8 +121,7 @@ class Accumulator:
             initial_canvas: str | None = None,
             bitmap_mask_path: str | None = None,
             crumble: bool = False,
-            bitmap_introduction_flags: int = 1,
-            initially_crumbled: bool = False):
+            bitmap_introduction_flags: int = 1):
         if isinstance(reset_mode, str):
             reset_mode = ResetMode.from_string(reset_mode)
         match method:
@@ -145,8 +144,7 @@ class Accumulator:
             case "canvas":
                 return CanvasAccumulator(width, height, reset_mode, reset_alpha,
                     reset_mask_path, heatmap_mode, heatmap_args, initial_canvas,
-                    bitmap_mask_path, crumble, bitmap_introduction_flags,
-                    initially_crumbled)
+                    bitmap_mask_path, crumble, bitmap_introduction_flags)
         raise ValueError(f"Unknown accumulator method '{method}'")
 
     def get_heatmap_array(self) -> numpy.ndarray:
@@ -398,6 +396,7 @@ class SumAccumulator(Accumulator):
 class BitmapIntroductionFlags(enum.Enum):
     MOTION = 1
     STATIC = 2
+    NO_OVERWRITE = 4
 
 
 class CanvasAccumulator(Accumulator):
@@ -413,8 +412,7 @@ class CanvasAccumulator(Accumulator):
             initial_canvas: str | None = None,
             bitmap_mask_path: str | None = None,
             crumble: bool = False,
-            bitmap_introduction_flags: int = 1,
-            initially_crumbled: bool = True):
+            bitmap_introduction_flags: int = 1):
         Accumulator.__init__(self, width, height, heatmap_mode, heatmap_args)
         self.reset_mode = reset_mode
         self.reset_alpha = reset_alpha
@@ -431,9 +429,7 @@ class CanvasAccumulator(Accumulator):
         self.bitmap_mask = None if bitmap_mask_path is None else load_mask(bitmap_mask_path)
         self.direction: FlowDirection | None = None
         self.crumble = crumble
-        self.crumble_mask = numpy.zeros((self.height, self.width), dtype=numpy.uint8)
-        if not self.crumble or not initially_crumbled:
-            self.crumble_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8)
+        self.mask = numpy.zeros((self.height, self.width), dtype=numpy.uint8)
         self.bitmap_introduction_flags = bitmap_introduction_flags
 
     def update(self, flow: numpy.ndarray, direction: FlowDirection):
@@ -441,8 +437,10 @@ class CanvasAccumulator(Accumulator):
         self.direction = direction
         if self.reset_mode == ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
-            where = numpy.where(numpy.random.random(size=(self.height, self.width)) <= threshold)
+            below_threshold = numpy.random.random(size=(self.height, self.width)) <= threshold            
+            where = numpy.where((1-below_threshold) + self.heatmap == 0)
             self.canvas[where] = self.initial_canvas[where]
+            self.mask[where] = 0
         elif self.reset_mode != ResetMode.OFF:
             warnings.warn(f"Unsupported reset mode '{self.reset_mode}' for CanvasAccumulator")
          
@@ -454,49 +452,48 @@ class CanvasAccumulator(Accumulator):
         self.canvas.flat[t3+2] = values.flat[s3+2]
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
-
-        if self.direction == FlowDirection.BACKWARD:
-            moving_target = numpy.nonzero(self.flow_flat)[0]
-            moving_source = moving_target + self.flow_flat[moving_target]
-        elif self.direction == FlowDirection.FORWARD:
-            moving_source = numpy.nonzero(self.flow_flat)[0]
-            moving_target = moving_source + self.flow_flat[moving_source]
-
-        wh = numpy.nonzero(self.crumble_mask.flat[moving_source])[0]
-        moving_crumble_source = moving_source[wh]
-        if self.direction == FlowDirection.BACKWARD:
-            moving_crumble_target = moving_crumble_source - self.flow_flat[moving_target][wh]
-        elif self.direction == FlowDirection.FORWARD:
-            moving_crumble_target = moving_crumble_source + self.flow_flat[moving_source][wh]
-
-        if self.bitmap_mask is None:
-            moving_bitmap_source = moving_source
-            moving_bitmap_target = moving_target
-            static_bitmap_source = numpy.array([])
-        else:
-            wh = numpy.nonzero(self.bitmap_mask.flat[moving_source])[0]
-            moving_bitmap_source = moving_source[wh]
-            if self.direction == FlowDirection.BACKWARD:
-                moving_bitmap_target = moving_bitmap_source - self.flow_flat[moving_target][wh]
-            elif self.direction == FlowDirection.FORWARD:
-                moving_bitmap_target = moving_bitmap_source + self.flow_flat[moving_source][wh]
-            static_bitmap_source = numpy.nonzero(self.bitmap_mask.flat)[0]
-
+        
+        bitmap_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8) if self.bitmap_mask is None else self.bitmap_mask
+        
+        if self.direction == FlowDirection.FORWARD:
+            pixels_source = numpy.nonzero(self.mask.flat)[0]
+            pixels_target = pixels_source + self.flow_flat[pixels_source]
+            bitmap_source = numpy.nonzero(numpy.multiply(bitmap_mask.flat, self.flow_flat))[0]
+            bitmap_target = bitmap_source + self.flow_flat[bitmap_source]
+            if self.bitmap_introduction_flags & BitmapIntroductionFlags.NO_OVERWRITE.value:
+                wh = numpy.where(self.mask.flat[bitmap_target] == 0)
+                bitmap_source = bitmap_source[wh]
+                bitmap_target = bitmap_target[wh]
+        
+        elif self.direction == FlowDirection.BACKWARD:
+            shift = numpy.arange(self.height * self.width) + self.flow_flat
+            new_mask = self.mask.flat[shift].reshape((self.height, self.width))
+            pixels_target = numpy.nonzero(new_mask.flat)[0]
+            pixels_source = pixels_target + self.flow_flat[pixels_target]
+            new_bitmap_mask = bitmap_mask.flat[shift].reshape((self.height, self.width))
+            if self.bitmap_introduction_flags & BitmapIntroductionFlags.NO_OVERWRITE.value:
+                bitmap_target = numpy.nonzero(numpy.multiply(numpy.multiply(new_bitmap_mask.flat, self.flow_flat), (1 - self.mask).flat))[0]
+            else:
+                bitmap_target = numpy.nonzero(numpy.multiply(new_bitmap_mask.flat, self.flow_flat))[0]
+            bitmap_source = bitmap_target + self.flow_flat[bitmap_target]
+        
         aux = self.canvas.copy()
-
+            
         if self.crumble:
-            self.put(moving_crumble_source, moving_crumble_source, self.initial_canvas)
-            self.crumble_mask.flat[moving_crumble_source] = 0
-            self.crumble_mask.flat[moving_crumble_target] = 1
-
-        self.put(moving_crumble_target, moving_crumble_source, aux)
-
+            self.put(pixels_source, pixels_source, self.initial_canvas)
+            self.mask.flat[pixels_source] = 0
+            
+        self.put(pixels_target, pixels_source, aux)
+        self.mask.flat[pixels_target] = 1
+        
         if self.bitmap_introduction_flags & BitmapIntroductionFlags.STATIC.value:
+            static_bitmap_source = numpy.nonzero(bitmap_mask.flat)[0]
             self.put(static_bitmap_source, static_bitmap_source, bitmap)
-            self.crumble_mask.flat[static_bitmap_source] = 1
+            self.mask.flat[static_bitmap_source] = 1
+        
         if self.bitmap_introduction_flags & BitmapIntroductionFlags.MOTION.value:
-            self.put(moving_bitmap_target, moving_bitmap_source, bitmap)
-            self.crumble_mask.flat[moving_bitmap_target] = 1
+            self.put(bitmap_target, bitmap_source, bitmap)
+            self.mask.flat[bitmap_target] = 1
         
         return self.canvas
 
@@ -504,5 +501,4 @@ class CanvasAccumulator(Accumulator):
         a = numpy.zeros((self.height, self.width, 2))
         a[:,:,0] = self.crumble_mask
         a[:,:,1] = self.crumble_mask
-        print("Argmax:", numpy.max(self.crumble_mask))
         return a

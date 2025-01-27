@@ -196,7 +196,6 @@ def transfer(
         bitmap_mask_path: str | None = None,
         crumble: bool = False,
         bitmap_introduction_flags: int = 1,
-        initially_crumbled: bool = False,
         preview_output: bool = False,
         lock_expr: str | None = None,
         lock_mode: str | LockMode = LockMode.STAY):
@@ -408,8 +407,7 @@ def transfer(
                 initial_canvas,
                 bitmap_mask_path,
                 crumble,
-                bitmap_introduction_flags,
-                initially_crumbled)
+                bitmap_introduction_flags)
 
         if has_output:
             vout_args = (

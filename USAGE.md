@@ -281,9 +281,16 @@ Argument | Default | Description
 -------- | ------- | -----------
 `-ic, --initial-canvas` | White | Either a HEX color or a path to an image. Will define the initial canvas image.
 `-bm, --bitmap-mask` | `None` | (Optionnal) A path to a black and white image. If set, only bitmap pixels from white regions in the mask will be introduced, otherwise, every moving bitmap pixels are considered.
-`-bi, --bitmap-introduction-flags` | 1 | If 1, moving bitmap pixels are pasted onto the canvas. If 2, bitmap pixels from the mask are pasted onto the canvas. If 3, the two previous effects apply.
+`-bi, --bitmap-introduction-flags` | 5 | See below.If 1, moving bitmap pixels are pasted onto the canvas. If 2, bitmap pixels from the mask are pasted onto the canvas. If 3, the two previous effects apply.
 `-cr, --crumble` | `False` | Enable the crumbling effect: a moving pixels leaves an empty spot behind it. Moving pixels from the bitmap bypass this behavior.
-`-cri, --initially-crumbled` | `False` | If `True`, the whole canvas is originally considered empty. No action will occur until bitmap pixels arrive.
+
+Bitmap Introduction Flags:
+
+- `MOTION` (1): moving bitmap pixels are pasted onto the canvas.
+- `STATIC` (2): all bitmap pixels from the bitmap mask are pasted onto the canvas.
+- `NO_OVERWRITE` (4): moving bitmap pixels cannot be placed over a pixel introduced earlier, only in black space.
+
+Default is `MOTION | NO_OVERWRITE`, ie. 5.
 
 ## Accumulator Heatmap
 
