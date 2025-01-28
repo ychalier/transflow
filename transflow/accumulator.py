@@ -365,16 +365,17 @@ class SumAccumulator(Accumulator):
             logging.warning("SumAccumulator only works with backward flow, not %s", direction)
         self._update_flow(flow)
         if self.reset_mode == ResetMode.RANDOM:
-            # TODO: heatmap?
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
-            where = numpy.where(numpy.random.random(size=(self.height, self.width)) <= threshold)
+            below_threshold = numpy.random.random(size=(self.height, self.width)) <= threshold
+            below_heatmap = self.heatmap <= self.heatmap_reset_threshold
+            where = numpy.nonzero(numpy.multiply(below_threshold, below_heatmap))
             self.total_flow[where] = 0
         elif self.reset_mode == ResetMode.LINEAR:
-            # TODO: heatmap?
+            wh = numpy.where(self.heatmap <= self.heatmap_reset_threshold)
             if self.reset_mask is None:
-                self.total_flow = (1 - self.reset_alpha) * self.total_flow
+                self.total_flow[wh] = (1 - self.reset_alpha) * self.total_flow[wh]
             else:
-                self.total_flow = (1 - self.reset_mask) * self.total_flow
+                self.total_flow[wh] = numpy.expand_dims(1 - self.reset_mask[wh], -1) * self.total_flow[wh]
         self.total_flow += flow
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
