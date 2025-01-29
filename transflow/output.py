@@ -145,7 +145,7 @@ def render1d(arr: numpy.ndarray, scale: float = 1,
              ) -> numpy.ndarray:
     if colors is None:
         colors = ("#000000", "#ffffff")
-    color_arrs = [numpy.array(parse_hex_color(c), dtype=float) for c in colors]
+    color_arrs = [numpy.array(parse_hex_color(c), dtype=numpy.float32) for c in colors]
     out_shape = (*arr.shape[:2], 1)
     if binary:
         coeff = numpy.clip(numpy.round(scale * arr), 0, 1).reshape(out_shape)
@@ -162,7 +162,7 @@ def render2d(arr: numpy.ndarray, scale: float = 1,
               colors: tuple[str] | None = None)-> numpy.ndarray:
     if colors is None:
         colors = ("#ffff00", "#0000ff", "#ff00ff", "#00ff00")
-    color_arrs = [numpy.array(parse_hex_color(c), dtype=float) for c in colors]
+    color_arrs = [numpy.array(parse_hex_color(c), dtype=numpy.float32) for c in colors]
     out_shape = (*arr.shape[:2], 1)
     coeff_y = numpy.clip(1 + scale * arr[:,:,0], 0, 1).reshape(out_shape)
     coeff_b = numpy.clip(1 - scale * arr[:,:,0], 0, 1).reshape(out_shape)

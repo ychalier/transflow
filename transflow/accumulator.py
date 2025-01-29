@@ -65,7 +65,7 @@ class Accumulator:
             if isinstance(heatmap_mode, str) else heatmap_mode
         self.heatmap_reset_threshold = heatmap_reset_threshold if heatmap_reset_threshold is not None else float("inf")
         if self.heatmap_mode == HeatmapMode.DISCRETE:
-            self.heatmap = numpy.zeros((self.height, self.width), dtype=int)
+            self.heatmap = numpy.zeros((self.height, self.width), dtype=numpy.int32)
             x = tuple(map(int, heatmap_args.split(":")))\
                 if isinstance(heatmap_args, str) else heatmap_args
             self.heatmap_min = x[0]
@@ -73,17 +73,17 @@ class Accumulator:
             self.heatmap_add = x[2]
             self.heatmap_sub = x[3]
         elif self.heatmap_mode == HeatmapMode.CONTINUOUS:
-            self.heatmap = numpy.zeros((self.height, self.width), dtype=float)
+            self.heatmap = numpy.zeros((self.height, self.width), dtype=numpy.float32)
             x = tuple(map(float, heatmap_args.split(":")))\
                 if isinstance(heatmap_args, str) else heatmap_args
             self.heatmap_min = 0
             self.heatmap_max = x[0]
             self.heatmap_decay = x[1]
             self.heatmap_threshold = x[2]
-        self.fx_min = numpy.zeros((self.height, self.width), dtype=int)
-        self.fx_max = numpy.zeros((self.height, self.width), dtype=int)
-        self.fy_min = numpy.zeros((self.height, self.width), dtype=int)
-        self.fy_max = numpy.zeros((self.height, self.width), dtype=int)
+        self.fx_min = numpy.zeros((self.height, self.width), dtype=numpy.int32)
+        self.fx_max = numpy.zeros((self.height, self.width), dtype=numpy.int32)
+        self.fy_min = numpy.zeros((self.height, self.width), dtype=numpy.int32)
+        self.fy_max = numpy.zeros((self.height, self.width), dtype=numpy.int32)
         for i in range(self.height):
             for j in range(self.width):
                 self.fx_min[i, j] = -j
@@ -97,7 +97,7 @@ class Accumulator:
     def _update_flow(self, flow: numpy.ndarray):
         numpy.clip(flow[:,:,0], self.fx_min, self.fx_max, flow[:,:,0])
         numpy.clip(flow[:,:,1], self.fy_min, self.fy_max, flow[:,:,1])
-        self.flow_int = numpy.round(flow).astype(int)
+        self.flow_int = numpy.round(flow).astype(numpy.int32)
         self.flow_flat = numpy.ravel(self.flow_int[:,:,1] * self.width + self.flow_int[:,:,0])
         if self.heatmap_mode == HeatmapMode.DISCRETE:
             self.heatmap = numpy.clip(self.heatmap - self.heatmap_sub,
@@ -183,8 +183,8 @@ class MappingAccumulator(Accumulator):
         shape = (self.height, self.width)
         self.basex = numpy.broadcast_to(numpy.arange(self.width), shape).copy()
         self.basey = numpy.broadcast_to(numpy.arange(self.height)[:,numpy.newaxis], shape).copy()
-        self.mapx = self.basex.astype(float)
-        self.mapy = self.basey.astype(float)
+        self.mapx = self.basex.astype(numpy.float32)
+        self.mapy = self.basey.astype(numpy.float32)
 
     def update(self, flow: numpy.ndarray, direction: FlowDirection):
         self._update_flow(flow)
@@ -219,8 +219,8 @@ class MappingAccumulator(Accumulator):
             self.mapy = self.mapy[shift]
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
-        mapping = numpy.clip(self.mapy.astype(int), 0, self.height - 1) * self.width\
-            + numpy.clip(self.mapx.astype(int), 0, self.width - 1)
+        mapping = numpy.clip(self.mapy.astype(numpy.int32), 0, self.height - 1) * self.width\
+            + numpy.clip(self.mapx.astype(numpy.int32), 0, self.width - 1)
         out = bitmap\
             .reshape((self.height * self.width, bitmap.shape[2]))[mapping.flat]\
             .reshape(bitmap.shape)
@@ -284,8 +284,8 @@ class CrumbleAccumulator(MappingAccumulator):
             self.crumble_mask.flat[w3] = 1
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
-        mapping = numpy.clip(self.mapy.astype(int), 0, self.height - 1) * self.width\
-            + numpy.clip(self.mapx.astype(int), 0, self.width - 1)
+        mapping = numpy.clip(self.mapy.astype(numpy.int32), 0, self.height - 1) * self.width\
+            + numpy.clip(self.mapx.astype(numpy.int32), 0, self.width - 1)
         out = bitmap\
             .reshape((self.height * self.width, bitmap.shape[2]))[mapping.flat]\
             .reshape(bitmap.shape)
@@ -355,7 +355,7 @@ class SumAccumulator(Accumulator):
 
     def __init__(self, width: int, height: int, **acc_args):
         Accumulator.__init__(self, width, height, **acc_args)
-        self.total_flow = numpy.zeros((height, width, 2), dtype=float)
+        self.total_flow = numpy.zeros((height, width, 2), dtype=numpy.float32)
         shape = (height, width)
         self.basex = numpy.broadcast_to(numpy.arange(self.width), shape).copy()
         self.basey = numpy.broadcast_to(numpy.arange(self.height)[:,numpy.newaxis], shape).copy()
@@ -379,7 +379,7 @@ class SumAccumulator(Accumulator):
         self.total_flow += flow
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
-        total_flow_int = numpy.round(self.total_flow).astype(int)
+        total_flow_int = numpy.round(self.total_flow).astype(numpy.int32)
         iy = self.basey + total_flow_int[:,:,1]
         numpy.clip(iy, 0, self.height - 1, iy)
         ix = self.basex + total_flow_int[:,:,0]
