@@ -235,6 +235,8 @@ var params = {
     scale: new RangeParameter("scale", 1, parseFloat, ident, parseExp, formatExp, 0.01, 100),
     blurSize: new RangeParameter("blur", 1, parseInt, ident, parseOdd, formatOdd, 1, 13),
     decay: new RangeParameter("recall", 0.001, parseFloat, ident, parseEase(0.001), formatEase(0.001)),
+    feedback: new RangeParameter("feedback", 1, parseInt, ident, parseInt, ident),
+    iterations: new RangeParameter("iterations", 10, parseInt, ident, parseInt, ident, 1, 100),
     flowMirrorX: new RangeParameter("flow mirror x", 0, parseInt, ident, parseInt, ident),
     flowMirrorY: new RangeParameter("flow mirror y", 0, parseInt, ident, parseInt, ident),
     bitmapMirrorX: new RangeParameter("bitmap mirror x", 0, parseInt, ident, parseInt, ident),
@@ -246,7 +248,7 @@ var params = {
 const rangeParams = ["showFlow", "lockFlow", "lockBitmap", "windowSize",
     "gaussianSize", "minimumMovement", "flowDecay", "alpha", "scale",
     "blurSize", "decay", "flowMirrorX", "flowMirrorY", "bitmapMirrorX",
-    "bitmapMirrorY"];
+    "bitmapMirrorY", "feedback", "iterations"];
 
 
 function readParamsFromUrl() {
@@ -657,6 +659,8 @@ async function main() {
     bindParamToRangeInput(gl, "bitmapMirrorX", tINT, [remapProgram]);
     bindParamToRangeInput(gl, "bitmapMirrorY", tINT, [remapProgram]);
     const rangeInputs = document.getElementById("range-inputs");
+    params.feedback.create(rangeInputs);
+    params.iterations.create(rangeInputs);
     params.showFlow.create(rangeInputs);
     params.lockFlow.create(rangeInputs);
     params.lockBitmap.create(rangeInputs);
@@ -757,6 +761,8 @@ async function main() {
     var firstFrame = true;
     var previousFrameTime = performance.now();
 
+    const flowDecayLocation = gl.getUniformLocation(flowHornSchunckProgram, "flowDecay");
+
     function animate() {
 
         const currentTimeFrame = performance.now();
@@ -777,23 +783,38 @@ async function main() {
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
 
-        if (!params.lockFlow.value) {
-            gl.useProgram(flowProgram[params.method.value]);
+        if (params.method.value == "hs" && !params.feedback.value && !params.lockFlow.value) {
+            for (let i = 0; i < params.iterations.value; i++) {
+                gl.useProgram(flowHornSchunckProgram);
+                gl.uniform1f(flowDecayLocation, i == 0 ? 0.0 : 1.0);
+                gl.viewport(0, 0, params.flowWidth.value, params.flowHeight.value);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, flowAFrameBuffer);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, motionSource);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                gl.useProgram(copyFlowProgram);
+                gl.viewport(0, 0, params.flowWidth.value, params.flowHeight.value);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, flowBFrameBuffer);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
+        } else {
+            if (!params.lockFlow.value) {
+                gl.useProgram(flowProgram[params.method.value]);
+                gl.viewport(0, 0, params.flowWidth.value, params.flowHeight.value);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, flowAFrameBuffer);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, motionSource);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
+            gl.useProgram(copyFlowProgram);
             gl.viewport(0, 0, params.flowWidth.value, params.flowHeight.value);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, flowAFrameBuffer);
-            gl.activeTexture(gl.TEXTURE0);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, motionSource);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, flowBFrameBuffer);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
 
         gl.useProgram(pastProgram);
         gl.viewport(0, 0, params.flowWidth.value, params.flowHeight.value);
         gl.bindFramebuffer(gl.FRAMEBUFFER, pastFrameBuffer);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-        gl.useProgram(copyFlowProgram);
-        gl.viewport(0, 0, params.flowWidth.value, params.flowHeight.value);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, flowBFrameBuffer);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         if (params.showFlow.value) {

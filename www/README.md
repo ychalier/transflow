@@ -6,3 +6,9 @@ A demo is live at [chalier.fr/transflow](https://chalier.fr/transflow/).
 
 [![](https://drive.chalier.fr/protected/transflow/www.jpg)](https://drive.chalier.fr/protected/transflow/www.mp4)
 *Click for an example video*
+
+## Details
+
+Here is a chart for understanding the interaction between WebGL programs and textures, associated with framebuffers:
+
+![](https://drive.chalier.fr/protected/transflow/webgl-chart.png)
