@@ -320,6 +320,25 @@ function initializeTexture(gl, texture) {
 }
 
 
+function initializeTextureFloat(gl, texture, width, height) {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(
+        gl.TEXTURE_2D,      // Target
+        0,                  // Mipmap level
+        gl.RGBA32F,         // Internal format (high precision float)
+        width, height,      // Width, Height
+        0,                  // Border (must be 0)
+        gl.RGBA,            // Format
+        gl.FLOAT,           // Type
+        null                // No initial data (allocate only)
+    );
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, params.interpolation == "linear" ? gl.LINEAR : gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, params.interpolation == "linear" ? gl.LINEAR : gl.NEAREST);
+}
+
+
 function initializeBuffer(gl) {
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
@@ -571,6 +590,12 @@ async function main() {
 
     const displayCanvas = document.getElementById("display");
     const gl = displayCanvas.getContext("webgl2", { "preserveDrawingBuffer": true });
+    if (!gl.getExtension('OES_texture_float_linear')) {
+        console.warn("OES_texture_float_linear is not supported.");
+    }
+    if (!gl.getExtension("EXT_color_buffer_float")) {
+        console.error("EXT_color_buffer_float is not supported on this device.");
+    }
     displayCanvas.width = params.width.value;
     displayCanvas.height = params.height.value;
 
@@ -585,8 +610,10 @@ async function main() {
     });
 
     document.getElementById("button-recall").addEventListener("click", () => {
+        const baseMappingData = new Float32Array(params.height.value * params.width.value * 4);
+        for (let k = 0; k < params.height.value * params.width.value * 4; k++) baseMappingData[k] = 0;
         gl.activeTexture(gl.TEXTURE4);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, params.width.value, params.height.value, 0, gl.RGBA, gl.UNSIGNED_BYTE, createEmptyArrayInt16(params.width.value, params.height.value));
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, params.width.value, params.height.value, 0, gl.RGBA, gl.FLOAT, baseMappingData);
     });
 
     document.getElementById("button-export").addEventListener("click", () => {
@@ -631,6 +658,7 @@ async function main() {
     const flowPointMatchingShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/flowPointMatching.frag");
     const accShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/acc.frag");
     const copyShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/copy.frag");
+    const showFlowShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/showFlow.frag");
     const remapShader = await createShader(gl, gl.FRAGMENT_SHADER, "shaders/remap.frag");
 
     const pastProgram = createProgram(gl, vertexShader, copyShader);
@@ -643,6 +671,7 @@ async function main() {
         pm: flowPointMatchingProgram,
     };
     const copyFlowProgram = createProgram(gl, vertexShader, copyShader);
+    const showFlowProgram = createProgram(gl, vertexShader, showFlowShader);
     const accProgram = createProgram(gl, vertexShader, accShader);
     const feedbackProgram = createProgram(gl, vertexShader, copyShader);
     const remapProgram = createProgram(gl, vertexShader, remapShader);
@@ -660,14 +689,13 @@ async function main() {
     iterationsInput.classList.add("method-input");
     iterationsInput.setAttribute("method", "hs");
     function onFeedbackInput(feedbackState) {
-        flowDecayInput.style.display = feedbackState == 1 ? "none" : "block";
-        iterationsInput.style.display = feedbackState == 0 ? "none" : "block";
+        flowDecayInput.style.display = feedbackState == 0 ? "none" : "block";
+        iterationsInput.style.display = feedbackState == 1 ? "none" : "block";
     }
     feedbackInput.querySelector("input").addEventListener("input", (event) => {
         onFeedbackInput(event.target.value);
     });
-    onFeedbackInput(params.feedback.value);
-    
+        
     bindParamToRangeInput(gl, "alpha", tFLOAT, [flowHornSchunckProgram], ["hs"]);
     bindParamToRangeInput(gl, "scale", tFLOAT, [accProgram]);
     bindParamToRangeInput(gl, "blurSize", tINT, [accProgram]);
@@ -689,6 +717,7 @@ async function main() {
             }
         });
     }));
+    onFeedbackInput(params.feedback.value);
 
     const nextTexture = gl.createTexture();
     initializeTexture(gl, nextTexture);
@@ -700,36 +729,44 @@ async function main() {
     gl.bindFramebuffer(gl.FRAMEBUFFER, pastFrameBuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pastTexture, 0);
 
-    const baseFlowData = [];
-    for (let k = 0; k < params.flowHeight.value * params.flowWidth.value; k++) baseFlowData.push(...[0, 128, 0, 128]);
+    const baseFlowData = new Float32Array(params.flowHeight.value * params.flowWidth.value * 4);
+    for (let k = 0; k < params.flowHeight.value * params.flowWidth.value * 4; k++) baseFlowData[k] = 0;
 
     const flowATexture = gl.createTexture();
-    initializeTexture(gl, flowATexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, params.flowWidth.value, params.flowHeight.value, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(baseFlowData));
+    initializeTextureFloat(gl, flowATexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, params.flowWidth.value, params.flowHeight.value, 0, gl.RGBA, gl.FLOAT, baseFlowData);
+    const flowADepthBuffer = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, flowADepthBuffer);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, params.flowWidth.value, params.flowHeight.value);
     const flowAFrameBuffer = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, flowAFrameBuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, flowATexture, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, flowADepthBuffer);
 
     const flowBTexture = gl.createTexture();
-    initializeTexture(gl, flowBTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, params.flowWidth.value, params.flowHeight.value, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(baseFlowData));
+    initializeTextureFloat(gl, flowBTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, params.flowWidth.value, params.flowHeight.value, 0, gl.RGBA, gl.FLOAT, baseFlowData);
+    const flowBDepthBuffer = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, flowBDepthBuffer);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, params.flowWidth.value, params.flowHeight.value);
     const flowBFrameBuffer = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, flowBFrameBuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, flowBTexture, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, flowBDepthBuffer);
 
-    const baseMappingData = [];
-    for (let k = 0; k < params.height.value * params.width.value; k++) baseMappingData.push(...[0, 128, 0, 128]);
+    const baseMappingData = new Float32Array(params.height.value * params.width.value * 4);
+    for (let k = 0; k < params.height.value * params.width.value * 4; k++) baseMappingData[k] = 0;
 
     const feedbackTexture = gl.createTexture();
-    initializeTexture(gl, feedbackTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, params.width.value, params.height.value, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(baseMappingData));
+    initializeTextureFloat(gl, feedbackTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, params.width.value, params.height.value, 0, gl.RGBA, gl.FLOAT, baseMappingData);
     const feedbackFrameBuffer = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, feedbackFrameBuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, feedbackTexture, 0);
 
     const mappingTexture = gl.createTexture();
-    initializeTexture(gl, mappingTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, params.width.value, params.height.value, 0, gl.RGBA, gl.UNSIGNED_BYTE, createEmptyArray(params.width.value, params.height.value));
+    initializeTextureFloat(gl, mappingTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, params.width.value, params.height.value, 0, gl.RGBA, gl.FLOAT, baseMappingData);
     const outputFrameBuffer = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, outputFrameBuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, mappingTexture, 0);
@@ -756,6 +793,10 @@ async function main() {
     gl.useProgram(copyFlowProgram);
     initializeBuffer(gl);
     bindTexture(gl, copyFlowProgram, "sampler", 3, flowATexture);
+
+    gl.useProgram(showFlowProgram);
+    initializeBuffer(gl);
+    bindTexture(gl, showFlowProgram, "sampler", 3, flowATexture);
 
     gl.useProgram(accProgram);
     initializeBuffer(gl);
@@ -833,7 +874,7 @@ async function main() {
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         if (params.showFlow.value) {
-            gl.useProgram(copyFlowProgram);
+            gl.useProgram(showFlowProgram);
             gl.viewport(0, 0, params.flowWidth.value, params.flowHeight.value);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.drawArrays(gl.TRIANGLES, 0, 6);

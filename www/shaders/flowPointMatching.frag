@@ -18,8 +18,6 @@ uniform int gaussianSize;
 
 uniform float minimumMovement;
 
-const float textureScale = 128.0;
-
 float gray(sampler2D texture, vec2 coords) {
     // flip x-axis for the flowMirrorX effect
     if (flowMirrorX) {
@@ -31,17 +29,6 @@ float gray(sampler2D texture, vec2 coords) {
     vec4 color = texture2D(texture, coords);
     return (color.x + color.y + color.z) / 3.0;
 }
-
-/**
- * Converts a vec2 of two values between -2^15/textureScale and 2^15/textureScale - 1
- * to a vec4 of four values between 0 and 1.
- */
-vec4 toDoubleChannel(vec2 baseValue) {
-    vec2 scaledAndShiftedValue = (baseValue * textureScale) + 32768.0;
-    vec2 tenth = floor(scaledAndShiftedValue / 256.0);
-    return vec4(scaledAndShiftedValue.x - 256.0 * tenth.x, tenth.x, scaledAndShiftedValue.y - 256.0 * tenth.y, tenth.y) / 255.0;
-}
-
 
 float differenceAround(vec2 offset) {
     float difference = 0.0;
@@ -61,7 +48,6 @@ float differenceAround(vec2 offset) {
     }
     return difference / total;
 }
-
 
 void main() {
     float minDiff = 16.0;
@@ -91,6 +77,6 @@ void main() {
         }
     }
 
-    gl_FragColor = toDoubleChannel(256.0 * flow);
+    gl_FragColor.xy = flow;
 
 }

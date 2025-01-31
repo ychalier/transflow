@@ -13,8 +13,6 @@ uniform float alpha;
 uniform bool flowMirrorX;
 uniform bool flowMirrorY;
 
-const float textureScale = 128.0;
-
 float gray(sampler2D texture, vec2 offset) {
     // flip x-axis for the flowMirrorX effect
     vec2 coords = uv + offset / vec2(flowWidth, flowHeight);
@@ -28,26 +26,8 @@ float gray(sampler2D texture, vec2 offset) {
     return dot(color, vec4(1.0, 1.0, 1.0, 0.0)) / 3.0;
 }
 
-vec2 fromDoubleChannel(vec4 baseValue) {
-    return (
-        vec2(
-            256.0 * baseValue.x + 256.0 * 255.0 * baseValue.y,
-            256.0 * baseValue.z + 256.0 * 255.0 * baseValue.w
-        ) - 32768.0) / textureScale;
-}
-
 vec2 flowAt(vec2 offset) {
-    return flowDecay * fromDoubleChannel(texture2D(inflow, uv + offset / vec2(flowWidth, flowHeight))) / 256.0;
-}
-
-/**
- * Converts a vec2 of two values between -2^15/textureScale and 2^15/textureScale - 1
- * to a vec4 of four values between 0 and 1.
- */
-vec4 toDoubleChannel(vec2 baseValue) {
-    vec2 scaledAndShiftedValue = (baseValue * textureScale) + 32768.0;
-    vec2 tenth = floor(scaledAndShiftedValue / 256.0);
-    return vec4(scaledAndShiftedValue.x - 256.0 * tenth.x, tenth.x, scaledAndShiftedValue.y - 256.0 * tenth.y, tenth.y) / 255.0;
+    return flowDecay * texture2D(inflow, uv + offset / vec2(flowWidth, flowHeight)).xy;
 }
 
 void main() {
@@ -74,7 +54,7 @@ void main() {
 
     vec2 result = hood - vec2(ex * b, ey * b);
 
-    gl_FragColor = toDoubleChannel(256.0 * result / blockSize);
-
+    // gl_FragColor = toDoubleChannel(256.0 * result / blockSize);
+    gl_FragColor.xy = result / blockSize;
 
 }

@@ -14,9 +14,6 @@ uniform bool flowMirrorY;
 const int MAXIMUM_WINDOW_SIZE = 15;
 uniform int windowSize;
 
-const float textureScale = 128.0;
-
-
 float gray(sampler2D texture, vec2 coords) {
     // flip x-axis for the flowMirrorX effect
     if (flowMirrorX) {
@@ -27,16 +24,6 @@ float gray(sampler2D texture, vec2 coords) {
     }
     vec4 color = texture2D(texture, coords);
     return (color.x + color.y + color.z) / 3.0;
-}
-
-/**
- * Converts a vec2 of two values between -2^15/textureScale and 2^15/textureScale - 1
- * to a vec4 of four values between 0 and 1.
- */
-vec4 toDoubleChannel(vec2 baseValue) {
-    vec2 scaledAndShiftedValue = (baseValue * textureScale) + 32768.0;
-    vec2 tenth = floor(scaledAndShiftedValue / 256.0);
-    return vec4(scaledAndShiftedValue.x - 256.0 * tenth.x, tenth.x, scaledAndShiftedValue.y - 256.0 * tenth.y, tenth.y) / 255.0;
 }
 
 float tr2(mat2 A) {
@@ -90,5 +77,5 @@ void main() {
         flow = vec2(0.0);
     }
 
-    gl_FragColor = toDoubleChannel(256.0 * flow / blockSize);
+    gl_FragColor.xy = flow / blockSize;
 }
