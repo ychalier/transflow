@@ -205,6 +205,50 @@ class RangeParameter extends Parameter {
 }
 
 
+class BooleanParameter extends Parameter {
+    constructor(label, defl) {
+        super(label, defl, parseInt, ident, parseInt, ident);
+        this.inputEl = null;
+        this.onInput = null;
+    }
+
+    create(parent, onInput=undefined) {
+        const inputId = inputCounter;
+        inputCounter++;
+        const containerEl = create(parent, "label", "parameter-boolean");
+        this.inputEl = create(containerEl, "input", "parameter-input");
+        this.inputEl.setAttribute("id", `booleanInput-${inputId}`);
+        this.inputEl.type = "checkbox";
+        this.inputEl.checked = this.formatInputValue(this.value) == 1;
+        containerEl.setAttribute("for", `booleanInput-${inputId}`);
+        const labelEl = create(containerEl, "span");
+        labelEl.textContent = this.label;
+        var self = this;
+        this.onInput = onInput;
+        this.inputEl.addEventListener("input", () => {
+            self.setValue(self.parseInputValue(self.inputEl.checked ? 1 : 0));
+        });
+        this.inputEl.addEventListener("dblclick", () => {
+            self.reset();
+        });
+        return containerEl;
+    }
+
+    setValue(value) {
+        this.value = value;
+        this.inputEl.checked = this.formatInputValue(this.value) == 1;
+        writeParamsToUrl(true);
+        if (this.onInput != undefined) {
+            this.onInput(this.value);
+        }
+    }
+
+    reset() {
+        this.setValue(this.defl);
+    }
+}
+
+
 const suggestedDimensions = {
     width: window.innerWidth < window.innerHeight ? 720 : 1280,
     height: window.innerWidth < window.innerHeight ? 1280 : 720
@@ -224,9 +268,9 @@ var params = {
     fps: new Parameter("FPS", 60, parseInt, ident, parseInt, ident),
     interpolation: new Parameter("Texture Interpolation", "nearest", ident, ident, ident, ident),
     method: new Parameter("Method", "hs", ident, ident, ident, ident),
-    showFlow: new RangeParameter("show flow", 0, parseInt, ident, parseInt, ident),
-    lockFlow: new RangeParameter("lock flow", 0, parseInt, ident, parseInt, ident),
-    lockBitmap: new RangeParameter("lock bitmap", 0, parseInt, ident, parseInt, ident),
+    showFlow: new BooleanParameter("show flow", 0),
+    lockFlow: new BooleanParameter("lock flow", 0),
+    lockBitmap: new BooleanParameter("lock bitmap", 0),
     windowSize: new RangeParameter("window", 7, parseInt, ident, parseOdd, formatOdd, 1, 13),
     gaussianSize: new RangeParameter("neighborhood", 5, parseInt, ident, parseOdd, formatOdd, 1, 13),
     minimumMovement: new RangeParameter("threshold", 0.03, parseFloat, ident, parseEase(0.03), formatEase(0.03)),
@@ -237,10 +281,10 @@ var params = {
     decay: new RangeParameter("recall", 0.001, parseFloat, ident, parseEase(0.001), formatEase(0.001)),
     feedback: new RangeParameter("feedback", 1, parseInt, ident, parseInt, ident),
     iterations: new RangeParameter("iterations", 10, parseInt, ident, parseInt, ident, 1, 100),
-    flowMirrorX: new RangeParameter("flow mirror x", 0, parseInt, ident, parseInt, ident),
-    flowMirrorY: new RangeParameter("flow mirror y", 0, parseInt, ident, parseInt, ident),
-    bitmapMirrorX: new RangeParameter("bitmap mirror x", 0, parseInt, ident, parseInt, ident),
-    bitmapMirrorY: new RangeParameter("bitmap mirror y", 0, parseInt, ident, parseInt, ident),
+    flowMirrorX: new BooleanParameter("flow flip x", 0),
+    flowMirrorY: new BooleanParameter("flow flip y", 0),
+    bitmapMirrorX: new BooleanParameter("bitmap flip x", 0),
+    bitmapMirrorY: new BooleanParameter("bitmap flip y", 0),
     bypassMenu: new Parameter("bypass menu", 0, parseInt, ident, parseInt, ident),
 }
 
@@ -526,6 +570,27 @@ function bindParamToRangeInput(gl, param, varType, programs, methodFilter) {
 }
 
 
+function bindParamToBooleanInput(gl, param, programs, methodFilter) {
+    const locations = [];
+    for (const program of programs) {
+        locations.push(gl.getUniformLocation(program, param));
+    }
+    function updateValue(newValue) {
+        for (let i = 0; i < programs.length; i++) {
+            gl.useProgram(programs[i]);
+            gl.uniform1i(locations[i], newValue);
+        }
+    }
+    const el = params[param].create(document.getElementById("boolean-inputs"), updateValue);
+    if (methodFilter != undefined) {
+        el.classList.add("method-input");
+        el.setAttribute("method", methodFilter.join(","));
+    }
+    updateValue(params[param].value);
+    return el;
+}
+
+
 function createTextureSource(sourceType, sourceArg, sourceWidth, sourceHeight, onTextureSourceReady) {
     let source;
     if (sourceType == "webcam" || sourceType == "video" || sourceType == "vfile") {
@@ -725,6 +790,7 @@ async function main() {
     const remapProgram = createProgram(gl, vertexShader, remapShader);
 
     const rangeInputs = document.getElementById("range-inputs");
+    const booleanInputs = document.getElementById("boolean-inputs");
     bindParamToRangeInput(gl, "windowSize", tINT, [flowPointMatchingProgram, flowLucasKanadeProgram], ["pm", "lk"]);
     bindParamToRangeInput(gl, "gaussianSize", tINT, [flowPointMatchingProgram], ["pm"]);
     bindParamToRangeInput(gl, "minimumMovement", tFLOAT, [flowPointMatchingProgram], ["pm"])
@@ -748,13 +814,13 @@ async function main() {
     bindParamToRangeInput(gl, "scale", tFLOAT, [accProgram]);
     bindParamToRangeInput(gl, "blurSize", tINT, [accProgram]);
     bindParamToRangeInput(gl, "decay", tFLOAT, [accProgram]);
-    bindParamToRangeInput(gl, "flowMirrorX", tINT, [flowPointMatchingProgram, flowLucasKanadeProgram, flowHornSchunckProgram]);
-    bindParamToRangeInput(gl, "flowMirrorY", tINT, [flowPointMatchingProgram, flowLucasKanadeProgram, flowHornSchunckProgram]);
-    bindParamToRangeInput(gl, "bitmapMirrorX", tINT, [remapProgram]);
-    bindParamToRangeInput(gl, "bitmapMirrorY", tINT, [remapProgram]);
-    params.showFlow.create(rangeInputs);
-    params.lockFlow.create(rangeInputs);
-    params.lockBitmap.create(rangeInputs);
+    bindParamToBooleanInput(gl, "flowMirrorX", [flowPointMatchingProgram, flowLucasKanadeProgram, flowHornSchunckProgram]);
+    bindParamToBooleanInput(gl, "flowMirrorY", [flowPointMatchingProgram, flowLucasKanadeProgram, flowHornSchunckProgram]);
+    bindParamToBooleanInput(gl, "bitmapMirrorX", [remapProgram]);
+    bindParamToBooleanInput(gl, "bitmapMirrorY", [remapProgram]);
+    params.lockFlow.create(booleanInputs);
+    params.lockBitmap.create(booleanInputs);
+    params.showFlow.create(booleanInputs);
 
     binParamToSelect("method", "#select-method", (methodName => {
         document.querySelectorAll(".method-input").forEach(methodInput => {

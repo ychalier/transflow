@@ -263,7 +263,60 @@ select+.parameter {
     right: .4rem;
 }
 
-.parameter-input {
+#boolean-inputs {
+    display: flex;
+    width: 240px;
+    flex-wrap: wrap;
+    gap: .2rem;
+    margin-bottom: .4rem;
+    user-select: none;
+}
+
+.parameter-boolean {
+    position: relative;
+    height: 26px;
+    border: 1px solid black;
+    font-size: 10pt;
+    line-height: 24px;
+    cursor: pointer;
+    user-select: none;
+    width: calc(50% - .2rem);
+}
+
+.parameter-boolean .parameter-input {
+    width: 0;
+    margin: 0;
+    padding: 0;
+    height: 0;
+}
+
+.parameter-boolean .parameter-input:active,
+.parameter-boolean .parameter-input:focus {
+    outline: none;
+}
+
+.parameter-boolean span {
+    padding: .2rem .4rem;
+    user-select: none;
+}
+
+.parameter-boolean .parameter-input ~ span::before {
+    position: absolute;
+    top: 0;
+    left: 0;
+    content: "";
+    width: 100%;
+    height: 100%;
+    background: white;
+    z-index: -1;
+    user-select: none;
+}
+
+.parameter-boolean .parameter-input:checked ~ span::before {
+    background: var(--accent);
+}
+
+.parameter-input[type=range] {
     width: 100%;
     border: none;
     margin: 0;
