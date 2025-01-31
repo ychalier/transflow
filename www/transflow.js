@@ -503,6 +503,7 @@ function bindParamToRangeInput(gl, param, varType, programs, methodFilter) {
         el.setAttribute("method", methodFilter.join(","));
     }
     updateValue(params[param].value);
+    return el;
 }
 
 
@@ -646,10 +647,27 @@ async function main() {
     const feedbackProgram = createProgram(gl, vertexShader, copyShader);
     const remapProgram = createProgram(gl, vertexShader, remapShader);
 
+    const rangeInputs = document.getElementById("range-inputs");
     bindParamToRangeInput(gl, "windowSize", tINT, [flowPointMatchingProgram, flowLucasKanadeProgram], ["pm", "lk"]);
     bindParamToRangeInput(gl, "gaussianSize", tINT, [flowPointMatchingProgram], ["pm"]);
     bindParamToRangeInput(gl, "minimumMovement", tFLOAT, [flowPointMatchingProgram], ["pm"])
-    bindParamToRangeInput(gl, "flowDecay", tFLOAT, [flowHornSchunckProgram], ["hs"]);
+    
+    const feedbackInput = params.feedback.create(rangeInputs);
+    const flowDecayInput = bindParamToRangeInput(gl, "flowDecay", tFLOAT, [flowHornSchunckProgram], ["hs"]);
+    feedbackInput.classList.add("method-input");
+    feedbackInput.setAttribute("method", "hs");
+    const iterationsInput = params.iterations.create(rangeInputs);
+    iterationsInput.classList.add("method-input");
+    iterationsInput.setAttribute("method", "hs");
+    function onFeedbackInput(feedbackState) {
+        flowDecayInput.style.display = feedbackState == 1 ? "none" : "block";
+        iterationsInput.style.display = feedbackState == 0 ? "none" : "block";
+    }
+    feedbackInput.querySelector("input").addEventListener("input", (event) => {
+        onFeedbackInput(event.target.value);
+    });
+    onFeedbackInput(params.feedback.value);
+    
     bindParamToRangeInput(gl, "alpha", tFLOAT, [flowHornSchunckProgram], ["hs"]);
     bindParamToRangeInput(gl, "scale", tFLOAT, [accProgram]);
     bindParamToRangeInput(gl, "blurSize", tINT, [accProgram]);
@@ -658,9 +676,6 @@ async function main() {
     bindParamToRangeInput(gl, "flowMirrorY", tINT, [flowPointMatchingProgram, flowLucasKanadeProgram, flowHornSchunckProgram]);
     bindParamToRangeInput(gl, "bitmapMirrorX", tINT, [remapProgram]);
     bindParamToRangeInput(gl, "bitmapMirrorY", tINT, [remapProgram]);
-    const rangeInputs = document.getElementById("range-inputs");
-    params.feedback.create(rangeInputs);
-    params.iterations.create(rangeInputs);
     params.showFlow.create(rangeInputs);
     params.lockFlow.create(rangeInputs);
     params.lockBitmap.create(rangeInputs);
