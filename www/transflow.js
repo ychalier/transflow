@@ -616,17 +616,65 @@ async function main() {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, params.width.value, params.height.value, 0, gl.RGBA, gl.FLOAT, baseMappingData);
     });
 
-    document.getElementById("button-export").addEventListener("click", () => {
+    document.getElementById("button-screen").addEventListener("click", (event) => {
         const link = document.createElement("a");
-        link.setAttribute("download", `transflow-${parseInt((new Date()) * 1)}.png`);
+        const fileName = `transflow-${parseInt((new Date()) * 1)}.png`;
+        link.setAttribute("download", fileName);
         link.href = displayCanvas.toDataURL("image/png");
         link.click();
+        showToast(event, `downloaded as ${fileName}`);
     });
 
     document.getElementById("button-share").addEventListener("click", (event) => {
         writeParamsToUrl(false, false);
         navigator.clipboard.writeText(window.location.href);
         showToast(event, "link copied to clipboard");
+    });
+
+    
+    var isRecording = false;
+    var recordedChunks = [];
+    var mediaRecorder = null;
+
+    function startRecording() {
+        if (isRecording) return;
+        isRecording = true;
+        recordedChunks = [];
+        return new Promise(function (res, rej) {
+            var stream = displayCanvas.captureStream(params.fps.value);
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: "video/webm;codecs:vp9",
+                videoBitsPerSecond: 20000000
+            });
+            mediaRecorder.start(4000);
+            mediaRecorder.ondataavailable = function (event) {
+                recordedChunks.push(event.data);
+            }
+            mediaRecorder.onstop = function (event) {
+                var blob = new Blob(recordedChunks, {type: "video/webm" });
+                var a = document.createElement("a");
+                a.setAttribute("download", `transflow-${parseInt((new Date()) * 1)}.webm`);
+                a.href = URL.createObjectURL(blob); 
+                a.click();
+            }
+        })
+    }
+
+    function stopRecording() {
+        if (!isRecording) return;
+        isRecording = false;
+        mediaRecorder.stop();
+    }
+
+    document.getElementById("button-record").addEventListener("click", (event) => {
+        if (isRecording) {
+            stopRecording();
+            event.target.textContent = "record";
+        } else {
+            startRecording();
+            event.target.textContent = "recording…";
+            showToast(event, `click again to stop recording`);
+        }
     });
 
     function onTextureSourceReady(event) {
