@@ -606,6 +606,10 @@ function createTextureSource(sourceType, sourceArg, sourceWidth, sourceHeight, o
     source.crossOrigin = "anonymous";
     source.width = sourceWidth;
     source.height = sourceHeight;
+    source.addEventListener("error", (event) => {
+        console.error(`Error loading source: ${sourceType} ${sourceArg}`, event);
+        alert(`Error loading source: ${sourceType} ${sourceArg}`);
+    });
     if (sourceType == "webcam") {
         getVideoDevices.then(devices => {
             navigator.mediaDevices.getUserMedia({
