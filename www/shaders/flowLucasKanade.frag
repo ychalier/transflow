@@ -10,6 +10,7 @@ uniform float flowWidth;
 uniform float flowHeight;
 uniform bool flowMirrorX;
 uniform bool flowMirrorY;
+uniform float threshold;
 
 const int MAXIMUM_WINDOW_SIZE = 15;
 uniform int windowSize;
@@ -72,10 +73,13 @@ void main() {
     if (e.x > 0.001 && e.y > 0.001) {
         mat2 AtAinv = mat2(AtA[1][1], -AtA[0][1], -AtA[1][0], AtA[0][0]) / (AtA[0][0] * AtA[1][1] - AtA[1][0] * AtA[0][1]);
         flow = AtAinv * Atb;
-        flow /= (flowWidth, flowHeight);
+        flow /= (blockSize * flowWidth, blockSize * flowHeight);
+        if (threshold > 0.0 && flow.x * flow.x + flow.y * flow.y < threshold) {
+            flow = vec2(0.0);
+        }
     } else {
         flow = vec2(0.0);
     }
 
-    gl_FragColor.xy = flow / blockSize;
+    gl_FragColor.xy = flow;
 }

@@ -12,6 +12,7 @@ uniform float flowDecay;
 uniform float alpha;
 uniform bool flowMirrorX;
 uniform bool flowMirrorY;
+uniform float threshold;
 
 float gray(sampler2D texture, vec2 offset) {
     // flip x-axis for the flowMirrorX effect
@@ -52,9 +53,12 @@ void main() {
 
     float b = (ex*hood.x + ey*hood.y + et) / (alpha + pow(ex, 2.0) + pow(ey, 2.0));
 
-    vec2 result = hood - vec2(ex * b, ey * b);
+    vec2 result = (hood - vec2(ex * b, ey * b)) / blockSize;
 
-    // gl_FragColor = toDoubleChannel(256.0 * result / blockSize);
-    gl_FragColor.xy = result / blockSize;
+    if (threshold > 0.0 && result.x * result.x + result.y * result.y < threshold) {
+        result = vec2(0.0);
+    }
+
+    gl_FragColor.xy = result;
 
 }

@@ -273,10 +273,11 @@ var params = {
     lockBitmap: new BooleanParameter("lock bitmap", 0),
     windowSize: new RangeParameter("window", 7, parseInt, ident, parseOdd, formatOdd, 1, 13),
     gaussianSize: new RangeParameter("neighborhood", 5, parseInt, ident, parseOdd, formatOdd, 1, 13),
-    minimumMovement: new RangeParameter("threshold", 0.03, parseFloat, ident, parseEase(0.03), formatEase(0.03)),
     flowDecay: new RangeParameter("decay", 0.95, parseFloat, ident, parseFloat, ident),
     alpha: new RangeParameter("alpha", 1, parseFloat, ident, parseExp, formatExp, 0.01, 100),
     scale: new RangeParameter("scale", 1, parseFloat, ident, parseExp, formatExp, 0.01, 100),
+    minimumMovement: new RangeParameter("threshold", 0.03, parseFloat, ident, parseEase(0.03), formatEase(0.03)),
+    threshold: new RangeParameter("threshold", 0, parseFloat, ident, parseEase(0.001), formatEase(0.001), 0, 1),
     blurSize: new RangeParameter("blur", 1, parseInt, ident, parseOdd, formatOdd, 1, 13),
     decay: new RangeParameter("recall", 0.001, parseFloat, ident, parseEase(0.001), formatEase(0.001)),
     feedback: new RangeParameter("feedback", 1, parseInt, ident, parseInt, ident),
@@ -292,7 +293,7 @@ var params = {
 const rangeParams = ["showFlow", "lockFlow", "lockBitmap", "windowSize",
     "gaussianSize", "minimumMovement", "flowDecay", "alpha", "scale",
     "blurSize", "decay", "flowMirrorX", "flowMirrorY", "bitmapMirrorX",
-    "bitmapMirrorY", "feedback", "iterations"];
+    "bitmapMirrorY", "feedback", "iterations", "threshold"];
 
 
 function readParamsFromUrl() {
@@ -797,7 +798,6 @@ async function main() {
     const booleanInputs = document.getElementById("boolean-inputs");
     bindParamToRangeInput(gl, "windowSize", tINT, [flowPointMatchingProgram, flowLucasKanadeProgram], ["pm", "lk"]);
     bindParamToRangeInput(gl, "gaussianSize", tINT, [flowPointMatchingProgram], ["pm"]);
-    bindParamToRangeInput(gl, "minimumMovement", tFLOAT, [flowPointMatchingProgram], ["pm"])
     
     const feedbackInput = params.feedback.create(rangeInputs);
     const flowDecayInput = bindParamToRangeInput(gl, "flowDecay", tFLOAT, [flowHornSchunckProgram], ["hs"]);
@@ -816,6 +816,8 @@ async function main() {
         
     bindParamToRangeInput(gl, "alpha", tFLOAT, [flowHornSchunckProgram], ["hs"]);
     bindParamToRangeInput(gl, "scale", tFLOAT, [accProgram]);
+    bindParamToRangeInput(gl, "minimumMovement", tFLOAT, [flowPointMatchingProgram], ["pm"]);
+    bindParamToRangeInput(gl, "threshold", tFLOAT, [flowLucasKanadeProgram, flowHornSchunckProgram], ["hs", "lk"]);
     bindParamToRangeInput(gl, "blurSize", tINT, [accProgram]);
     bindParamToRangeInput(gl, "decay", tFLOAT, [accProgram]);
     bindParamToBooleanInput(gl, "flowMirrorX", [flowPointMatchingProgram, flowLucasKanadeProgram, flowHornSchunckProgram]);
