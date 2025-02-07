@@ -235,9 +235,8 @@ class CrumbleAccumulator(MappingAccumulator):
     def __init__(self, width: int, height: int, bg_color: str = "000000", **acc_args):
         MappingAccumulator.__init__(self, width, height, **acc_args)
         if self.reset_mode not in [ResetMode.OFF, ResetMode.RANDOM]:
-            logging.warning(
-                "CrumbleAccumulator only works with Off or Random reset, not %s",
-                self.reset_mode)
+            warnings.warn(
+                f"CrumbleAccumulator only works with Off or Random reset, not {self.reset_mode}")
         self.bg_color = parse_hex_color(bg_color)
         self.crumble_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8)
     
@@ -362,7 +361,7 @@ class SumAccumulator(Accumulator):
 
     def update(self, flow: numpy.ndarray, direction: FlowDirection):
         if direction != FlowDirection.BACKWARD:
-            logging.warning("SumAccumulator only works with backward flow, not %s", direction)
+            warnings.warn(f"SumAccumulator only works with backward flow, not {direction}")
         self._update_flow(flow)
         if self.reset_mode == ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
@@ -422,6 +421,8 @@ class CanvasAccumulator(Accumulator):
         self.crumble = crumble
         self.mask = numpy.zeros((self.height, self.width), dtype=numpy.uint8)
         self.bitmap_introduction_flags = bitmap_introduction_flags
+        if self.reset_mode not in [ResetMode.OFF, ResetMode.RANDOM]:
+            warnings.warn(f"Unsupported reset mode '{self.reset_mode}' for CanvasAccumulator")
 
     def update(self, flow: numpy.ndarray, direction: FlowDirection):
         self._update_flow(flow)
@@ -432,9 +433,7 @@ class CanvasAccumulator(Accumulator):
             below_heatmap = self.heatmap <= self.heatmap_reset_threshold
             where = numpy.nonzero(numpy.multiply(below_threshold, below_heatmap))
             self.canvas[where] = self.initial_canvas[where]
-            self.mask[where] = 0
-        elif self.reset_mode != ResetMode.OFF:
-            warnings.warn(f"Unsupported reset mode '{self.reset_mode}' for CanvasAccumulator")
+            self.mask[where] = 0            
          
     def put(self, target: numpy.ndarray, source: numpy.ndarray, values: numpy.ndarray):
         t3 = target * 3
