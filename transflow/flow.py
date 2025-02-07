@@ -382,7 +382,7 @@ class AvFlowSource(FlowSource):
         import av
         self.container = av.open(format=self.avformat, file=self.file)
         context = self.container.streams.video[0].codec_context
-        context.export_mvs = True
+        context.options = {"flags2": "+export_mvs"}
         self.iterator = self.container.decode(video=0)
         first_frame = next(self.iterator)
         self.set_metadata(
@@ -401,7 +401,7 @@ class AvFlowSource(FlowSource):
     def next(self) -> numpy.ndarray:
         frame = next(self.iterator)
         vectors = frame.side_data.get("MOTION_VECTORS")
-        flow = numpy.zeros((self.height, self.width, 2), dtype=int)
+        flow = numpy.zeros((self.height, self.width, 2), dtype=numpy.float32)
         if vectors is None:
             return flow
         for mv in vectors:
@@ -777,8 +777,8 @@ def calc_optical_flow_horn_schunck(
         decay: float = 0,
         delta: float = 1):
     import scipy.ndimage
-    a = cv2.GaussianBlur(prev_grey.astype(numpy.float64), (5, 5), 0)
-    b = cv2.GaussianBlur(next_grey.astype(numpy.float64), (5, 5), 0)
+    a = cv2.GaussianBlur(prev_grey.astype(numpy.float32), (5, 5), 0)
+    b = cv2.GaussianBlur(next_grey.astype(numpy.float32), (5, 5), 0)
     if flow is None:
         u = numpy.zeros(a.shape)
         v = numpy.zeros(a.shape)
@@ -804,7 +804,7 @@ def calc_optical_flow_horn_schunck(
         v = v_avg - numpy.multiply(ey, c)
         if delta is not None and numpy.linalg.norm(u - prev, 2) < delta:
             break
-    return numpy.stack([u, v], axis=-1)
+    return numpy.stack([u, v], axis=-1).astype(numpy.float32)
 
 
 def calc_optical_flow_lukas_kanade(
@@ -909,7 +909,7 @@ class CvFlowSource(FlowSource):
                 poly_n=self.config.fb_poly_n,
                 poly_sigma=self.config.fb_poly_sigma,
                 flags=self.config.fb_flags,
-            )
+            ).astype(numpy.float32)
         elif self.config.method == FlowMethod.HORN_SCHUNCK:
             flow = calc_optical_flow_horn_schunck(
                 prev_grey=left_gray,

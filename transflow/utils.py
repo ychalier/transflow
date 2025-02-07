@@ -13,7 +13,7 @@ def load_image(image_path: str) -> numpy.ndarray:
 
 
 def load_mask(mask_path: str, newaxis: bool = False) -> numpy.ndarray:
-    arr = load_image(mask_path)
+    arr = load_image(mask_path).astype(numpy.float32)
     if arr.ndim == 2:
         mask = arr / 255
     elif arr.ndim == 3:
