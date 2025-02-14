@@ -10,6 +10,9 @@ import numpy
 from .utils import parse_hex_color
 
 
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".ico", ".tiff"}
+
+
 class BitmapSource:
 
     def __init__(self, alteration_path: str | None, length: int | None = None):
@@ -58,12 +61,17 @@ class BitmapSource:
         return array
 
     @classmethod
-    def from_args(cls, path: str, size: tuple[int, int] | None = None,
-                  seek: int | None = None, seed: int | None = None,
-                  seek_time: float | None = None,
-                  alteration_path: str | None = None, repeat: int = 1):
+    def from_args(cls,
+            path: str,
+            size: tuple[int, int] | None = None,
+            seek: int | None = None,
+            seed: int | None = None,
+            seek_time: float | None = None,
+            alteration_path: str | None = None,
+            repeat: int = 1,
+            flow_path: str | None = None):
         ext = os.path.splitext(path)[1]
-        stillm = re.match(r"(color|noise|bwnoise|cnoise|gradient|#?[0-9a-f]{6})(:\d+:\d+)?",
+        stillm = re.match(r"(color|noise|bwnoise|cnoise|gradient|first|#?[0-9a-f]{6})(:\d+:\d+)?",
                           path.lower().strip())
         if stillm is not None:
             if stillm.group(2) is not None:
@@ -85,9 +93,12 @@ class BitmapSource:
                     return ColoredNoiseBitmapSource(width, height, seed, alteration_path)
                 case "gradient":
                     return GradientBitmapSource(width, height, seed)
+                case "first":
+                    assert flow_path is not None
+                    return VideoStillBitmapSource(flow_path, alteration_path)
                 case _:
                     raise ValueError(f"Unknown bitmap source '{stillm.group(1)}'")
-        elif os.path.isfile(path) and ext.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".ico", ".tiff"}:
+        elif os.path.isfile(path) and ext.lower() in IMAGE_EXTS:
             return ImageBitmapSource(path, alteration_path)
         else:
             return CvBitmapSource(path, seek, seek_time, alteration_path, repeat)
@@ -247,6 +258,17 @@ class ImageBitmapSource(StillBitmapSource):
         image = PIL.Image.open(self.path)
         array = numpy.array(image)[:,:,:3]
         image.close()
+        return array
+
+
+class VideoStillBitmapSource(ImageBitmapSource):
+    
+    def _init_array(self):
+        capture = cv2.VideoCapture(self.path)
+        success, frame = capture.read()
+        assert success, "Could not open video for still bitmap source"
+        array = numpy.array(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        capture.release()
         return array
 
 

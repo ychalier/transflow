@@ -345,6 +345,7 @@ Keyword | Description
 `bwnoise` | Use a random black or white noise image as bitmap
 `cnoise` | Use a random colored noise image as bitmap
 `gradient` | Use a random gradient of colors as bitmap
+`first` | Use the first frame of the flow input argument as a still bitmap source
 
 You can also pass an hex color (eg. `#00FF00`) to use a specific uniform color image.
 

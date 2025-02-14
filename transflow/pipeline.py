@@ -356,7 +356,8 @@ def transfer(
                 seed=seed,
                 seek_time=bitmap_seek_time,
                 alteration_path=bitmap_alteration_path,
-                repeat=bitmap_repeat)
+                repeat=bitmap_repeat,
+                flow_path=flow_path)
             bitmap_queue = multiprocessing.Queue(maxsize=1)
             bitmap_process = SourceProcess(bitmap_source, bitmap_queue, shape_queue)
             bitmap_process.start()
