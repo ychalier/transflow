@@ -26,7 +26,7 @@ def main():
     parser.add_argument("-b", "--bitmap",
         type=str, default=None,
         help="input bitmap: either a path to a video or an image file or a "\
-            "still image generator (color, noise, bwnoise, cnoise, gradient); "\
+            "still image generator (color, noise, bwnoise, cnoise, gradient, first); "\
             "if None, the input flow will be preprocessed")
     parser.add_argument("-o", "--output",
         type=str, default=None,
