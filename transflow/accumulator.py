@@ -11,6 +11,12 @@ from .utils import parse_hex_color, compose_top, compose_additive,\
     compose_subtractive, compose_average, load_image, load_mask
 
 
+red = numpy.zeros((1080, 1920, 3))
+red[:,:,0] = 255
+green = numpy.zeros((1080, 1920, 3))
+green[:,:,1] = 255
+
+
 @enum.unique
 class HeatmapMode(enum.Enum):
 
@@ -239,7 +245,7 @@ class CrumbleAccumulator(MappingAccumulator):
                 f"CrumbleAccumulator only works with Off or Random reset, not {self.reset_mode}")
         self.bg_color = parse_hex_color(bg_color)
         self.crumble_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8)
-    
+
     def update(self, flow: numpy.ndarray, direction: FlowDirection):
         self._update_flow(flow)
         if self.reset_mode == ResetMode.RANDOM:
@@ -394,6 +400,7 @@ class BitmapIntroductionFlags(enum.Enum):
     MOTION = 1
     STATIC = 2
     NO_OVERWRITE = 4
+    OUTER_FILL = 8
 
 
 class CanvasAccumulator(Accumulator):
@@ -420,7 +427,11 @@ class CanvasAccumulator(Accumulator):
         self.direction: FlowDirection | None = None
         self.crumble = crumble
         self.mask = numpy.zeros((self.height, self.width), dtype=numpy.uint8)
+        self.outer_mask = None
         self.bitmap_introduction_flags = bitmap_introduction_flags
+        if self.bitmap_introduction_flags & BitmapIntroductionFlags.OUTER_FILL.value:
+            self.mask = numpy.ones((self.height, self.width), dtype=numpy.uint8)
+            self.outer_mask = numpy.zeros((self.height, self.width), dtype=numpy.uint8)
         if self.reset_mode not in [ResetMode.OFF, ResetMode.RANDOM]:
             warnings.warn(f"Unsupported reset mode '{self.reset_mode}' for CanvasAccumulator")
 
@@ -433,8 +444,8 @@ class CanvasAccumulator(Accumulator):
             below_heatmap = self.heatmap <= self.heatmap_reset_threshold
             where = numpy.nonzero(numpy.multiply(below_threshold, below_heatmap))
             self.canvas[where] = self.initial_canvas[where]
-            self.mask[where] = 0            
-         
+            self.mask[where] = 0
+
     def put(self, target: numpy.ndarray, source: numpy.ndarray, values: numpy.ndarray):
         t3 = target * 3
         s3 = source * 3
@@ -443,9 +454,9 @@ class CanvasAccumulator(Accumulator):
         self.canvas.flat[t3+2] = values.flat[s3+2]
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
-        
+
         bitmap_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8) if self.bitmap_mask is None else self.bitmap_mask
-        
+
         if self.direction == FlowDirection.FORWARD:
             pixels_source = numpy.nonzero(self.mask.flat)[0]
             pixels_target = pixels_source + self.flow_flat[pixels_source]
@@ -455,7 +466,7 @@ class CanvasAccumulator(Accumulator):
                 wh = numpy.where(self.mask.flat[bitmap_target] == 0)
                 bitmap_source = bitmap_source[wh]
                 bitmap_target = bitmap_target[wh]
-        
+
         elif self.direction == FlowDirection.BACKWARD:
             shift = numpy.arange(self.height * self.width) + self.flow_flat
             new_mask = self.mask.flat[shift].reshape((self.height, self.width))
@@ -467,25 +478,36 @@ class CanvasAccumulator(Accumulator):
             else:
                 bitmap_target = numpy.nonzero(numpy.multiply(new_bitmap_mask.flat, self.flow_flat))[0]
             bitmap_source = bitmap_target + self.flow_flat[bitmap_target]
-        
+
         aux = self.canvas.copy()
-            
+
         if self.crumble:
             self.put(pixels_source, pixels_source, self.initial_canvas)
             self.mask.flat[pixels_source] = 0
-            
+
         self.put(pixels_target, pixels_source, aux)
         self.mask.flat[pixels_target] = 1
-        
+
+        if self.outer_mask is not None:
+            self.outer_mask.flat[pixels_target] = self.outer_mask.flat[pixels_source]
+
         if self.bitmap_introduction_flags & BitmapIntroductionFlags.STATIC.value:
             static_bitmap_source = numpy.nonzero(bitmap_mask.flat)[0]
             self.put(static_bitmap_source, static_bitmap_source, bitmap)
             self.mask.flat[static_bitmap_source] = 1
-        
+            if self.outer_mask is not None:
+                self.outer_mask.flat[static_bitmap_source] = 1
+
         if self.bitmap_introduction_flags & BitmapIntroductionFlags.MOTION.value:
             self.put(bitmap_target, bitmap_source, bitmap)
             self.mask.flat[bitmap_target] = 1
-        
+            if self.outer_mask is not None:
+                self.outer_mask.flat[bitmap_target] = 1
+
+        if self.outer_mask is not None and self.bitmap_introduction_flags & BitmapIntroductionFlags.OUTER_FILL.value:
+            outer_mask_inds = numpy.nonzero(self.outer_mask.flat)[0]
+            self.put(outer_mask_inds, outer_mask_inds, bitmap)
+
         return self.canvas
 
     def get_accumulator_array(self) -> numpy.ndarray:

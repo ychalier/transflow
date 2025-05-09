@@ -289,6 +289,7 @@ Bitmap Introduction Flags:
 - `MOTION` (1): moving bitmap pixels are pasted onto the canvas.
 - `STATIC` (2): all bitmap pixels from the bitmap mask are pasted onto the canvas.
 - `NO_OVERWRITE` (4): moving bitmap pixels cannot be placed over a pixel introduced earlier, only in black space.
+- `OUTER_FILL` (8): fill outside of initial canvas with bitmap pixels.
 
 Default is `MOTION | NO_OVERWRITE`, ie. 5.
 
