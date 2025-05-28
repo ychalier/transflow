@@ -183,6 +183,10 @@ def main():
         type=str, default="stay", choices=["skip", "stay"],
         help="When the flow is locked, either pause the source ('stay') or continue reading it ('skip')")
     args = parser.parse_args()
+    if args.flow == "gui":
+        from .gui import start_gui
+        start_gui()
+        return
     from .utils import parse_timestamp
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
     duration_time = parse_timestamp(args.duration)
