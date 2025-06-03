@@ -120,3 +120,59 @@ button:hover {
 summary {
     margin-bottom: .2rem;
 }
+
+body {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+.header {
+    padding: .4rem;
+}
+
+.body {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    border-top: 1px solid black;
+    border-bottom: 1px solid black;
+}
+
+.footer {
+    padding: .4rem;
+}
+
+.panel {
+    width: 100%;
+    height: 100%;
+}
+
+.panel-left {
+    border-right: 1px solid black;
+}
+
+.tabsbar {
+    display: flex;
+    gap: .4rem;
+    border-bottom: 1px solid black;
+    margin-bottom: .4rem;
+}
+
+.pane {
+    padding: .4rem;
+}
+
+.pane~.pane {
+    border-top: 1px solid black;
+}
+
+.tabsbar-item {
+    padding: .1rem .2rem;
+    cursor: default;
+}
+
+.tabsbar-item.active {
+    background-color: var(--accent);
+}
