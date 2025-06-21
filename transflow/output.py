@@ -1,7 +1,9 @@
 import os
+import re
 import subprocess
 
 import cv2
+import mjpeg_streamer # TODO: fork from https://github.com/egeakman/mjpeg-streamer
 import numpy
 
 from .utils import parse_hex_color, find_unique_path, startfile
@@ -31,9 +33,14 @@ class VideoOutput:
     def from_args(cls, path: str | None, width: int, height: int,
                   framerate: int | None = None, vcodec: str = "h264",
                   execute: bool = False, replace: bool = False,
-                  safe: bool = False):
+                  safe: bool = False, host: str = "localhost", port: int = 8080,
+                  ):
         if path is None:
             return CvVideoOutput(width, height)
+        mjpeg_pattern = re.compile(r"^mjpeg(/[a-z0-9A-Z\-]+)?$", re.IGNORECASE)
+        if mjpeg_pattern.match(path):
+            name = mjpeg_pattern.match(path).group(1)
+            return MjpegVideoOutput(host, port, width, height, framerate, name)
         return FFmpegVideoOutput(path, width, height, framerate, vcodec,
                                  execute, replace, safe)
 
@@ -101,6 +108,35 @@ class CvVideoOutput(VideoOutput):
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         cv2.destroyAllWindows()
+
+
+class MjpegVideoOutput(VideoOutput):
+
+    def __init__(self, host: str, port: int, width: int, height: int,
+                 framerate: int, name: str | None = None, quality: int = 50):
+        VideoOutput.__init__(self, width, height)
+        if name is None or name.strip() == "":
+            name = "transflow"
+        self.host = host
+        self.port = port
+        self.name = name
+        self.framerate = framerate
+        self.quality = quality
+        self.stream = None
+        self.server = None
+    
+    def __enter__(self):
+        self.stream = mjpeg_streamer.Stream(self.name, size=(self.width, self.height), quality=self.quality, fps=self.framerate)
+        self.server = mjpeg_streamer.MjpegServer(self.host, self.port)
+        self.server.add_stream(self.stream)
+        self.server.start()
+        return self
+    
+    def feed(self, frame: numpy.ndarray):
+        self.stream.set_frame(frame)
+    
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.server.stop()
 
 
 class ZipOutput:
