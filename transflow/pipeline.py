@@ -80,7 +80,7 @@ class OutputProcess(multiprocessing.Process):
                         break
                     self.output.feed(frame)
                 except KeyboardInterrupt:
-                    continue
+                    break # was 'continue' before, but why?
                 except Exception:
                     traceback.print_exc()
                     break
