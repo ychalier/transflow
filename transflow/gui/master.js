@@ -33,12 +33,20 @@ var websocket;
 var websocketRetryCount = 0;
 var leftPanel;
 var rightPanel;
+var wssConnectionIndicator;
+
+function setWssConnectionIndicator(state) {
+    if (wssConnectionIndicator == undefined) return;
+    wssConnectionIndicator.textContent = state;
+}
 
 function connectWebsocket(wssUrl) {
+    setWssConnectionIndicator(`Connecting… [${websocketRetryCount}]`);
     websocket = new WebSocket(wssUrl);
     websocket.onopen = () => {
         websocketRetryCount = 0;
         console.log("Websocket is connected");
+        setWssConnectionIndicator("Connected");
     }
     websocket.onmessage = (message) => {
         console.log(message);
@@ -69,24 +77,27 @@ function connectWebsocket(wssUrl) {
     };
     websocket.onclose = (event) => {
         websocketRetryCount++;
-        let delay = 1;
+        let delay = 0.01;
         if (websocketRetryCount >= 10) {
-            delay = 30;
-        } else if (websocketRetryCount >= 3) {
             delay = 5;
+        } else if (websocketRetryCount >= 3) {
+            delay = 1;
         }
         console.log(`Socket is closed. Reconnect will be attempted in ${delay} second.`, event.reason);
+        setWssConnectionIndicator("Closed");
         setTimeout(() => { connectWebsocket(wssUrl); }, delay * 1000);
     };
     websocket.onerror = (err) => {
         console.error("Socket encountered error: ", err.message, "Closing socket");
+        setWssConnectionIndicator("Error");
         websocket.close();
     };
 }
 
 function openWssConnection() {
-    fetch("/").then(res => {
-        const wssUrl = `ws://${res.headers.get("Wss-Host")}:${res.headers.get("Wss-Port")}`;
+    setWssConnectionIndicator("Scanning…");
+    fetch("/wss").then(res => res.text()).then(text => {
+        const wssUrl = text;  // `ws://${res.headers.get("Wss-Host")}:${res.headers.get("Wss-Port")}`;
         connectWebsocket(wssUrl);
     });
 }
@@ -213,6 +224,8 @@ function inflateBody(container) {
 
 function inflateFooter(container) {
     container.innerHTML = "";
+    wssConnectionIndicator = create(container, "span");
+    wssConnectionIndicator.textContent = "Disconnected";
     create(container, "span").innerHTML = `<a href="https://github.com/ychalier/transflow">GitHub</a>`;
 }
 

@@ -89,10 +89,18 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
             media_path = query.get('url', [None])[0]
             if media_path and os.path.isfile(media_path):
                 # TODO: how about image files?
-                self.serve_video_file(media_path)
+                return self.serve_video_file(media_path)
             else:
-                self.send_error(404, "File not found")
+                return self.send_error(404, "File not found")
+        elif parsed.path == "/wss":
+            return self.serve_text(f"ws://{self.server.wss.host}:{self.server.wss.port}")
         return super().do_GET()
+    
+    def serve_text(self, text: str, encoding: str = "utf8"):
+        self.send_response(200)
+        self.send_header('Content-Type', "text/plain")
+        self.end_headers()
+        self.wfile.write(text.encode(encoding))
     
     def serve_video_file(self, path):
         file_size = os.path.getsize(path)
@@ -129,11 +137,6 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
                     if not chunk:
                         break
                     self.wfile.write(chunk)
-    
-    def end_headers(self):
-        self.send_header("Wss-Host", str(self.server.wss.host))
-        self.send_header("Wss-Port", str(self.server.wss.port))
-        return super().end_headers()
 
 
 class WebServer(http.server.HTTPServer):
