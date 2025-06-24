@@ -33,14 +33,25 @@ class VideoOutput:
     def from_args(cls, path: str | None, width: int, height: int,
                   framerate: int | None = None, vcodec: str = "h264",
                   execute: bool = False, replace: bool = False,
-                  safe: bool = False, host: str = "localhost", port: int = 8080,
-                  ):
+                  safe: bool = False):
         if path is None:
             return CvVideoOutput(width, height)
-        mjpeg_pattern = re.compile(r"^mjpeg(/[a-z0-9A-Z\-]+)?$", re.IGNORECASE)
+        mjpeg_pattern = re.compile(r"^mjpeg(:[:a-z0-9A-Z\-]+)?$", re.IGNORECASE)
         if mjpeg_pattern.match(path):
-            name = mjpeg_pattern.match(path).group(1)
-            return MjpegVideoOutput(host, port, width, height, framerate, name)
+            mjpeg_query = mjpeg_pattern.match(path).group(1) 
+            mjpeg_args = []
+            if mjpeg_query is not None:
+                mjpeg_args = mjpeg_query[1:].split(":")
+            n_mjpeg_args = len(mjpeg_args)
+            if n_mjpeg_args == 0:
+                host, port = "localhost", 8080
+            elif n_mjpeg_args == 1:
+                host, port = "localhost", int(mjpeg_args[0])
+            elif n_mjpeg_args == 2:
+                host, port = mjpeg_args[1], int(mjpeg_args[0])
+            else:
+                raise ValueError(f"Invalid number of MJPEG arguments: {n_mjpeg_args}")
+            return MjpegVideoOutput(host, port, width, height, framerate)
         return FFmpegVideoOutput(path, width, height, framerate, vcodec,
                                  execute, replace, safe)
 
@@ -113,27 +124,24 @@ class CvVideoOutput(VideoOutput):
 class MjpegVideoOutput(VideoOutput):
 
     def __init__(self, host: str, port: int, width: int, height: int,
-                 framerate: int, name: str | None = None, quality: int = 50):
+                 framerate: int, quality: int = 50):
         VideoOutput.__init__(self, width, height)
-        if name is None or name.strip() == "":
-            name = "transflow"
         self.host = host
         self.port = port
-        self.name = name
         self.framerate = framerate
         self.quality = quality
         self.stream = None
         self.server = None
     
     def __enter__(self):
-        self.stream = mjpeg_streamer.Stream(self.name, size=(self.width, self.height), quality=self.quality, fps=self.framerate)
+        self.stream = mjpeg_streamer.Stream("transflow", size=(self.width, self.height), quality=self.quality, fps=self.framerate)
         self.server = mjpeg_streamer.MjpegServer(self.host, self.port)
         self.server.add_stream(self.stream)
         self.server.start()
         return self
     
     def feed(self, frame: numpy.ndarray):
-        self.stream.set_frame(frame)
+        self.stream.set_frame(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
     
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.server.stop()

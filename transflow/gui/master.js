@@ -22,6 +22,9 @@ var config = {
     },
     accumulator: {
         method: "map"
+    },
+    output: {
+        previewUrl: null
     }
 }
 
@@ -29,6 +32,7 @@ var leftPanelActiveTab = "Flow Source";
 var websocket;
 var websocketRetryCount = 0;
 var leftPanel;
+var rightPanel;
 
 function connectWebsocket(wssUrl) {
     websocket = new WebSocket(wssUrl);
@@ -56,6 +60,10 @@ function connectWebsocket(wssUrl) {
             }
             onConfigChange(`config.bitmapSource.file`);
             inflateLeftPanel(leftPanel);
+        } else if (message.data.startsWith("OUT")) {
+            config.output.previewUrl = message.data.slice(4);
+            onConfigChange(`config.output.previewUrl`);
+            inflateRightPanel(rightPanel);
         }
         websocket.send("PONG");
     };
@@ -167,9 +175,13 @@ function inflateLeftPanel(container) {
 
 function inflatePanePreview(container) {
     container.innerHTML = "";
-    const video = create(container, "video");
-    video.setAttribute("controls", 1);
-    video.setAttribute("loop", 1);
+    if (config.output.previewUrl != null) {
+        const img = create(container, "img");
+        img.src = config.output.previewUrl;
+        img.addEventListener("error", () => {
+            img.src = config.output.previewUrl + "?t=" + new Date().getTime();
+        });
+    }
 }
 
 function inflatePaneGenerate(container) {
@@ -195,7 +207,7 @@ function inflateBody(container) {
     container.innerHTML = "";
     leftPanel = create(container, "div", "panel panel-left");
     inflateLeftPanel(leftPanel);
-    const rightPanel = create(container, "div", "panel panel-right");
+    rightPanel = create(container, "div", "panel panel-right");
     inflateRightPanel(rightPanel);
 }
 

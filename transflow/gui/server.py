@@ -19,9 +19,10 @@ base_dir = Path(__file__).parent
 
 class WebsocketServer(threading.Thread):
 
-    def __init__(self, host: str):
+    def __init__(self, host: str, mjpeg_port: int):
         threading.Thread.__init__(self, daemon=True)
         self.host = host
+        self.mjpeg_port = mjpeg_port
         self.port = None
         self.connections = set()
     
@@ -44,7 +45,10 @@ class WebsocketServer(threading.Thread):
         elif message.startswith("GEN "):
             config = json.loads(message[4:])
             from ..pipeline import transfer
-            transfer(config["flowSource"]["file"], config["bitmapSource"]["file"], None, None, acc_method=config["accumulator"]["method"])
+            output_path = f"mjpeg:{self.mjpeg_port}:{self.host}"
+            mjpeg_url = f"http://{self.host}:{self.mjpeg_port}/transflow"
+            self._broadcast(f"OUT {mjpeg_url}")
+            transfer(config["flowSource"]["file"], config["bitmapSource"]["file"], output_path, None, acc_method=config["accumulator"]["method"])
 
     def run(self):
         async def register(websocket):
@@ -134,14 +138,14 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
 
 class WebServer(http.server.HTTPServer):
 
-    def __init__(self, host: str, port: int):
+    def __init__(self, host: str, port: int, mjpeg_port: int):
         http.server.HTTPServer.__init__(self, (host, port), WebHandler)
-        self.wss = WebsocketServer(host)
+        self.wss = WebsocketServer(host, mjpeg_port)
         self.wss.start()
 
 
-def start_gui(host: str = "localhost", port: int = 8000):
-    with WebServer(host, port) as httpd:
+def start_gui(host: str = "localhost", port: int = 8000, mjpeg_port: int = 8080):
+    with WebServer(host, port, mjpeg_port) as httpd:
         url = f"http://{host}:{port}"
         logger.info(f"Listening at {url}")
         webbrowser.open(url)
