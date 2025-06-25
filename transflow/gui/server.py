@@ -3,7 +3,6 @@ import http.server
 import json
 import logging
 import mimetypes
-import multiprocessing
 import os
 import threading
 import tkinter
@@ -76,8 +75,12 @@ class WebsocketServer(threading.Thread):
                     None,
                 ],
                 kwargs={
+                    "direction": args["flowSource"]["direction"],
                     "acc_method": args["accumulator"]["method"],
                     "cancel_event": self.job_cancel_event,
+                    "mask_path": args["flowSource"]["maskPath"],
+                    "kernel_path": args["flowSource"]["kernelPath"],
+                    "cv_config": args["flowSource"]["cvConfig"],
                 })
             self.job.start()
             return

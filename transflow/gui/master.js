@@ -16,9 +16,15 @@ function getSelectedValue(select) {
 var config = {
     flowSource: {
         file: null,
+        direction: "backward",
+        maskPath: null,
+        kernelPath: null,
+        cvConfig: null,
     },
     bitmapSource: {
         file: null,
+        type: "file",
+        color: "#cff010"
     },
     accumulator: {
         method: "map"
@@ -40,6 +46,14 @@ function setWssConnectionIndicator(state) {
     wssConnectionIndicator.textContent = state;
 }
 
+function configSet(keys, value) {
+    let o = config;
+    for (let i = 0; i < keys.length - 1; i++) {
+        o = o[keys[i]];
+    }
+    o[keys[keys.length - 1]] = value;
+}
+
 function connectWebsocket(wssUrl) {
     setWssConnectionIndicator(`Connecting… [${websocketRetryCount}]`);
     websocket = new WebSocket(wssUrl);
@@ -50,23 +64,13 @@ function connectWebsocket(wssUrl) {
     }
     websocket.onmessage = (message) => {
         console.log(message);
-        if (message.data.startsWith("FILEIN FS")) {
-            const fileUrl = message.data.slice(10);
-            if (fileUrl == "") {
-                config.flowSource.file = null;
-            } else {
-                config.flowSource.file = fileUrl;
-            }
-            onConfigChange(`config.flowSource.file`);
-            inflateLeftPanel(leftPanel);
-        } else if (message.data.startsWith("FILEIN BM")) {
-            const fileUrl = message.data.slice(10);
-            if (fileUrl == "") {
-                config.bitmapSource.file = null;
-            } else {
-                config.bitmapSource.file = fileUrl;
-            }
-            onConfigChange(`config.bitmapSource.file`);
+        if (message.data.startsWith("FILEIN ")) {
+            const query = message.data.slice(7);
+            let [inputName, fileUrl] = query.split(" ", 2);
+            if (fileUrl == "") fileUrl = null;
+            const configKeys = inputName.split(".");
+            configSet(configKeys, fileUrl);
+            onConfigChange(`config.${inputName}`);
             inflateLeftPanel(leftPanel);
         } else if (message.data.startsWith("OUT")) {
             config.output.previewUrl = message.data.slice(4);
@@ -132,21 +136,56 @@ function getPathSuffix(path) {
     return "." + split[split.length - 1];
 }
 
+function getPathName(path) {
+    const separator = path.includes("/") ? "/" : "\\";
+    const split = path.split(separator);
+    return split[split.length - 1];
+}
 
 function inflatePaneFlowSource(container) {
     container.innerHTML = "";
-    createFileInput(container, "FS", VIDEO_FILETYPES);
+    createFileInput(container, "flowSource.file", VIDEO_FILETYPES);
     if (config.flowSource.file != null) {
         const video = create(container, "video");
         video.src = `/media?url=${config.flowSource.file}`;
         video.setAttribute("controls", 1);
+    }
+    const directionSelect = create(container, "select");
+    inflateSelect(directionSelect, [
+        {name: "backward", label: "backward"},
+        {name: "forward", label: "forward"},
+    ], config.flowSource.direction);
+    directionSelect.addEventListener("change", () => {
+        config.flowSource.direction = getSelectedValue(directionSelect);
+    });
+    createFileInput(container, "flowSource.maskPath", IMAGE_FILETYPES);
+    if (config.flowSource.maskPath != null) {
+        create(container, "span").textContent = getPathName(config.flowSource.maskPath);
+    }
+    createFileInput(container, "flowSource.kernelPath", "*.npy");
+    if (config.flowSource.kernelPath != null) {
+        create(container, "span").textContent = getPathName(config.flowSource.kernelPath);
+    }
+    createFileInput(container, "flowSource.cvConfig", "*.json");
+    if (config.flowSource.cvConfig != null) {
+        create(container, "span").textContent = getPathName(config.flowSource.cvConfig);
+    }
+}
+
+function inflateSelect(select, options, initialValue) {
+    select.innerHTML = "";
+    for (const op of options) {
+        const option = create(select, "option");
+        option.value = op.name;
+        option.textContent = op.label;
+        if (option.value == initialValue) option.selected = true;
     }
 }
 
 function inflatePaneBitmapSource(container) {
     container.innerHTML = "";
     const bitmapSelect = create(container, "select");
-    const bitmapOptions = [
+    inflateSelect(bitmapSelect, [
         {name: "file", label: "file"},
         {name: "color", label: "color"},
         {name: "noise", label: "grey noise"},
@@ -154,15 +193,7 @@ function inflatePaneBitmapSource(container) {
         {name: "cnoise", label: "colored noise"},
         {name: "gradient", label: "gradient"},
         {name: "first", label: "first frame"},
-    ];
-    for (const bop of bitmapOptions) {
-        const option = create(bitmapSelect, "option");
-        option.value = bop.name;
-        option.textContent = bop.label;
-        if (option.value == config.bitmapSource.type) {
-            option.selected = true;
-        }
-    }
+    ], config.bitmapSource.type);
 
     const bitmapInputs = create(container);
     function onBitmapSelectChange() {
@@ -171,7 +202,7 @@ function inflatePaneBitmapSource(container) {
         bitmapInputs.innerHTML = "";
         switch(value) {
             case "file":
-                createFileInput(bitmapInputs, "BM", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
+                createFileInput(bitmapInputs, "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
                 if (config.bitmapSource.file != null) {
                     if (VIDEO_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
                         const video = create(bitmapInputs, "video");
@@ -205,10 +236,10 @@ function inflatePaneBitmapSource(container) {
                 break;
         }
     }
-    
+
     bitmapSelect.addEventListener("change", onBitmapSelectChange);
-    onBitmapSelectChange();   
-    
+    onBitmapSelectChange();
+
 }
 
 function inflatePaneAccumulator(container) {
