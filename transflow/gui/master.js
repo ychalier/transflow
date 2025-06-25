@@ -145,17 +145,70 @@ function inflatePaneFlowSource(container) {
 
 function inflatePaneBitmapSource(container) {
     container.innerHTML = "";
-    createFileInput(container, "BM", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
-    if (config.bitmapSource.file != null) {
-        if (VIDEO_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
-            const video = create(container, "video");
-            video.src = `/media?url=${config.bitmapSource.file}`;
-            video.setAttribute("controls", 1);
-        } else if (IMAGE_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
-            const image = create(container, "img");
-            image.src = `/media?url=${config.bitmapSource.file}`;
+    const bitmapSelect = create(container, "select");
+    const bitmapOptions = [
+        {name: "file", label: "file"},
+        {name: "color", label: "color"},
+        {name: "noise", label: "grey noise"},
+        {name: "bwnoise", label: "b&w noise"},
+        {name: "cnoise", label: "colored noise"},
+        {name: "gradient", label: "gradient"},
+        {name: "first", label: "first frame"},
+    ];
+    for (const bop of bitmapOptions) {
+        const option = create(bitmapSelect, "option");
+        option.value = bop.name;
+        option.textContent = bop.label;
+        if (option.value == config.bitmapSource.type) {
+            option.selected = true;
         }
     }
+
+    const bitmapInputs = create(container);
+    function onBitmapSelectChange() {
+        const value = getSelectedValue(bitmapSelect);
+        config.bitmapSource.type = value;
+        bitmapInputs.innerHTML = "";
+        switch(value) {
+            case "file":
+                createFileInput(bitmapInputs, "BM", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
+                if (config.bitmapSource.file != null) {
+                    if (VIDEO_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
+                        const video = create(bitmapInputs, "video");
+                        video.src = `/media?url=${config.bitmapSource.file}`;
+                        video.setAttribute("controls", 1);
+                    } else if (IMAGE_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
+                        const image = create(bitmapInputs, "img");
+                        image.src = `/media?url=${config.bitmapSource.file}`;
+                    }
+                }
+                break;
+            case "color":
+                const colorInput = create(bitmapInputs, "input");
+                colorInput.type = "color";
+                if (config.bitmapSource.color != undefined) {
+                    colorInput.value = config.bitmapSource.color;
+                }
+                colorInput.addEventListener("change", () => {
+                    config.bitmapSource.color = colorInput.value;
+                });
+                break;
+            case "noise":
+            case "bwnoise":
+            case "cnoise":
+            case "gradient":
+            case "first":
+                break;
+            default:
+                alert("Unknown bitmap source!");
+                console.error("Unkown bitmap source", value);
+                break;
+        }
+    }
+    
+    bitmapSelect.addEventListener("change", onBitmapSelectChange);
+    onBitmapSelectChange();   
+    
 }
 
 function inflatePaneAccumulator(container) {

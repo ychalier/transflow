@@ -52,9 +52,16 @@ class WebsocketServer(threading.Thread):
             output_path = f"mjpeg:{self.mjpeg_port}:{self.host}"
             mjpeg_url = f"http://{self.host}:{self.mjpeg_port}/transflow"
             self._broadcast(f"OUT {mjpeg_url}")
+            bitmap_path = None
+            if args["bitmapSource"]["type"] == "file":
+                bitmap_path = args["bitmapSource"]["file"]
+            elif args["bitmapSource"]["type"] == "color":
+                bitmap_path = args["bitmapSource"]["color"]
+            else:
+                bitmap_path = args["bitmapSource"]["type"]
             transfer(
                 args["flowSource"]["file"],
-                args["bitmapSource"]["file"],
+                bitmap_path,
                 output_path,
                 None,
                 acc_method=args["accumulator"]["method"])
