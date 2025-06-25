@@ -3,6 +3,7 @@ import os
 import queue
 import random
 import re
+import threading
 import time
 import traceback
 import typing
@@ -199,7 +200,8 @@ def transfer(
         bitmap_introduction_flags: int = 1,
         preview_output: bool = False,
         lock_expr: str | None = None,
-        lock_mode: str | LockMode = LockMode.STAY):
+        lock_mode: str | LockMode = LockMode.STAY,
+        cancel_event: threading.Event | None = None):
 
     if safe:
         append_history()
@@ -439,6 +441,8 @@ def transfer(
 
         pbar = tqdm.tqdm(total=get_expected_length(fs_length, bs_length, cursor), unit="frame")
         while True:
+            if cancel_event is not None and cancel_event.is_set():
+                break
             try:
                 flows = []
                 break_now = False

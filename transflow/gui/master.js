@@ -274,6 +274,11 @@ function inflatePaneGenerate(container) {
     buttonGenerate.addEventListener("click", () => {
         websocket.send(`GEN ${JSON.stringify(config)}`);
     });
+    const buttonInterrupt = create(container, "button");
+    buttonInterrupt.textContent = "Interrupt";
+    buttonInterrupt.addEventListener("click", () => {
+        websocket.send("INTERRUPT");
+    });
 }
 
 function inflateRightPanel(container) {

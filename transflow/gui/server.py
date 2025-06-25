@@ -3,6 +3,7 @@ import http.server
 import json
 import logging
 import mimetypes
+import multiprocessing
 import os
 import threading
 import tkinter
@@ -25,7 +26,9 @@ class WebsocketServer(threading.Thread):
         self.mjpeg_port = mjpeg_port
         self.port = None
         self.connections = set()
-    
+        self.job_cancel_event = None
+        self.job = None
+
     def _broadcast(self, message: str):
         logger.debug("Broadcasting %s", message)
         websockets.broadcast(self.connections, message)
@@ -34,7 +37,11 @@ class WebsocketServer(threading.Thread):
         logger.debug("Websocket %s \"%s\"", websocket.id.hex, message)
         if message == "PONG":
             return
-        cmd, args_string = message.split(" ", 1)
+        cmd, args_string = None, None
+        if " " in message:
+            cmd, args_string = message.split(" ", 1)
+        else:
+            cmd = message
         args = json.loads(args_string) if args_string else {}
         if cmd == "FILEIN":
             window = tkinter.Tk()
@@ -59,12 +66,23 @@ class WebsocketServer(threading.Thread):
                 bitmap_path = args["bitmapSource"]["color"]
             else:
                 bitmap_path = args["bitmapSource"]["type"]
-            transfer(
-                args["flowSource"]["file"],
-                bitmap_path,
-                output_path,
-                None,
-                acc_method=args["accumulator"]["method"])
+            self.job_cancel_event = threading.Event()
+            self.job = threading.Thread(
+                target=transfer,
+                args=[
+                    args["flowSource"]["file"],
+                    bitmap_path,
+                    output_path,
+                    None,
+                ],
+                kwargs={
+                    "acc_method": args["accumulator"]["method"],
+                    "cancel_event": self.job_cancel_event,
+                })
+            self.job.start()
+            return
+        if cmd == "INTERRUPT":
+            self.job_cancel_event.set()
             return
 
     def run(self):
@@ -111,7 +129,7 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
         elif parsed.path == "/wss":
             return self.serve_text(f"ws://{self.server.wss.host}:{self.server.wss.port}")
         return super().do_GET()
-    
+
     def serve_text(self, text: str, encoding: str = "utf8"):
         self.send_response(200)
         self.send_header('Content-Type', "text/plain")
