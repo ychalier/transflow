@@ -111,17 +111,31 @@ function inflateHeader(container) {
     create(container).textContent = "transflow";
 }
 
-function createFileInput(container, inputName) {
+function createFileInput(container, inputName, fileTypes) {
     const input = create(container, "button");
     input.textContent = "Select file";
     input.addEventListener("click", () => {
-        websocket.send(`FILEIN ${inputName}`);
+        const data = {
+            name: inputName,
+            filetypes: fileTypes,
+        }
+        websocket.send(`FILEIN ${JSON.stringify(data)}`);
     });
 }
 
+const VIDEO_FILETYPES = "*.mp4 *.avi *.mkv *.mov *.mpg *.gif";
+const IMAGE_FILETYPES = "*.jpg *.jpeg *.png *.webp";
+
+
+function getPathSuffix(path) {
+    const split = path.split(".");
+    return "." + split[split.length - 1];
+}
+
+
 function inflatePaneFlowSource(container) {
     container.innerHTML = "";
-    createFileInput(container, "FS");
+    createFileInput(container, "FS", VIDEO_FILETYPES);
     if (config.flowSource.file != null) {
         const video = create(container, "video");
         video.src = `/media?url=${config.flowSource.file}`;
@@ -131,11 +145,16 @@ function inflatePaneFlowSource(container) {
 
 function inflatePaneBitmapSource(container) {
     container.innerHTML = "";
-    createFileInput(container, "BM");
+    createFileInput(container, "BM", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
     if (config.bitmapSource.file != null) {
-        const video = create(container, "video");
-        video.src = `/media?url=${config.bitmapSource.file}`;
-        video.setAttribute("controls", 1);
+        if (VIDEO_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
+            const video = create(container, "video");
+            video.src = `/media?url=${config.bitmapSource.file}`;
+            video.setAttribute("controls", 1);
+        } else if (IMAGE_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
+            const image = create(container, "img");
+            image.src = `/media?url=${config.bitmapSource.file}`;
+        }
     }
 }
 

@@ -34,21 +34,31 @@ class WebsocketServer(threading.Thread):
         logger.debug("Websocket %s \"%s\"", websocket.id.hex, message)
         if message == "PONG":
             return
-        elif message.startswith("FILEIN "):
+        cmd, args_string = message.split(" ", 1)
+        args = json.loads(args_string) if args_string else {}
+        if cmd == "FILEIN":
             window = tkinter.Tk()
             window.wm_attributes("-topmost", 1)
             window.withdraw()
-            filename = askopenfilename(parent=window, initialdir=(base_dir / ".." / ".." / "assets").as_posix(), filetypes=[("video files", "*.mp4")])
+            filename = askopenfilename(
+                parent=window,
+                initialdir=(base_dir / ".." / ".." / "assets").as_posix(),
+                filetypes=[("Allowed types", args["filetypes"])])
             if filename != "":
-                self._broadcast(f"{message} {filename}")
+                self._broadcast(f"FILEIN {args['name']} {filename}")
             return
-        elif message.startswith("GEN "):
-            config = json.loads(message[4:])
+        if cmd == "GEN":
             from ..pipeline import transfer
             output_path = f"mjpeg:{self.mjpeg_port}:{self.host}"
             mjpeg_url = f"http://{self.host}:{self.mjpeg_port}/transflow"
             self._broadcast(f"OUT {mjpeg_url}")
-            transfer(config["flowSource"]["file"], config["bitmapSource"]["file"], output_path, None, acc_method=config["accumulator"]["method"])
+            transfer(
+                args["flowSource"]["file"],
+                args["bitmapSource"]["file"],
+                output_path,
+                None,
+                acc_method=args["accumulator"]["method"])
+            return
 
     def run(self):
         async def register(websocket):
@@ -88,8 +98,7 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
             query = parse_qs(parsed.query)
             media_path = query.get('url', [None])[0]
             if media_path and os.path.isfile(media_path):
-                # TODO: how about image files?
-                return self.serve_video_file(media_path)
+                return self.serve_file_range(media_path)
             else:
                 return self.send_error(404, "File not found")
         elif parsed.path == "/wss":
@@ -101,8 +110,8 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Type', "text/plain")
         self.end_headers()
         self.wfile.write(text.encode(encoding))
-    
-    def serve_video_file(self, path):
+
+    def serve_file_range(self, path):
         file_size = os.path.getsize(path)
         mime_type, _ = mimetypes.guess_type(path)
         mime_type = mime_type or 'application/octet-stream'
