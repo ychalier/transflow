@@ -6,3 +6,5 @@ pygame
 pyside6
 scipy
 tqdm
+aiohttp   # for 'mjpeg-streamer'
+netifaces # for 'mjpeg-streamer'

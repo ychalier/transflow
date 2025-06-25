@@ -3,9 +3,9 @@ import re
 import subprocess
 
 import cv2
-import mjpeg_streamer # TODO: fork from https://github.com/egeakman/mjpeg-streamer
 import numpy
 
+from .mjpeg import MjpegStream, MjpegServer
 from .utils import parse_hex_color, find_unique_path, startfile
 
 
@@ -51,7 +51,7 @@ class VideoOutput:
                 host, port = mjpeg_args[1], int(mjpeg_args[0])
             else:
                 raise ValueError(f"Invalid number of MJPEG arguments: {n_mjpeg_args}")
-            return MjpegVideoOutput(host, port, width, height, framerate)
+            return MjpegOutput(host, port, width, height, framerate)
         return FFmpegVideoOutput(path, width, height, framerate, vcodec,
                                  execute, replace, safe)
 
@@ -121,7 +121,7 @@ class CvVideoOutput(VideoOutput):
         cv2.destroyAllWindows()
 
 
-class MjpegVideoOutput(VideoOutput):
+class MjpegOutput(VideoOutput):
 
     def __init__(self, host: str, port: int, width: int, height: int,
                  framerate: int, quality: int = 50):
@@ -134,8 +134,8 @@ class MjpegVideoOutput(VideoOutput):
         self.server = None
     
     def __enter__(self):
-        self.stream = mjpeg_streamer.Stream("transflow", size=(self.width, self.height), quality=self.quality, fps=self.framerate)
-        self.server = mjpeg_streamer.MjpegServer(self.host, self.port)
+        self.stream = MjpegStream("transflow", size=(self.width, self.height), quality=self.quality, fps=self.framerate)
+        self.server = MjpegServer(self.host, self.port)
         self.server.add_stream(self.stream)
         self.server.start()
         return self
