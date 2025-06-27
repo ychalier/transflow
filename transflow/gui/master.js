@@ -127,8 +127,8 @@ function createFileInput(container, inputName, fileTypes) {
     });
 }
 
-const VIDEO_FILETYPES = "*.mp4 *.avi *.mkv *.mov *.mpg *.gif";
-const IMAGE_FILETYPES = "*.jpg *.jpeg *.png *.webp";
+const VIDEO_FILETYPES = "*.mp4 *.avi *.mkv *.mov *.mpg";
+const IMAGE_FILETYPES = "*.jpg *.jpeg *.png *.webp *.gif";
 
 
 function getPathSuffix(path) {
@@ -144,13 +144,19 @@ function getPathName(path) {
 
 function inflatePaneFlowSource(container) {
     container.innerHTML = "";
-    createFileInput(container, "flowSource.file", VIDEO_FILETYPES);
+
+    const inputFileContainer = create(container, "div", "input-container");
+    create(inputFileContainer, "span").textContent = "File";
+    createFileInput(inputFileContainer, "flowSource.file", VIDEO_FILETYPES);
     if (config.flowSource.file != null) {
-        const video = create(container, "video");
+        const video = create(inputFileContainer, "video");
         video.src = `/media?url=${config.flowSource.file}`;
         video.setAttribute("controls", 1);
     }
-    const directionSelect = create(container, "select");
+
+    const inputDirectionContainer = create(container, "div", "input-container");
+    create(inputDirectionContainer, "span").textContent = "Direction";
+    const directionSelect = create(inputDirectionContainer, "select");
     inflateSelect(directionSelect, [
         {name: "backward", label: "backward"},
         {name: "forward", label: "forward"},
@@ -158,18 +164,28 @@ function inflatePaneFlowSource(container) {
     directionSelect.addEventListener("change", () => {
         config.flowSource.direction = getSelectedValue(directionSelect);
     });
-    createFileInput(container, "flowSource.maskPath", IMAGE_FILETYPES);
+
+    const inputMaskContainer = create(container, "div", "input-container");
+    create(inputMaskContainer, "span").textContent = "Mask";
+    createFileInput(inputMaskContainer, "flowSource.maskPath", IMAGE_FILETYPES);
     if (config.flowSource.maskPath != null) {
-        create(container, "span").textContent = getPathName(config.flowSource.maskPath);
+        create(inputMaskContainer, "span").textContent = getPathName(config.flowSource.maskPath);
     }
-    createFileInput(container, "flowSource.kernelPath", "*.npy");
+
+    const inputKernelContainer = create(container, "div", "input-container");
+    create(inputKernelContainer, "span").textContent = "Kernel";
+    createFileInput(inputKernelContainer, "flowSource.kernelPath", "*.npy");
     if (config.flowSource.kernelPath != null) {
-        create(container, "span").textContent = getPathName(config.flowSource.kernelPath);
+        create(inputKernelContainer, "span").textContent = getPathName(config.flowSource.kernelPath);
     }
-    createFileInput(container, "flowSource.cvConfig", "*.json");
+
+    const inputCvConfigContainer = create(container, "div", "input-container");
+    create(inputCvConfigContainer, "span").textContent = "CV Config";
+    createFileInput(inputCvConfigContainer, "flowSource.cvConfig", "*.json");
     if (config.flowSource.cvConfig != null) {
-        create(container, "span").textContent = getPathName(config.flowSource.cvConfig);
+        create(inputCvConfigContainer, "span").textContent = getPathName(config.flowSource.cvConfig);
     }
+
 }
 
 function inflateSelect(select, options, initialValue) {
@@ -184,7 +200,10 @@ function inflateSelect(select, options, initialValue) {
 
 function inflatePaneBitmapSource(container) {
     container.innerHTML = "";
-    const bitmapSelect = create(container, "select");
+    
+    const inputTypeContainer = create(container, "div", "input-container");
+    create(inputTypeContainer, "span").textContent = "Type";
+    const bitmapSelect = create(inputTypeContainer, "select");
     inflateSelect(bitmapSelect, [
         {name: "file", label: "file"},
         {name: "color", label: "color"},
@@ -195,26 +214,30 @@ function inflatePaneBitmapSource(container) {
         {name: "first", label: "first frame"},
     ], config.bitmapSource.type);
 
-    const bitmapInputs = create(container);
+    const bitmapInputs = create(container, "div", "input-container");
     function onBitmapSelectChange() {
         const value = getSelectedValue(bitmapSelect);
         config.bitmapSource.type = value;
         bitmapInputs.innerHTML = "";
         switch(value) {
             case "file":
-                createFileInput(bitmapInputs, "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
+                const inputFileContainer = create(bitmapInputs, "div", "input-container");
+                create(inputFileContainer, "span").textContent = "File";
+                createFileInput(inputFileContainer, "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
                 if (config.bitmapSource.file != null) {
                     if (VIDEO_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
-                        const video = create(bitmapInputs, "video");
+                        const video = create(inputFileContainer, "video");
                         video.src = `/media?url=${config.bitmapSource.file}`;
                         video.setAttribute("controls", 1);
                     } else if (IMAGE_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
-                        const image = create(bitmapInputs, "img");
+                        const image = create(inputFileContainer, "img");
                         image.src = `/media?url=${config.bitmapSource.file}`;
                     }
                 }
                 break;
             case "color":
+                const inputColorContainer = create(bitmapInputs, "div", "input-container");
+                create(inputColorContainer, "span").textContent = "Color";
                 const colorInput = create(bitmapInputs, "input");
                 colorInput.type = "color";
                 if (config.bitmapSource.color != undefined) {
@@ -244,7 +267,9 @@ function inflatePaneBitmapSource(container) {
 
 function inflatePaneAccumulator(container) {
     container.innerHTML = "";
-    const methodSelect = create(container, "select");
+    const inputMethodContainer = create(container, "div", "input-container");
+    create(inputMethodContainer, "span").textContent = "Method";
+    const methodSelect = create(inputMethodContainer, "select");
     for (const methodName of ["map", "stack", "sum", "crumble", "canvas"]) {
         const option = create(methodSelect, "option");
         option.textContent = methodName;
