@@ -65,6 +65,8 @@ class WebsocketServer(threading.Thread):
                 bitmap_path = args["bitmapSource"]["color"]
             else:
                 bitmap_path = args["bitmapSource"]["type"]
+            print("Job args:")
+            print(args)
             self.job_cancel_event = threading.Event()
             self.job = threading.Thread(
                 target=transfer,
@@ -81,6 +83,11 @@ class WebsocketServer(threading.Thread):
                     "mask_path": args["flowSource"]["maskPath"],
                     "kernel_path": args["flowSource"]["kernelPath"],
                     "cv_config": args["flowSource"]["cvConfig"],
+                    "reset_mode": args["accumulator"]["resetMode"],
+                    "reset_alpha": args["accumulator"]["resetAlpha"],
+                    "reset_mask_path": args["accumulator"]["resetMask"],
+                    "heatmap_mode": args["accumulator"]["heatmapMode"],
+                    "heatmap_args": args["accumulator"]["heatmapArgs"],
                 })
             self.job.start()
             return

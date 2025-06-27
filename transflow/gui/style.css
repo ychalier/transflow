@@ -191,3 +191,7 @@ video {
 .input-container ~ .input-container {
     margin-top: 1rem;
 }
+
+.input-container button {
+    width: fit-content;
+}

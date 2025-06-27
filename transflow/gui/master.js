@@ -27,7 +27,12 @@ var config = {
         color: "#cff010"
     },
     accumulator: {
-        method: "map"
+        method: "map",
+        resetMode: "off",
+        resetAlpha: 0.1,
+        resetMask: null,
+        heatmapMode: "discrete",
+        heatmapArgs: "0:4:2:1",
     },
     output: {
         previewUrl: null
@@ -142,11 +147,16 @@ function getPathName(path) {
     return split[split.length - 1];
 }
 
+function createInputContainer(container, label) {
+    const inputContainer = create(container, "div", "input-container");
+    create(inputContainer, "span").textContent = label;
+    return inputContainer;
+}
+
 function inflatePaneFlowSource(container) {
     container.innerHTML = "";
 
-    const inputFileContainer = create(container, "div", "input-container");
-    create(inputFileContainer, "span").textContent = "File";
+    const inputFileContainer = createInputContainer(container, "File");
     createFileInput(inputFileContainer, "flowSource.file", VIDEO_FILETYPES);
     if (config.flowSource.file != null) {
         const video = create(inputFileContainer, "video");
@@ -154,8 +164,7 @@ function inflatePaneFlowSource(container) {
         video.setAttribute("controls", 1);
     }
 
-    const inputDirectionContainer = create(container, "div", "input-container");
-    create(inputDirectionContainer, "span").textContent = "Direction";
+    const inputDirectionContainer = createInputContainer(container, "Direction");
     const directionSelect = create(inputDirectionContainer, "select");
     inflateSelect(directionSelect, [
         {name: "backward", label: "backward"},
@@ -165,22 +174,19 @@ function inflatePaneFlowSource(container) {
         config.flowSource.direction = getSelectedValue(directionSelect);
     });
 
-    const inputMaskContainer = create(container, "div", "input-container");
-    create(inputMaskContainer, "span").textContent = "Mask";
+    const inputMaskContainer = createInputContainer(container, "Mask");
     createFileInput(inputMaskContainer, "flowSource.maskPath", IMAGE_FILETYPES);
     if (config.flowSource.maskPath != null) {
         create(inputMaskContainer, "span").textContent = getPathName(config.flowSource.maskPath);
     }
 
-    const inputKernelContainer = create(container, "div", "input-container");
-    create(inputKernelContainer, "span").textContent = "Kernel";
+    const inputKernelContainer = createInputContainer(container, "Kernel");
     createFileInput(inputKernelContainer, "flowSource.kernelPath", "*.npy");
     if (config.flowSource.kernelPath != null) {
         create(inputKernelContainer, "span").textContent = getPathName(config.flowSource.kernelPath);
     }
 
-    const inputCvConfigContainer = create(container, "div", "input-container");
-    create(inputCvConfigContainer, "span").textContent = "CV Config";
+    const inputCvConfigContainer = createInputContainer(container, "CV Config");
     createFileInput(inputCvConfigContainer, "flowSource.cvConfig", "*.json");
     if (config.flowSource.cvConfig != null) {
         create(inputCvConfigContainer, "span").textContent = getPathName(config.flowSource.cvConfig);
@@ -200,9 +206,8 @@ function inflateSelect(select, options, initialValue) {
 
 function inflatePaneBitmapSource(container) {
     container.innerHTML = "";
-    
-    const inputTypeContainer = create(container, "div", "input-container");
-    create(inputTypeContainer, "span").textContent = "Type";
+
+    const inputTypeContainer = createInputContainer(container, "Type");
     const bitmapSelect = create(inputTypeContainer, "select");
     inflateSelect(bitmapSelect, [
         {name: "file", label: "file"},
@@ -221,8 +226,7 @@ function inflatePaneBitmapSource(container) {
         bitmapInputs.innerHTML = "";
         switch(value) {
             case "file":
-                const inputFileContainer = create(bitmapInputs, "div", "input-container");
-                create(inputFileContainer, "span").textContent = "File";
+                const inputFileContainer = createInputContainer(bitmapInputs, "File");
                 createFileInput(inputFileContainer, "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
                 if (config.bitmapSource.file != null) {
                     if (VIDEO_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
@@ -236,8 +240,7 @@ function inflatePaneBitmapSource(container) {
                 }
                 break;
             case "color":
-                const inputColorContainer = create(bitmapInputs, "div", "input-container");
-                create(inputColorContainer, "span").textContent = "Color";
+                const inputColorContainer = createInputContainer(bitmapInputs, "Color");
                 const colorInput = create(bitmapInputs, "input");
                 colorInput.type = "color";
                 if (config.bitmapSource.color != undefined) {
@@ -267,21 +270,76 @@ function inflatePaneBitmapSource(container) {
 
 function inflatePaneAccumulator(container) {
     container.innerHTML = "";
-    const inputMethodContainer = create(container, "div", "input-container");
-    create(inputMethodContainer, "span").textContent = "Method";
+
+    const inputMethodContainer = createInputContainer(container, "Method");
     const methodSelect = create(inputMethodContainer, "select");
-    for (const methodName of ["map", "stack", "sum", "crumble", "canvas"]) {
-        const option = create(methodSelect, "option");
-        option.textContent = methodName;
-        option.value = methodName;
-        if (methodName == config.accumulator.method) {
-            option.selected = true;
-        }
-    }
-    methodSelect.addEventListener("input", () => {
-        config.accumulator.method = getSelectedValue(methodSelect);
+    inflateSelect(methodSelect, [
+        {name: "map", label: "map"},
+        {name: "stack", label: "stack"},
+        {name: "sum", label: "sum"},
+        {name: "crumble", label: "crumble"},
+        {name: "canvas", label: "canvas"},
+    ], config.accumulator.method);
+
+    const accumulatorInputs = create(container, "div", "input-container");
+    function onAccumulatorMethodChange() {
+        const value = getSelectedValue(methodSelect);
+        config.accumulator.method = value;
         onConfigChange(`config.accumulator.method`);
-    });
+        accumulatorInputs.innerHTML = "";
+
+        const resetModeSelectContainer = createInputContainer(accumulatorInputs, "Reset Mode");
+        const resetModeSelect = create(resetModeSelectContainer, "select");
+        inflateSelect(resetModeSelect, [
+            {name: "off", label: "off"},
+            {name: "random", label: "random"},
+            {name: "linear", label: "linear"},
+        ], config.accumulator.resetMode);
+        resetModeSelect.addEventListener("change", () => {
+            config.accumulator.resetMode = getSelectedValue(resetModeSelect);
+        });
+
+        const resetAlphaContainer = createInputContainer(accumulatorInputs, "Reset Alpha");
+        const resetAlpha = create(resetAlphaContainer, "input");
+        resetAlpha.type = "range";
+        resetAlpha.min = 0;
+        resetAlpha.max = 1;
+        resetAlpha.step = 0.001;
+        resetAlpha.value = config.accumulator.resetAlpha;
+        const resetAlphaLabel = create(resetAlphaContainer, "span");
+        resetAlphaLabel.textContent = config.accumulator.resetAlpha.toFixed(3);
+        resetAlpha.addEventListener("input", () => {
+            config.accumulator.resetAlpha = parseFloat(resetAlpha.value);
+            resetAlphaLabel.textContent = config.accumulator.resetAlpha.toFixed(3);
+        });
+
+        const resetMaskContainer = createInputContainer(accumulatorInputs, "Reset Mask");
+        createFileInput(resetMaskContainer, "accumulator.resetMask", "*.jpg *.jpeg *.png");
+        if (config.accumulator.resetMask != null) {
+            create(resetMaskContainer, "span").textContent = getPathName(config.accumulator.resetMask);
+        }
+
+        const heatmapModeContainer = createInputContainer(accumulatorInputs, "Heatmap Mode");
+        const heatmapModeSelect = create(heatmapModeContainer, "select");
+        inflateSelect(heatmapModeSelect, [
+            {name: "discrete", label: "discrete"},
+            {name: "continuous", label: "continuous"},
+        ], config.accumulator.heatmapMode);
+        resetModeSelect.addEventListener("change", () => {
+            config.accumulator.heatmapMode = getSelectedValue(heatmapModeSelect);
+        });
+
+        const heatmapArgsContainer = createInputContainer(accumulatorInputs, "Heatmap Args");
+        const heatmapArgs = create(heatmapArgsContainer, "input");
+        heatmapArgs.value = config.accumulator.heatmapArgs;
+        heatmapArgs.addEventListener("change", () => {
+            config.accumulator.heatmapArgs = heatmapArgs.value;
+        });
+
+    }
+
+    methodSelect.addEventListener("change", onAccumulatorMethodChange);
+    onAccumulatorMethodChange();
 }
 
 function inflateLeftPanel(container) {
