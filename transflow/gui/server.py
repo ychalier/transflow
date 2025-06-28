@@ -56,8 +56,8 @@ class WebsocketServer(threading.Thread):
         if cmd == "GEN":
             from ..pipeline import transfer
             output_path = f"mjpeg:{self.mjpeg_port}:{self.host}"
-            mjpeg_url = f"http://{self.host}:{self.mjpeg_port}/transflow"
-            self._broadcast(f"OUT {mjpeg_url}")
+            print("Job args:")
+            print(args)
             bitmap_path = None
             if args["bitmapSource"]["type"] == "file":
                 bitmap_path = args["bitmapSource"]["file"]
@@ -65,8 +65,11 @@ class WebsocketServer(threading.Thread):
                 bitmap_path = args["bitmapSource"]["color"]
             else:
                 bitmap_path = args["bitmapSource"]["type"]
-            print("Job args:")
-            print(args)
+            initial_canvas = None
+            if args["accumulator"]["initialCanvasFile"] is None:
+                initial_canvas = args["accumulator"]["initialCanvasColor"]
+            else:
+                initial_canvas = args["accumulator"]["initialCanvasFile"]
             self.job_cancel_event = threading.Event()
             self.job = threading.Thread(
                 target=transfer,
@@ -77,19 +80,29 @@ class WebsocketServer(threading.Thread):
                     None,
                 ],
                 kwargs={
+                    "cancel_event": self.job_cancel_event,
+                    "use_mvs": args["flowSource"]["useMvs"],
                     "direction": args["flowSource"]["direction"],
                     "acc_method": args["accumulator"]["method"],
-                    "cancel_event": self.job_cancel_event,
                     "mask_path": args["flowSource"]["maskPath"],
                     "kernel_path": args["flowSource"]["kernelPath"],
                     "cv_config": args["flowSource"]["cvConfig"],
+                    "flow_filters": args["flowSource"]["flowFilters"],
                     "reset_mode": args["accumulator"]["resetMode"],
                     "reset_alpha": args["accumulator"]["resetAlpha"],
                     "reset_mask_path": args["accumulator"]["resetMask"],
                     "heatmap_mode": args["accumulator"]["heatmapMode"],
                     "heatmap_args": args["accumulator"]["heatmapArgs"],
+                    "heatmap_reset_threshold": args["accumulator"]["heatmapResetThreshold"],
+                    "accumulator_background": args["accumulator"]["background"],
+                    "stack_composer": args["accumulator"]["stackComposer"],
+                    "initial_canvas": initial_canvas,
+                    "bitmap_mask_path": args["accumulator"]["bitmapMask"],
+                    "crumble": args["accumulator"]["crumble"],
+                    "bitmap_alteration_path": args["bitmapSource"]["alterationPath"],
                 })
             self.job.start()
+            self._broadcast(f"OUT http://{self.host}:{self.mjpeg_port}/transflow")
             return
         if cmd == "INTERRUPT":
             self.job_cancel_event.set()

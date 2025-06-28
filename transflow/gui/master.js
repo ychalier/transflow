@@ -20,11 +20,14 @@ var config = {
         maskPath: null,
         kernelPath: null,
         cvConfig: null,
+        flowFilters: null,
+        useMvs: false,
     },
     bitmapSource: {
         file: null,
         type: "file",
-        color: "#cff010"
+        color: "#cff010",
+        alterationPath: null,
     },
     accumulator: {
         method: "map",
@@ -33,6 +36,13 @@ var config = {
         resetMask: null,
         heatmapMode: "discrete",
         heatmapArgs: "0:4:2:1",
+        heatmapResetThreshold: null,
+        background: "#ffffff",
+        stackComposer: "top",
+        initialCanvasFile: null,
+        initialCanvasColor: "#ffffff",
+        bitmapMask: null,
+        crumble: false
     },
     output: {
         previewUrl: null
@@ -164,6 +174,14 @@ function inflatePaneFlowSource(container) {
         video.setAttribute("controls", 1);
     }
 
+    const inputUseMvsContainer = createInputContainer(container, "Use Motion Vectors");
+    const inputUseMvs = create(inputUseMvsContainer, "input");
+    inputUseMvs.type = "checkbox";
+    if (config.flowSource.useMvs) inputUseMvs.checked = true;
+    inputUseMvs.addEventListener("change", () => {
+        config.flowSource.useMvs = inputUseMvs.checked;
+    });
+
     const inputDirectionContainer = createInputContainer(container, "Direction");
     const directionSelect = create(inputDirectionContainer, "select");
     inflateSelect(directionSelect, [
@@ -191,6 +209,13 @@ function inflatePaneFlowSource(container) {
     if (config.flowSource.cvConfig != null) {
         create(inputCvConfigContainer, "span").textContent = getPathName(config.flowSource.cvConfig);
     }
+
+    const inputFiltersContainer = createInputContainer(container, "Filters");
+    const inputFilters = create(inputFiltersContainer, "input");
+    inputFilters.value = config.flowSource.flowFilters;
+    inputFilters.addEventListener("change", () => {
+        config.flowSource.flowFilters = inputFilters.value;
+    });
 
 }
 
@@ -266,6 +291,9 @@ function inflatePaneBitmapSource(container) {
     bitmapSelect.addEventListener("change", onBitmapSelectChange);
     onBitmapSelectChange();
 
+    const inputAlterationPathContainer = createInputContainer(container, "Alteration");
+    createFileInput(inputAlterationPathContainer, "bitmapSource.alterationPath", IMAGE_FILETYPES);
+
 }
 
 function inflatePaneAccumulator(container) {
@@ -288,58 +316,120 @@ function inflatePaneAccumulator(container) {
         onConfigChange(`config.accumulator.method`);
         accumulatorInputs.innerHTML = "";
 
-        const resetModeSelectContainer = createInputContainer(accumulatorInputs, "Reset Mode");
-        const resetModeSelect = create(resetModeSelectContainer, "select");
-        inflateSelect(resetModeSelect, [
-            {name: "off", label: "off"},
-            {name: "random", label: "random"},
-            {name: "linear", label: "linear"},
-        ], config.accumulator.resetMode);
-        resetModeSelect.addEventListener("change", () => {
-            config.accumulator.resetMode = getSelectedValue(resetModeSelect);
-        });
-
-        const resetAlphaContainer = createInputContainer(accumulatorInputs, "Reset Alpha");
-        const resetAlpha = create(resetAlphaContainer, "input");
-        resetAlpha.type = "range";
-        resetAlpha.min = 0;
-        resetAlpha.max = 1;
-        resetAlpha.step = 0.001;
-        resetAlpha.value = config.accumulator.resetAlpha;
-        const resetAlphaLabel = create(resetAlphaContainer, "span");
-        resetAlphaLabel.textContent = config.accumulator.resetAlpha.toFixed(3);
-        resetAlpha.addEventListener("input", () => {
-            config.accumulator.resetAlpha = parseFloat(resetAlpha.value);
-            resetAlphaLabel.textContent = config.accumulator.resetAlpha.toFixed(3);
-        });
-
-        const resetMaskContainer = createInputContainer(accumulatorInputs, "Reset Mask");
-        createFileInput(resetMaskContainer, "accumulator.resetMask", "*.jpg *.jpeg *.png");
-        if (config.accumulator.resetMask != null) {
-            create(resetMaskContainer, "span").textContent = getPathName(config.accumulator.resetMask);
+        if (config.accumulator.method == "stack" || config.accumulator.method == "crumble") {
+            const inputBackgroundContainer = createInputContainer(accumulatorInputs, "Background");
+            const inputBackground = create(inputBackgroundContainer, "input");
+            inputBackground.type = "color";
+            inputBackground.value = config.accumulator.background;
+            inputBackground.addEventListener("change", () => {
+                config.accumulator.background = inputBackground.value;
+            });
         }
 
-        const heatmapModeContainer = createInputContainer(accumulatorInputs, "Heatmap Mode");
-        const heatmapModeSelect = create(heatmapModeContainer, "select");
-        inflateSelect(heatmapModeSelect, [
-            {name: "discrete", label: "discrete"},
-            {name: "continuous", label: "continuous"},
-        ], config.accumulator.heatmapMode);
-        resetModeSelect.addEventListener("change", () => {
-            config.accumulator.heatmapMode = getSelectedValue(heatmapModeSelect);
-        });
+        if (config.accumulator.method == "stack") {
+            const selectStackComposerContainer = createInputContainer(accumulatorInputs, "Stack Composer");
+            const selectStackComposer = create(selectStackComposerContainer, "select");
+            inflateSelect(selectStackComposer, [
+                {name: "top", label: "top"},
+                {name: "add", label: "add"},
+                {name: "sub", label: "sub"},
+                {name: "avg", label: "avg"},
+            ], config.accumulator.stackComposer);
+            selectStackComposer.addEventListener("change", () => {
+                config.accumulator.stackComposer = getSelectedValue(selectStackComposer);
+            });
+        }
 
-        const heatmapArgsContainer = createInputContainer(accumulatorInputs, "Heatmap Args");
-        const heatmapArgs = create(heatmapArgsContainer, "input");
-        heatmapArgs.value = config.accumulator.heatmapArgs;
-        heatmapArgs.addEventListener("change", () => {
-            config.accumulator.heatmapArgs = heatmapArgs.value;
-        });
+        if (config.accumulator.method == "canvas") {
+
+            const inputInitialCanvasFileContainer = createInputContainer(accumulatorInputs, "Initial Canvas File");
+            createFileInput(inputInitialCanvasFileContainer, "accumulator.initialCanvasFile", IMAGE_FILETYPES);
+
+            const inputInitialCanvasColorContainer = createInputContainer(accumulatorInputs, "Initial Canvas Color");
+            const inputInitialCanvasColor = create(inputInitialCanvasColorContainer, "input");
+            inputInitialCanvasColor.type = "color";
+            inputInitialCanvasColor.value = config.accumulator.initialCanvasColor;
+            inputInitialCanvasColor.addEventListener("change", () => {
+                config.accumulator.initialCanvasColor = inputInitialCanvasColor.value;
+            });
+
+            const inputBitmapMaskContainer = createInputContainer(accumulatorInputs, "Bitmap Mask");
+            createFileInput(inputBitmapMaskContainer, "accumulator.bitmapMask", IMAGE_FILETYPES);
+
+            const inputCrumbleContainer = createInputContainer(accumulatorInputs, "Crumble");
+            const inputCrumble = create(inputCrumbleContainer, "input");
+            inputCrumble.type = "checkbox";
+            if (config.accumulator.crumble) inputCrumble.checked = true;
+            inputCrumble.addEventListener("change", () => {
+                config.accumulator.crumble = inputCrumble.checked;
+            });
+
+        }
 
     }
 
     methodSelect.addEventListener("change", onAccumulatorMethodChange);
     onAccumulatorMethodChange();
+
+    const resetModeSelectContainer = createInputContainer(container, "Reset Mode");
+    const resetModeSelect = create(resetModeSelectContainer, "select");
+    inflateSelect(resetModeSelect, [
+        {name: "off", label: "off"},
+        {name: "random", label: "random"},
+        {name: "linear", label: "linear"},
+    ], config.accumulator.resetMode);
+    resetModeSelect.addEventListener("change", () => {
+        config.accumulator.resetMode = getSelectedValue(resetModeSelect);
+    });
+
+    const resetAlphaContainer = createInputContainer(container, "Reset Alpha");
+    const resetAlpha = create(resetAlphaContainer, "input");
+    resetAlpha.type = "range";
+    resetAlpha.min = 0;
+    resetAlpha.max = 1;
+    resetAlpha.step = 0.001;
+    resetAlpha.value = config.accumulator.resetAlpha;
+    const resetAlphaLabel = create(resetAlphaContainer, "span");
+    resetAlphaLabel.textContent = config.accumulator.resetAlpha.toFixed(3);
+    resetAlpha.addEventListener("input", () => {
+        config.accumulator.resetAlpha = parseFloat(resetAlpha.value);
+        resetAlphaLabel.textContent = config.accumulator.resetAlpha.toFixed(3);
+    });
+
+    const resetMaskContainer = createInputContainer(container, "Reset Mask");
+    createFileInput(resetMaskContainer, "accumulator.resetMask", "*.jpg *.jpeg *.png");
+    if (config.accumulator.resetMask != null) {
+        create(resetMaskContainer, "span").textContent = getPathName(config.accumulator.resetMask);
+    }
+
+    const heatmapModeContainer = createInputContainer(container, "Heatmap Mode");
+    const heatmapModeSelect = create(heatmapModeContainer, "select");
+    inflateSelect(heatmapModeSelect, [
+        {name: "discrete", label: "discrete"},
+        {name: "continuous", label: "continuous"},
+    ], config.accumulator.heatmapMode);
+    resetModeSelect.addEventListener("change", () => {
+        config.accumulator.heatmapMode = getSelectedValue(heatmapModeSelect);
+    });
+
+    const heatmapArgsContainer = createInputContainer(container, "Heatmap Args");
+    const heatmapArgs = create(heatmapArgsContainer, "input");
+    heatmapArgs.value = config.accumulator.heatmapArgs;
+    heatmapArgs.addEventListener("change", () => {
+        config.accumulator.heatmapArgs = heatmapArgs.value;
+    });
+
+    const heatmapResetThresholdContainer = createInputContainer(container, "Heatmap Reset Threshold");
+    const heatmapResetThreshold = create(heatmapResetThresholdContainer, "input");
+    heatmapResetThreshold.value = config.accumulator.heatmapResetThreshold;
+    heatmapResetThreshold.addEventListener("change", () => {
+        const value = heatmapResetThreshold.value;
+        if (value.trim() == "") {
+            config.accumulator.heatmapResetThreshold = null;
+        } else {
+            config.accumulator.heatmapResetThreshold = parseFloat(value);
+        }
+    });
 }
 
 function inflateLeftPanel(container) {
