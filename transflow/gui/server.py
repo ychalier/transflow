@@ -51,7 +51,7 @@ class WebsocketServer(threading.Thread):
                 initialdir=(base_dir / ".." / ".." / "assets").as_posix(),
                 filetypes=[("Allowed types", args["filetypes"])])
             if filename != "":
-                self._broadcast(f"FILEIN {args['name']} {filename}")
+                self._broadcast(f"FILEIN {args['key']} {filename}")
             return
         if cmd == "GEN":
             from ..pipeline import transfer

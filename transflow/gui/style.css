@@ -131,6 +131,7 @@ body {
 img,
 video {
     max-width: 100%;
+    border: 1px solid black;
 }
 
 .header {

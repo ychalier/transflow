@@ -1,17 +1,5 @@
-function create(parent=null, tag="div", className=null) {
-    const element = document.createElement(tag);
-    if (parent != null) parent.appendChild(element);
-    if (className != null) element.className = className;
-    return element;
-}
-
-function getSelectedValue(select) {
-    for (const option of select.querySelectorAll("option")) {
-        if (option.selected) {
-            return option.value;
-        }
-    }
-}
+const VIDEO_FILETYPES = "*.mp4 *.avi *.mkv *.mov *.mpg";
+const IMAGE_FILETYPES = "*.jpg *.jpeg *.png";
 
 var config = {
     flowSource: {
@@ -47,7 +35,7 @@ var config = {
     output: {
         previewUrl: null
     }
-}
+};
 
 var leftPanelActiveTab = "Flow Source";
 var websocket;
@@ -56,17 +44,157 @@ var leftPanel;
 var rightPanel;
 var wssConnectionIndicator;
 
+function create(parent=null, tag="div", className=null) {
+    const element = document.createElement(tag);
+    if (parent != null) parent.appendChild(element);
+    if (className != null) element.className = className;
+    return element;
+}
+
+function getSelectedValue(select) {
+    for (const option of select.querySelectorAll("option")) {
+        if (option.selected) {
+            return option.value;
+        }
+    }
+}
+
+function getPathSuffix(path) {
+    const split = path.split(".");
+    return "." + split[split.length - 1];
+}
+
+function getPathName(path) {
+    const separator = path.includes("/") ? "/" : "\\";
+    const split = path.split(separator);
+    return split[split.length - 1];
+}
+
+function createInputContainer(container, label) {
+    const inputContainer = create(container, "div", "input-container");
+    create(inputContainer, "span").textContent = label;
+    return inputContainer;
+}
+
+function configGet(key) {
+    const split = key.split(".");
+    let o = config;
+    for (let i = 0; i < split.length - 1; i++) {
+        o = o[split[i]];
+    }
+    return o[split[split.length - 1]];
+}
+
+function configSet(key, value) {
+    const split = key.split(".");
+    let o = config;
+    for (let i = 0; i < split.length - 1; i++) {
+        o = o[split[i]];
+    }
+    const oldValue = o[split[split.length - 1]];
+    if (oldValue != value) {
+        o[split[split.length - 1]] = value;
+        onConfigChange(key);
+    }
+}
+
+function onConfigChange(key) {
+    console.log("Config changed", key, configGet(key));
+}
+
+function createFileInput(container, label, key, filetypes) {
+    const inputContainer = createInputContainer(container, label);
+    const input = create(inputContainer, "button");
+    input.textContent = "Select file";
+    input.addEventListener("click", () => {
+        const data = { key: key, filetypes: filetypes };
+        websocket.send(`FILEIN ${JSON.stringify(data)}`);
+    });
+    const fileUrl = configGet(key);
+    if (fileUrl != null) {
+        const ext = getPathSuffix(fileUrl);
+        if (VIDEO_FILETYPES.includes(ext)) {
+            const video = create(inputContainer, "video");
+            video.src = `/media?url=${fileUrl}`;
+            video.setAttribute("controls", 1);
+        } else if (IMAGE_FILETYPES.includes(ext)) {
+            const img = create(inputContainer, "img");
+            img.src = `/media?url=${fileUrl}`;
+        }
+        input.textContent = getPathName(fileUrl);
+    }
+}
+
+function createBoolInput(container, label, key) {
+    const inputContainer = createInputContainer(container, label);
+    const input = create(inputContainer, "input");
+    input.type = "checkbox";
+    if (configGet(key)) input.checked = true;
+    input.addEventListener("change", () => {
+        configSet(key, input.checked);
+    });
+}
+
+function inflateSelect(select, values, initialValue) {
+    select.innerHTML = "";
+    for (const value of values) {
+        const option = create(select, "option");
+        option.value = value;
+        option.textContent = value;
+        if (value == initialValue) option.selected = true;
+    }
+}
+
+function createSelect(container, label, key, values) {
+    const selectContainer = createInputContainer(container, label);
+    const select = create(selectContainer, "select");
+    inflateSelect(select, values, configGet(key));
+    select.addEventListener("change", () => {
+        configSet(key, getSelectedValue(select));
+    });
+    return select;
+}
+
+function createTextInput(container, label, key) {
+    const inputContainer = createInputContainer(container, label);
+    const input = create(inputContainer, "input");
+    input.value = configGet(key);
+    input.addEventListener("change", () => {
+        configSet(key, input.value);
+    });
+}
+
+function createColorInput(container, label, key) {
+    const inputContainer = createInputContainer(container, label);
+    const input = create(inputContainer, "input");
+    input.type = "color";
+    input.value = configGet(key);
+    input.addEventListener("change", () => {
+        if (input.value != undefined) configSet(key, input.value);
+    });
+}
+
+function createRangeInput(container, label, key, min=0, max=1, decimals=3) {
+    const inputContainer = createInputContainer(container, label);
+    const input = create(inputContainer, "input");
+    input.type = "range";
+    input.min = min;
+    input.max = max;
+    input.step = 1 / Math.pow(10, decimals);
+    input.value = configGet(key);
+    const valueLabel = create(inputContainer, "span");
+    valueLabel.textContent = configGet(key).toFixed(decimals);
+    input.addEventListener("input", () => {
+        valueLabel.textContent = parseFloat(input.value).toFixed(decimals);
+    });
+    input.addEventListener("change", () => {
+        configSet(key, parseFloat(input.value));
+    });
+}
+
 function setWssConnectionIndicator(state) {
     if (wssConnectionIndicator == undefined) return;
     wssConnectionIndicator.textContent = state;
-}
-
-function configSet(keys, value) {
-    let o = config;
-    for (let i = 0; i < keys.length - 1; i++) {
-        o = o[keys[i]];
-    }
-    o[keys[keys.length - 1]] = value;
 }
 
 function connectWebsocket(wssUrl) {
@@ -81,15 +209,13 @@ function connectWebsocket(wssUrl) {
         console.log(message);
         if (message.data.startsWith("FILEIN ")) {
             const query = message.data.slice(7);
-            let [inputName, fileUrl] = query.split(" ", 2);
+            let [key, fileUrl] = query.split(" ", 2);
             if (fileUrl == "") fileUrl = null;
-            const configKeys = inputName.split(".");
-            configSet(configKeys, fileUrl);
-            onConfigChange(`config.${inputName}`);
+            configSet(key, fileUrl);
             inflateLeftPanel(leftPanel);
         } else if (message.data.startsWith("OUT")) {
             config.output.previewUrl = message.data.slice(4);
-            onConfigChange(`config.output.previewUrl`);
+            onConfigChange("output.previewUrl");
             inflateRightPanel(rightPanel);
         }
         websocket.send("PONG");
@@ -121,159 +247,35 @@ function openWssConnection() {
     });
 }
 
-function onConfigChange(paramName) {
-    console.log("Config changed", paramName);
-}
-
 function inflateHeader(container) {
     container.innerHTML = "";
     create(container).textContent = "transflow";
 }
 
-function createFileInput(container, inputName, fileTypes) {
-    const input = create(container, "button");
-    input.textContent = "Select file";
-    input.addEventListener("click", () => {
-        const data = {
-            name: inputName,
-            filetypes: fileTypes,
-        }
-        websocket.send(`FILEIN ${JSON.stringify(data)}`);
-    });
-}
-
-const VIDEO_FILETYPES = "*.mp4 *.avi *.mkv *.mov *.mpg";
-const IMAGE_FILETYPES = "*.jpg *.jpeg *.png *.webp *.gif";
-
-
-function getPathSuffix(path) {
-    const split = path.split(".");
-    return "." + split[split.length - 1];
-}
-
-function getPathName(path) {
-    const separator = path.includes("/") ? "/" : "\\";
-    const split = path.split(separator);
-    return split[split.length - 1];
-}
-
-function createInputContainer(container, label) {
-    const inputContainer = create(container, "div", "input-container");
-    create(inputContainer, "span").textContent = label;
-    return inputContainer;
-}
-
 function inflatePaneFlowSource(container) {
     container.innerHTML = "";
-
-    const inputFileContainer = createInputContainer(container, "File");
-    createFileInput(inputFileContainer, "flowSource.file", VIDEO_FILETYPES);
-    if (config.flowSource.file != null) {
-        const video = create(inputFileContainer, "video");
-        video.src = `/media?url=${config.flowSource.file}`;
-        video.setAttribute("controls", 1);
-    }
-
-    const inputUseMvsContainer = createInputContainer(container, "Use Motion Vectors");
-    const inputUseMvs = create(inputUseMvsContainer, "input");
-    inputUseMvs.type = "checkbox";
-    if (config.flowSource.useMvs) inputUseMvs.checked = true;
-    inputUseMvs.addEventListener("change", () => {
-        config.flowSource.useMvs = inputUseMvs.checked;
-    });
-
-    const inputDirectionContainer = createInputContainer(container, "Direction");
-    const directionSelect = create(inputDirectionContainer, "select");
-    inflateSelect(directionSelect, [
-        {name: "backward", label: "backward"},
-        {name: "forward", label: "forward"},
-    ], config.flowSource.direction);
-    directionSelect.addEventListener("change", () => {
-        config.flowSource.direction = getSelectedValue(directionSelect);
-    });
-
-    const inputMaskContainer = createInputContainer(container, "Mask");
-    createFileInput(inputMaskContainer, "flowSource.maskPath", IMAGE_FILETYPES);
-    if (config.flowSource.maskPath != null) {
-        create(inputMaskContainer, "span").textContent = getPathName(config.flowSource.maskPath);
-    }
-
-    const inputKernelContainer = createInputContainer(container, "Kernel");
-    createFileInput(inputKernelContainer, "flowSource.kernelPath", "*.npy");
-    if (config.flowSource.kernelPath != null) {
-        create(inputKernelContainer, "span").textContent = getPathName(config.flowSource.kernelPath);
-    }
-
-    const inputCvConfigContainer = createInputContainer(container, "CV Config");
-    createFileInput(inputCvConfigContainer, "flowSource.cvConfig", "*.json");
-    if (config.flowSource.cvConfig != null) {
-        create(inputCvConfigContainer, "span").textContent = getPathName(config.flowSource.cvConfig);
-    }
-
-    const inputFiltersContainer = createInputContainer(container, "Filters");
-    const inputFilters = create(inputFiltersContainer, "input");
-    inputFilters.value = config.flowSource.flowFilters;
-    inputFilters.addEventListener("change", () => {
-        config.flowSource.flowFilters = inputFilters.value;
-    });
-
-}
-
-function inflateSelect(select, options, initialValue) {
-    select.innerHTML = "";
-    for (const op of options) {
-        const option = create(select, "option");
-        option.value = op.name;
-        option.textContent = op.label;
-        if (option.value == initialValue) option.selected = true;
-    }
+    createFileInput(container, "File", "flowSource.file", VIDEO_FILETYPES);
+    createBoolInput(container, "Use Motion Vectors", "flowSource.useMvs");
+    createSelect(container, "Direction", "flowSource.direction", ["backward", "forward"]);
+    createFileInput(container, "Mask", "flowSource.maskPath", IMAGE_FILETYPES);
+    createFileInput(container, "Kernel", "flowSource.kernelPath", "*.npy");
+    createFileInput(container, "CV Config", "flowSource.cvConfig", "*.json");
+    createTextInput(container, "Filters", "flowSource.flowFilters");
 }
 
 function inflatePaneBitmapSource(container) {
     container.innerHTML = "";
-
-    const inputTypeContainer = createInputContainer(container, "Type");
-    const bitmapSelect = create(inputTypeContainer, "select");
-    inflateSelect(bitmapSelect, [
-        {name: "file", label: "file"},
-        {name: "color", label: "color"},
-        {name: "noise", label: "grey noise"},
-        {name: "bwnoise", label: "b&w noise"},
-        {name: "cnoise", label: "colored noise"},
-        {name: "gradient", label: "gradient"},
-        {name: "first", label: "first frame"},
-    ], config.bitmapSource.type);
-
+    const bitmapSelect = createSelect(container, "Type", "bitmapSource.type", ["file", "color", "noise", "bwnoise", "cnoise", "gradient", "first"]);
     const bitmapInputs = create(container, "div", "input-container");
     function onBitmapSelectChange() {
         const value = getSelectedValue(bitmapSelect);
-        config.bitmapSource.type = value;
         bitmapInputs.innerHTML = "";
         switch(value) {
             case "file":
-                const inputFileContainer = createInputContainer(bitmapInputs, "File");
-                createFileInput(inputFileContainer, "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
-                if (config.bitmapSource.file != null) {
-                    if (VIDEO_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
-                        const video = create(inputFileContainer, "video");
-                        video.src = `/media?url=${config.bitmapSource.file}`;
-                        video.setAttribute("controls", 1);
-                    } else if (IMAGE_FILETYPES.includes(getPathSuffix(config.bitmapSource.file))) {
-                        const image = create(inputFileContainer, "img");
-                        image.src = `/media?url=${config.bitmapSource.file}`;
-                    }
-                }
+                createFileInput(bitmapInputs, "File", "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
                 break;
             case "color":
-                const inputColorContainer = createInputContainer(bitmapInputs, "Color");
-                const colorInput = create(bitmapInputs, "input");
-                colorInput.type = "color";
-                if (config.bitmapSource.color != undefined) {
-                    colorInput.value = config.bitmapSource.color;
-                }
-                colorInput.addEventListener("change", () => {
-                    config.bitmapSource.color = colorInput.value;
-                });
+                createColorInput(bitmapInputs, "Color", "bitmapSource.color");
                 break;
             case "noise":
             case "bwnoise":
@@ -287,149 +289,37 @@ function inflatePaneBitmapSource(container) {
                 break;
         }
     }
-
     bitmapSelect.addEventListener("change", onBitmapSelectChange);
     onBitmapSelectChange();
-
-    const inputAlterationPathContainer = createInputContainer(container, "Alteration");
-    createFileInput(inputAlterationPathContainer, "bitmapSource.alterationPath", IMAGE_FILETYPES);
-
+    createFileInput(container, "Alteration", "bitmapSource.alterationPath", "*.png");
 }
 
 function inflatePaneAccumulator(container) {
     container.innerHTML = "";
-
-    const inputMethodContainer = createInputContainer(container, "Method");
-    const methodSelect = create(inputMethodContainer, "select");
-    inflateSelect(methodSelect, [
-        {name: "map", label: "map"},
-        {name: "stack", label: "stack"},
-        {name: "sum", label: "sum"},
-        {name: "crumble", label: "crumble"},
-        {name: "canvas", label: "canvas"},
-    ], config.accumulator.method);
-
+    const methodSelect = createSelect(container, "Method", "accumulator.method", ["map", "stack", "sum", "crumble", "canvas"]);
     const accumulatorInputs = create(container, "div", "input-container");
     function onAccumulatorMethodChange() {
         const value = getSelectedValue(methodSelect);
-        config.accumulator.method = value;
-        onConfigChange(`config.accumulator.method`);
         accumulatorInputs.innerHTML = "";
-
-        if (config.accumulator.method == "stack" || config.accumulator.method == "crumble") {
-            const inputBackgroundContainer = createInputContainer(accumulatorInputs, "Background");
-            const inputBackground = create(inputBackgroundContainer, "input");
-            inputBackground.type = "color";
-            inputBackground.value = config.accumulator.background;
-            inputBackground.addEventListener("change", () => {
-                config.accumulator.background = inputBackground.value;
-            });
+        if (value == "stack" || value == "crumble") {
+            createColorInput(accumulatorInputs, "Background", "accumulator.background");
+        } else if (value == "stack") {
+            createSelect(accumulatorInputs, "Stack Composer", "accumulator.stackComposer", ["top", "add", "sub", "avg"]);
+        } else if (value == "canvas") {
+            createFileInput(accumulatorInputs, "Initial Canvas File", "accumulator.initialCanvasFile", IMAGE_FILETYPES);
+            createColorInput(accumulatorInputs, "Initial Canvas Color", "accumulator.initialCanvasColor");
+            createFileInput(accumulatorInputs, "Bitmap Mask", "accumulator.bitmapMask", IMAGE_FILETYPES);
+            createBoolInput(accumulatorInputs, "Crumble", "accumulator.crumble");
         }
-
-        if (config.accumulator.method == "stack") {
-            const selectStackComposerContainer = createInputContainer(accumulatorInputs, "Stack Composer");
-            const selectStackComposer = create(selectStackComposerContainer, "select");
-            inflateSelect(selectStackComposer, [
-                {name: "top", label: "top"},
-                {name: "add", label: "add"},
-                {name: "sub", label: "sub"},
-                {name: "avg", label: "avg"},
-            ], config.accumulator.stackComposer);
-            selectStackComposer.addEventListener("change", () => {
-                config.accumulator.stackComposer = getSelectedValue(selectStackComposer);
-            });
-        }
-
-        if (config.accumulator.method == "canvas") {
-
-            const inputInitialCanvasFileContainer = createInputContainer(accumulatorInputs, "Initial Canvas File");
-            createFileInput(inputInitialCanvasFileContainer, "accumulator.initialCanvasFile", IMAGE_FILETYPES);
-
-            const inputInitialCanvasColorContainer = createInputContainer(accumulatorInputs, "Initial Canvas Color");
-            const inputInitialCanvasColor = create(inputInitialCanvasColorContainer, "input");
-            inputInitialCanvasColor.type = "color";
-            inputInitialCanvasColor.value = config.accumulator.initialCanvasColor;
-            inputInitialCanvasColor.addEventListener("change", () => {
-                config.accumulator.initialCanvasColor = inputInitialCanvasColor.value;
-            });
-
-            const inputBitmapMaskContainer = createInputContainer(accumulatorInputs, "Bitmap Mask");
-            createFileInput(inputBitmapMaskContainer, "accumulator.bitmapMask", IMAGE_FILETYPES);
-
-            const inputCrumbleContainer = createInputContainer(accumulatorInputs, "Crumble");
-            const inputCrumble = create(inputCrumbleContainer, "input");
-            inputCrumble.type = "checkbox";
-            if (config.accumulator.crumble) inputCrumble.checked = true;
-            inputCrumble.addEventListener("change", () => {
-                config.accumulator.crumble = inputCrumble.checked;
-            });
-
-        }
-
     }
-
     methodSelect.addEventListener("change", onAccumulatorMethodChange);
     onAccumulatorMethodChange();
-
-    const resetModeSelectContainer = createInputContainer(container, "Reset Mode");
-    const resetModeSelect = create(resetModeSelectContainer, "select");
-    inflateSelect(resetModeSelect, [
-        {name: "off", label: "off"},
-        {name: "random", label: "random"},
-        {name: "linear", label: "linear"},
-    ], config.accumulator.resetMode);
-    resetModeSelect.addEventListener("change", () => {
-        config.accumulator.resetMode = getSelectedValue(resetModeSelect);
-    });
-
-    const resetAlphaContainer = createInputContainer(container, "Reset Alpha");
-    const resetAlpha = create(resetAlphaContainer, "input");
-    resetAlpha.type = "range";
-    resetAlpha.min = 0;
-    resetAlpha.max = 1;
-    resetAlpha.step = 0.001;
-    resetAlpha.value = config.accumulator.resetAlpha;
-    const resetAlphaLabel = create(resetAlphaContainer, "span");
-    resetAlphaLabel.textContent = config.accumulator.resetAlpha.toFixed(3);
-    resetAlpha.addEventListener("input", () => {
-        config.accumulator.resetAlpha = parseFloat(resetAlpha.value);
-        resetAlphaLabel.textContent = config.accumulator.resetAlpha.toFixed(3);
-    });
-
-    const resetMaskContainer = createInputContainer(container, "Reset Mask");
-    createFileInput(resetMaskContainer, "accumulator.resetMask", "*.jpg *.jpeg *.png");
-    if (config.accumulator.resetMask != null) {
-        create(resetMaskContainer, "span").textContent = getPathName(config.accumulator.resetMask);
-    }
-
-    const heatmapModeContainer = createInputContainer(container, "Heatmap Mode");
-    const heatmapModeSelect = create(heatmapModeContainer, "select");
-    inflateSelect(heatmapModeSelect, [
-        {name: "discrete", label: "discrete"},
-        {name: "continuous", label: "continuous"},
-    ], config.accumulator.heatmapMode);
-    resetModeSelect.addEventListener("change", () => {
-        config.accumulator.heatmapMode = getSelectedValue(heatmapModeSelect);
-    });
-
-    const heatmapArgsContainer = createInputContainer(container, "Heatmap Args");
-    const heatmapArgs = create(heatmapArgsContainer, "input");
-    heatmapArgs.value = config.accumulator.heatmapArgs;
-    heatmapArgs.addEventListener("change", () => {
-        config.accumulator.heatmapArgs = heatmapArgs.value;
-    });
-
-    const heatmapResetThresholdContainer = createInputContainer(container, "Heatmap Reset Threshold");
-    const heatmapResetThreshold = create(heatmapResetThresholdContainer, "input");
-    heatmapResetThreshold.value = config.accumulator.heatmapResetThreshold;
-    heatmapResetThreshold.addEventListener("change", () => {
-        const value = heatmapResetThreshold.value;
-        if (value.trim() == "") {
-            config.accumulator.heatmapResetThreshold = null;
-        } else {
-            config.accumulator.heatmapResetThreshold = parseFloat(value);
-        }
-    });
+    createSelect(container, "Reset Mode", "accumulator.resetMode", ["off", "random", "linear"]);
+    createRangeInput(container, "Reset Alpha", "accumulator.resetAlpha");
+    createFileInput(container, "Reset Mask", "accumulator.resetMask", "*.jpg *.jpeg *.png");
+    createSelect(container, "Heatmap Mode", "accumulator.heatmapMode", ["discrete", "continuous"]);
+    createTextInput(container, "Heatmap Args", "accumulator.heatmapArgs");
+    createTextInput(container, "Heatmap Reset Threshold", "accumulator.heatmapResetThreshold"); // TODO: maybe set to null if empty or parseFloat
 }
 
 function inflateLeftPanel(container) {
