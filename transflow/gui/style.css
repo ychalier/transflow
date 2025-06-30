@@ -198,3 +198,8 @@ video {
 .input-container button {
     width: fit-content;
 }
+
+.input-buttons {
+    display: flex;
+    gap: .2rem;
+}

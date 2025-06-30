@@ -116,7 +116,8 @@ function onConfigChange(key) {
 
 function createFileOpenInput(container, label, key, filetypes) {
     const inputContainer = createInputContainer(container, label);
-    const input = create(inputContainer, "button");
+    const inputButtons = create(inputContainer, "div", "input-buttons");
+    const input = create(inputButtons, "button");
     input.textContent = "Select file";
     input.addEventListener("click", () => {
         const data = { key: key, filetypes: filetypes };
@@ -134,12 +135,19 @@ function createFileOpenInput(container, label, key, filetypes) {
             img.src = `/media?url=${fileUrl}`;
         }
         input.textContent = getPathName(fileUrl);
+        const buttonClear = create(inputButtons, "button");
+        buttonClear.textContent = "Clear";
+        buttonClear.addEventListener("click", () => {
+            configSet(key, null);
+            inflateLeftPanel(leftPanel);
+        });
     }
 }
 
 function createFileSaveInput(container, label, key, defaultextension, filetypes) {
     const inputContainer = createInputContainer(container, label);
-    const input = create(inputContainer, "button");
+    const inputButtons = create(inputContainer, "div", "input-buttons");
+    const input = create(inputButtons, "button");
     input.textContent = "Select file";
     input.addEventListener("click", () => {
         const data = { key: key, defaultextension: defaultextension , filetypes: filetypes};
@@ -148,6 +156,12 @@ function createFileSaveInput(container, label, key, defaultextension, filetypes)
     const fileUrl = configGet(key);
     if (fileUrl != null) {
         input.textContent = getPathName(fileUrl);
+        const buttonClear = create(inputButtons, "button");
+        buttonClear.textContent = "Clear";
+        buttonClear.addEventListener("click", () => {
+            configSet(key, null);
+            inflateLeftPanel(leftPanel);
+        });
     }
 }
 
