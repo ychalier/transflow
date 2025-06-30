@@ -154,7 +154,7 @@ def get_expected_length(fs_length: int | None, bs_length: int | None, cursor: in
 def transfer(
         flow_path: str,
         bitmap_path: str | None,
-        output_path: str | None,
+        output_path: str | list[str] | None,
         extra_flow_paths: list[str] | None,
         flows_merging_function: str = "first",
         use_mvs: bool = False,
@@ -424,7 +424,12 @@ def transfer(
                 replace,
                 safe
             )
-            output_paths = [output_path]
+            if isinstance(output_path, list) and not output_path:
+                output_path = None
+            if output_path is None or isinstance(output_path, str):
+                output_paths = [output_path]
+            else:
+                output_paths = output_path
             if output_path is not None and preview_output:
                 output_paths.append(None)
             for path in output_paths:

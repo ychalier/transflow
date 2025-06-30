@@ -29,7 +29,7 @@ def main():
             "still image generator (color, noise, bwnoise, cnoise, gradient, first); "\
             "if None, the input flow will be preprocessed")
     parser.add_argument("-o", "--output",
-        type=str, default=None,
+        type=str, action="append",
         help="output path: if provided, path to export the output video (as "\
             "an MP4 file) ; otherwise, opens a temporary display window")
     parser.add_argument("-ba", "--bitmap-alteration",
