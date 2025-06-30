@@ -175,6 +175,11 @@ video {
     border-top: 1px solid black;
 }
 
+.pane-shrink {
+    height: fit-content;
+    flex-shrink: 0;
+}
+
 .tabsbar {
     display: flex;
     border-bottom: 1px solid black;

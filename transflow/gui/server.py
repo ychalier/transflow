@@ -68,8 +68,11 @@ class WebsocketServer(threading.Thread):
                 self._broadcast(f"FILE {args['key']} {filename}")
         elif cmd == "GENERATE":
             from ..pipeline import transfer
+            from ..utils import parse_timestamp
             print("Job args:")
             print(args)
+            seek_time = parse_timestamp(args["flowSource"]["seekTime"]) if args["flowSource"]["seekTime"] is not None else 0
+            duration_time = parse_timestamp(args["flowSource"]["durationTime"])
             bitmap_path = None
             if args["bitmapSource"]["type"] == "file":
                 bitmap_path = args["bitmapSource"]["file"]
@@ -99,6 +102,7 @@ class WebsocketServer(threading.Thread):
                     "replace": False,
                     "cancel_event": self.job_cancel_event,
                     "safe": True,
+                    "seed": args["seed"],
                     "use_mvs": args["flowSource"]["useMvs"],
                     "direction": args["flowSource"]["direction"],
                     "acc_method": args["accumulator"]["method"],
@@ -129,7 +133,15 @@ class WebsocketServer(threading.Thread):
                     "render_colors": args["output"]["renderColors"],
                     "render_binary": args["output"]["renderBinary"],
                     "checkpoint_every": args["output"]["checkpointEvery"],
-                    "checkpoint_end": args["output"]["checkpointEnd"]
+                    "checkpoint_end": args["output"]["checkpointEnd"],
+                    "seek_time": seek_time,
+                    "duration_time": duration_time,
+                    "repeat": args["flowSource"]["repeat"],
+                    "bitmap_seek_time": parse_timestamp(args["bitmapSource"]["seekTime"]),
+                    "bitmap_repeat": args["bitmapSource"]["repeat"],
+                    "bitmap_introduction_flags": args["accumulator"]["bitmapIntroductionFlags"],
+                    "lock_mode": args["flowSource"]["lockMode"],
+                    "lock_expr": args["flowSource"]["lockExpr"],
                 })
             self.job.start()
             self._broadcast(f"OUT http://{self.host}:{self.mjpeg_port}/transflow")

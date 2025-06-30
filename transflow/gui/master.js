@@ -2,6 +2,8 @@ const VIDEO_FILETYPES = "*.mp4 *.avi *.mkv *.mov *.mpg";
 const IMAGE_FILETYPES = "*.jpg *.jpeg *.png";
 
 var config = {
+    seed: Math.floor(Math.random() * (Math.pow(2, 31) - 1)),
+    previewUrl: null,
     flowSource: {
         file: null,
         direction: "backward",
@@ -12,12 +14,19 @@ var config = {
         useMvs: false,
         roundFlow: false,
         exportFlow: false,
+        seekTime: null,
+        durationTime: null,
+        repeat: 1,
+        lockMode: "stay",
+        lockExpr: null,
     },
     bitmapSource: {
         file: null,
         type: "file",
         color: "#cff010",
         alterationPath: null,
+        seekTime: null,
+        repeat: 1,
     },
     accumulator: {
         method: "map",
@@ -32,10 +41,10 @@ var config = {
         initialCanvasFile: null,
         initialCanvasColor: "#ffffff",
         bitmapMask: null,
-        crumble: false
+        crumble: false,
+        bitmapIntroductionFlags: 1,
     },
     output: {
-        previewUrl: null,
         file: null,
         outputIntensity: false,
         outputHeatmap: false,
@@ -203,9 +212,13 @@ function createTextInput(container, label, key) {
     const input = create(inputContainer, "input");
     input.value = configGet(key);
     input.addEventListener("change", () => {
-        configSet(key, input.value);
+        let value = input.value.trim();
+        if (value == "") value = null;
+        configSet(key, value);
     });
 }
+
+const createTimestampInput = createTextInput; //TODO: custom input
 
 function createColorInput(container, label, key) {
     const inputContainer = createInputContainer(container, label);
@@ -244,8 +257,11 @@ function createNumberInput(container, label, key, min=null, max=null, step=1) {
     input.step = step;
     input.value = configGet(key);
     input.addEventListener("change", () => {
-        configSet(key, parseFloat(input.value));
+        let value = input.value;
+        value = value == "" ? null : parseFloat(value);
+        configSet(key, value);
     });
+    return input;
 }
 
 function setWssConnectionIndicator(state) {
@@ -270,8 +286,8 @@ function connectWebsocket(wssUrl) {
             configSet(key, fileUrl);
             inflateLeftPanel(leftPanel);
         } else if (message.data.startsWith("OUT")) {
-            config.output.previewUrl = message.data.slice(4);
-            onConfigChange("output.previewUrl");
+            config.previewUrl = message.data.slice(4);
+            onConfigChange("previewUrl");
             inflateRightPanel(rightPanel);
         }
         websocket.send("PONG");
@@ -319,6 +335,11 @@ function inflatePaneFlowSource(container) {
     createTextInput(container, "Filters", "flowSource.flowFilters");
     createBoolInput(container, "Round Flow", "flowSource.roundFlow");
     createBoolInput(container, "Export Flow", "flowSource.exportFlow");
+    createTimestampInput(container, "Seek Time", "flowSource.seekTime");
+    createTimestampInput(container, "Duration Time", "flowSource.durationTime");
+    createNumberInput(container, "Repeat", "flowSource.repeat", 0, null, 1);
+    createSelect(container, "Lock Mode", "flowSource.lockMode", ["stay", "skip"]);
+    createTextInput(container, "Lock Expression", "flowSource.lockExpr");
 }
 
 function inflatePaneBitmapSource(container) {
@@ -337,6 +358,8 @@ function inflatePaneBitmapSource(container) {
     bitmapSelect.addEventListener("change", onBitmapSelectChange);
     onBitmapSelectChange();
     createFileOpenInput(container, "Alteration", "bitmapSource.alterationPath", "*.png");
+    createTimestampInput(container, "Seek Time", "bitmapSource.seekTime");
+    createNumberInput(container, "Repeat", "bitmapSource.repeat", 0, null, 1);
 }
 
 function inflatePaneAccumulator(container) {
@@ -354,6 +377,7 @@ function inflatePaneAccumulator(container) {
             createFileOpenInput(accumulatorInputs, "Initial Canvas File", "accumulator.initialCanvasFile", IMAGE_FILETYPES);
             createColorInput(accumulatorInputs, "Initial Canvas Color", "accumulator.initialCanvasColor");
             createFileOpenInput(accumulatorInputs, "Bitmap Mask", "accumulator.bitmapMask", IMAGE_FILETYPES);
+            createNumberInput(accumulatorInputs, "Bitmap Introduction Flags", "accumulator.bitmapIntroductionFlags", 0, null, 1);
             createBoolInput(accumulatorInputs, "Crumble", "accumulator.crumble");
         }
     }
@@ -395,32 +419,43 @@ function inflateLeftPanel(container) {
             inflateLeftPanel(container);
         });
     }
-    const pane = create(container, "div", "pane");
+    const paneMain = create(container, "div", "pane");
     switch (leftPanelActiveTab) {
         case "Flow Source":
-            inflatePaneFlowSource(pane);
+            inflatePaneFlowSource(paneMain);
             break;
         case "Bitmap Source":
-            inflatePaneBitmapSource(pane);
+            inflatePaneBitmapSource(paneMain);
             break;
         case "Accumulator":
-            inflatePaneAccumulator(pane);
+            inflatePaneAccumulator(paneMain);
             break;
         case "Output":
-            inflatePaneOutput(pane);
+            inflatePaneOutput(paneMain);
             break;
     }
+    const paneFooter = create(container, "div", "pane pane-shrink");
+    const seedInput = createNumberInput(paneFooter, "Seed", "seed", 0, 2147483647, 1);
+    const seedInputContainer = seedInput.parentElement;
+    const seedRandomButton = create(seedInputContainer, "button");
+    seedRandomButton.textContent = "Random";
+    seedRandomButton.addEventListener("click", () => {
+        const value = Math.floor(Math.random() * Math.pow(2, 31) - 1);
+        configSet("seed", value);
+        seedInput.value = value;
+    });
 }
 
 function inflateRightPanel(container) {
     container.innerHTML = "";
     const pane = create(container, "div", "pane");
 
-    if (config.output.previewUrl != null) {
-        const img = create(pane, "img");
-        img.src = config.output.previewUrl;
+    if (config.previewUrl != null) {
+        const imgContainer = create(pane, "div");
+        const img = create(imgContainer, "img");
+        img.src = config.previewUrl;
         img.addEventListener("error", () => {
-            img.src = config.output.previewUrl + "?t=" + new Date().getTime();
+            img.src = config.previewUrl + "?t=" + new Date().getTime();
         });
     }
 
