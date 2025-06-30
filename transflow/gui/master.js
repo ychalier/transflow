@@ -84,7 +84,7 @@ function getPathName(path) {
 
 function createInputContainer(container, label) {
     const inputContainer = create(container, "div", "input-container");
-    create(inputContainer, "span").textContent = label;
+    create(inputContainer, "label").textContent = label;
     return inputContainer;
 }
 
@@ -167,8 +167,11 @@ function createFileSaveInput(container, label, key, defaultextension, filetypes)
 
 function createBoolInput(container, label, key) {
     const inputContainer = createInputContainer(container, label);
+    inputContainer.classList.add("input-container-bool");
     const input = create(inputContainer, "input");
     input.type = "checkbox";
+    input.id = `input-${key}`;
+    inputContainer.querySelector("label").setAttribute("for", `input-${key}`);
     if (configGet(key)) input.checked = true;
     input.addEventListener("change", () => {
         configSet(key, input.checked);
@@ -264,7 +267,6 @@ function connectWebsocket(wssUrl) {
             const query = message.data.slice(5);
             let [key, fileUrl] = query.split(" ", 2);
             if (fileUrl == "") fileUrl = null;
-            console.log("DEBUG", key, fileUrl);
             configSet(key, fileUrl);
             inflateLeftPanel(leftPanel);
         } else if (message.data.startsWith("OUT")) {
@@ -412,25 +414,22 @@ function inflateLeftPanel(container) {
 
 function inflateRightPanel(container) {
     container.innerHTML = "";
+    const pane = create(container, "div", "pane");
 
-    const panePreview = create(container, "div", "pane");
-    panePreview.setAttribute("id", "pane-preview");
     if (config.output.previewUrl != null) {
-        const img = create(panePreview, "img");
+        const img = create(pane, "img");
         img.src = config.output.previewUrl;
         img.addEventListener("error", () => {
             img.src = config.output.previewUrl + "?t=" + new Date().getTime();
         });
     }
 
-    const paneGenerate = create(container, "div", "pane");
-    paneGenerate.setAttribute("id", "pane-generate");
-    const buttonGenerate = create(paneGenerate, "button");
+    const buttonGenerate = create(pane, "button");
     buttonGenerate.textContent = "Generate";
     buttonGenerate.addEventListener("click", () => {
         websocket.send(`GENERATE ${JSON.stringify(config)}`);
     });
-    const buttonInterrupt = create(paneGenerate, "button");
+    const buttonInterrupt = create(pane, "button");
     buttonInterrupt.textContent = "Interrupt";
     buttonInterrupt.addEventListener("click", () => {
         websocket.send("INTERRUPT");
@@ -459,7 +458,7 @@ function inflate() {
     inflateHeader(header);
     const body = create(document.body, "div", "body");
     inflateBody(body);
-    const footer = create(document.body, "div");
+    const footer = create(document.body, "div", "footer");
     inflateFooter(footer);
 }
 
