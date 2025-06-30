@@ -10,6 +10,8 @@ var config = {
         cvConfig: null,
         flowFilters: null,
         useMvs: false,
+        roundFlow: false,
+        exportFlow: false,
     },
     bitmapSource: {
         file: null,
@@ -33,7 +35,17 @@ var config = {
         crumble: false
     },
     output: {
-        previewUrl: null
+        previewUrl: null,
+        file: null,
+        outputIntensity: false,
+        outputHeatmap: false,
+        outputAccumulator: false,
+        renderScale: 0.1,
+        renderColors: null,
+        renderBinary: false,
+        checkpointEvery: null,
+        checkpointEnd: false,
+        vcodec: "h264",
     }
 };
 
@@ -102,13 +114,13 @@ function onConfigChange(key) {
     console.log("Config changed", key, configGet(key));
 }
 
-function createFileInput(container, label, key, filetypes) {
+function createFileOpenInput(container, label, key, filetypes) {
     const inputContainer = createInputContainer(container, label);
     const input = create(inputContainer, "button");
     input.textContent = "Select file";
     input.addEventListener("click", () => {
         const data = { key: key, filetypes: filetypes };
-        websocket.send(`FILEIN ${JSON.stringify(data)}`);
+        websocket.send(`FILE_OPEN ${JSON.stringify(data)}`);
     });
     const fileUrl = configGet(key);
     if (fileUrl != null) {
@@ -121,6 +133,20 @@ function createFileInput(container, label, key, filetypes) {
             const img = create(inputContainer, "img");
             img.src = `/media?url=${fileUrl}`;
         }
+        input.textContent = getPathName(fileUrl);
+    }
+}
+
+function createFileSaveInput(container, label, key, defaultextension, filetypes) {
+    const inputContainer = createInputContainer(container, label);
+    const input = create(inputContainer, "button");
+    input.textContent = "Select file";
+    input.addEventListener("click", () => {
+        const data = { key: key, defaultextension: defaultextension , filetypes: filetypes};
+        websocket.send(`FILE_SAVE ${JSON.stringify(data)}`);
+    });
+    const fileUrl = configGet(key);
+    if (fileUrl != null) {
         input.textContent = getPathName(fileUrl);
     }
 }
@@ -192,6 +218,19 @@ function createRangeInput(container, label, key, min=0, max=1, decimals=3) {
     });
 }
 
+function createNumberInput(container, label, key, min=null, max=null, step=1) {
+    const inputContainer = createInputContainer(container, label);
+    const input = create(inputContainer, "input");
+    input.type = "number";
+    if (min != null) input.min = min;
+    if (max != null) input.max = max;
+    input.step = step;
+    input.value = configGet(key);
+    input.addEventListener("change", () => {
+        configSet(key, parseFloat(input.value));
+    });
+}
+
 function setWssConnectionIndicator(state) {
     if (wssConnectionIndicator == undefined) return;
     wssConnectionIndicator.textContent = state;
@@ -207,10 +246,11 @@ function connectWebsocket(wssUrl) {
     }
     websocket.onmessage = (message) => {
         console.log(message);
-        if (message.data.startsWith("FILEIN ")) {
-            const query = message.data.slice(7);
+        if (message.data.startsWith("FILE ")) {
+            const query = message.data.slice(5);
             let [key, fileUrl] = query.split(" ", 2);
             if (fileUrl == "") fileUrl = null;
+            console.log("DEBUG", key, fileUrl);
             configSet(key, fileUrl);
             inflateLeftPanel(leftPanel);
         } else if (message.data.startsWith("OUT")) {
@@ -254,13 +294,15 @@ function inflateHeader(container) {
 
 function inflatePaneFlowSource(container) {
     container.innerHTML = "";
-    createFileInput(container, "File", "flowSource.file", VIDEO_FILETYPES);
+    createFileOpenInput(container, "File", "flowSource.file", VIDEO_FILETYPES);
     createBoolInput(container, "Use Motion Vectors", "flowSource.useMvs");
     createSelect(container, "Direction", "flowSource.direction", ["backward", "forward"]);
-    createFileInput(container, "Mask", "flowSource.maskPath", IMAGE_FILETYPES);
-    createFileInput(container, "Kernel", "flowSource.kernelPath", "*.npy");
-    createFileInput(container, "CV Config", "flowSource.cvConfig", "*.json");
+    createFileOpenInput(container, "Mask", "flowSource.maskPath", IMAGE_FILETYPES);
+    createFileOpenInput(container, "Kernel", "flowSource.kernelPath", "*.npy");
+    createFileOpenInput(container, "CV Config", "flowSource.cvConfig", "*.json");
     createTextInput(container, "Filters", "flowSource.flowFilters");
+    createBoolInput(container, "Round Flow", "flowSource.roundFlow");
+    createBoolInput(container, "Export Flow", "flowSource.exportFlow");
 }
 
 function inflatePaneBitmapSource(container) {
@@ -270,28 +312,15 @@ function inflatePaneBitmapSource(container) {
     function onBitmapSelectChange() {
         const value = getSelectedValue(bitmapSelect);
         bitmapInputs.innerHTML = "";
-        switch(value) {
-            case "file":
-                createFileInput(bitmapInputs, "File", "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
-                break;
-            case "color":
-                createColorInput(bitmapInputs, "Color", "bitmapSource.color");
-                break;
-            case "noise":
-            case "bwnoise":
-            case "cnoise":
-            case "gradient":
-            case "first":
-                break;
-            default:
-                alert("Unknown bitmap source!");
-                console.error("Unkown bitmap source", value);
-                break;
+        if (value == "file") {
+            createFileOpenInput(bitmapInputs, "File", "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
+        } else if (value == "color") {
+            createColorInput(bitmapInputs, "Color", "bitmapSource.color");
         }
     }
     bitmapSelect.addEventListener("change", onBitmapSelectChange);
     onBitmapSelectChange();
-    createFileInput(container, "Alteration", "bitmapSource.alterationPath", "*.png");
+    createFileOpenInput(container, "Alteration", "bitmapSource.alterationPath", "*.png");
 }
 
 function inflatePaneAccumulator(container) {
@@ -306,9 +335,9 @@ function inflatePaneAccumulator(container) {
         } else if (value == "stack") {
             createSelect(accumulatorInputs, "Stack Composer", "accumulator.stackComposer", ["top", "add", "sub", "avg"]);
         } else if (value == "canvas") {
-            createFileInput(accumulatorInputs, "Initial Canvas File", "accumulator.initialCanvasFile", IMAGE_FILETYPES);
+            createFileOpenInput(accumulatorInputs, "Initial Canvas File", "accumulator.initialCanvasFile", IMAGE_FILETYPES);
             createColorInput(accumulatorInputs, "Initial Canvas Color", "accumulator.initialCanvasColor");
-            createFileInput(accumulatorInputs, "Bitmap Mask", "accumulator.bitmapMask", IMAGE_FILETYPES);
+            createFileOpenInput(accumulatorInputs, "Bitmap Mask", "accumulator.bitmapMask", IMAGE_FILETYPES);
             createBoolInput(accumulatorInputs, "Crumble", "accumulator.crumble");
         }
     }
@@ -316,16 +345,30 @@ function inflatePaneAccumulator(container) {
     onAccumulatorMethodChange();
     createSelect(container, "Reset Mode", "accumulator.resetMode", ["off", "random", "linear"]);
     createRangeInput(container, "Reset Alpha", "accumulator.resetAlpha");
-    createFileInput(container, "Reset Mask", "accumulator.resetMask", "*.jpg *.jpeg *.png");
+    createFileOpenInput(container, "Reset Mask", "accumulator.resetMask", "*.jpg *.jpeg *.png");
     createSelect(container, "Heatmap Mode", "accumulator.heatmapMode", ["discrete", "continuous"]);
     createTextInput(container, "Heatmap Args", "accumulator.heatmapArgs");
     createTextInput(container, "Heatmap Reset Threshold", "accumulator.heatmapResetThreshold"); // TODO: maybe set to null if empty or parseFloat
 }
 
+function inflatePaneOutput(container) {
+    container.innerHTML = "";
+    createFileSaveInput(container, "File", "output.file", ".mp4", VIDEO_FILETYPES);
+    createTextInput(container, "Video Codec", "output.vcodec");
+    createBoolInput(container, "Output Intensity", "output.outputIntensity");
+    createBoolInput(container, "Output Heatmap", "output.outputHeatmap");
+    createBoolInput(container, "Output Accumulator", "output.outputAccumulator");
+    createNumberInput(container, "Render Scale", "output.renderScale", null, null, 0.001);
+    createTextInput(container, "Render Colors", "output.renderColors");
+    createBoolInput(container, "Render Binary", "output.renderBinary");
+    createNumberInput(container, "Checkpoint Every", "output.checkpointEvery", 0, null, 1);
+    createBoolInput(container, "Checkpoint End", "output.checkpointEnd");
+}
+
 function inflateLeftPanel(container) {
     container.innerHTML = "";
     const tabsBar = create(container, "div", "tabsbar");
-    for (const tabName of ["Flow Source", "Bitmap Source", "Accumulator"]) {
+    for (const tabName of ["Flow Source", "Bitmap Source", "Accumulator", "Output"]) {
         const button = create(tabsBar, "div", "tabsbar-item");
         if (tabName == leftPanelActiveTab) {
             button.classList.add("active");
@@ -347,42 +390,38 @@ function inflateLeftPanel(container) {
         case "Accumulator":
             inflatePaneAccumulator(pane);
             break;
+        case "Output":
+            inflatePaneOutput(pane);
+            break;
     }
 }
 
-function inflatePanePreview(container) {
+function inflateRightPanel(container) {
     container.innerHTML = "";
+
+    const panePreview = create(container, "div", "pane");
+    panePreview.setAttribute("id", "pane-preview");
     if (config.output.previewUrl != null) {
-        const img = create(container, "img");
+        const img = create(panePreview, "img");
         img.src = config.output.previewUrl;
         img.addEventListener("error", () => {
             img.src = config.output.previewUrl + "?t=" + new Date().getTime();
         });
     }
-}
 
-function inflatePaneGenerate(container) {
-    container.innerHTML = "";
-    const buttonGenerate = create(container, "button");
+    const paneGenerate = create(container, "div", "pane");
+    paneGenerate.setAttribute("id", "pane-generate");
+    const buttonGenerate = create(paneGenerate, "button");
     buttonGenerate.textContent = "Generate";
     buttonGenerate.addEventListener("click", () => {
-        websocket.send(`GEN ${JSON.stringify(config)}`);
+        websocket.send(`GENERATE ${JSON.stringify(config)}`);
     });
-    const buttonInterrupt = create(container, "button");
+    const buttonInterrupt = create(paneGenerate, "button");
     buttonInterrupt.textContent = "Interrupt";
     buttonInterrupt.addEventListener("click", () => {
         websocket.send("INTERRUPT");
     });
-}
 
-function inflateRightPanel(container) {
-    container.innerHTML = "";
-    const panePreview = create(container, "div", "pane");
-    panePreview.setAttribute("id", "pane-preview");
-    inflatePanePreview(panePreview);
-    const paneGenerate = create(container, "div", "pane");
-    paneGenerate.setAttribute("id", "pane-generate");
-    inflatePaneGenerate(paneGenerate);
 }
 
 function inflateBody(container) {

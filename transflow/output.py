@@ -141,7 +141,10 @@ class MjpegOutput(VideoOutput):
         return self
     
     def feed(self, frame: numpy.ndarray):
-        self.stream.set_frame(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        if isinstance(frame, tuple):
+            self.stream.set_frame(cv2.cvtColor(frame[0], cv2.COLOR_RGB2BGR))
+        else:
+            self.stream.set_frame(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
     
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.server.stop()

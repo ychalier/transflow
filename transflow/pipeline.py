@@ -89,9 +89,19 @@ class OutputProcess(multiprocessing.Process):
 
 def get_secondary_output_path(
         flow_path: str,
-        output_path: str | None,
+        output_path: str | list[str] | None,
         suffix: str) -> str:
-    path = os.path.splitext(flow_path if output_path is None else output_path)[0]
+    base_output_path = None
+    if isinstance(output_path, list):
+        mjpeg_pattern = re.compile(r"^mjpeg(:[:a-z0-9A-Z\-]+)?$", re.IGNORECASE)
+        for path in output_path:
+            if mjpeg_pattern.match(path):
+                continue
+            base_output_path = path
+            break
+    else:
+        base_output_path = output_path
+    path = os.path.splitext(flow_path if base_output_path is None else base_output_path)[0]
     if path.endswith(".flow") or path.endswith(".ckpt"):
         path = path[:-5]
     if re.match(r".*\.(\d{3})$", path):

@@ -4,11 +4,12 @@ import json
 import logging
 import mimetypes
 import os
+import time
 import threading
 import tkinter
 import webbrowser
 from pathlib import Path
-from tkinter.filedialog import askopenfilename
+from tkinter.filedialog import askopenfilename, asksaveasfilename
 from urllib.parse import urlparse, parse_qs
 
 import websockets
@@ -42,7 +43,7 @@ class WebsocketServer(threading.Thread):
         else:
             cmd = message
         args = json.loads(args_string) if args_string else {}
-        if cmd == "FILEIN":
+        if cmd == "FILE_OPEN":
             window = tkinter.Tk()
             window.wm_attributes("-topmost", 1)
             window.withdraw()
@@ -51,11 +52,22 @@ class WebsocketServer(threading.Thread):
                 initialdir=(base_dir / ".." / ".." / "assets").as_posix(),
                 filetypes=[("Allowed types", args["filetypes"])])
             if filename != "":
-                self._broadcast(f"FILEIN {args['key']} {filename}")
-            return
-        if cmd == "GEN":
+                self._broadcast(f"FILE {args['key']} {filename}")
+        elif cmd == "FILE_SAVE":
+            window = tkinter.Tk()
+            window.wm_attributes("-topmost", 1)
+            window.withdraw()
+            filename = asksaveasfilename(
+                parent=window,
+                initialdir=(base_dir / ".." / ".." / "out").as_posix(),
+                defaultextension=args["defaultextension"],
+                filetypes=[("Allowed types", args["filetypes"])],
+                initialfile=f"transflow-{time.time():.0f}"
+            )
+            if filename != "":
+                self._broadcast(f"FILE {args['key']} {filename}")
+        elif cmd == "GENERATE":
             from ..pipeline import transfer
-            output_path = f"mjpeg:{self.mjpeg_port}:{self.host}"
             print("Job args:")
             print(args)
             bitmap_path = None
@@ -70,17 +82,23 @@ class WebsocketServer(threading.Thread):
                 initial_canvas = args["accumulator"]["initialCanvasColor"]
             else:
                 initial_canvas = args["accumulator"]["initialCanvasFile"]
+            output_paths = [f"mjpeg:{self.mjpeg_port}:{self.host}"]
+            if args["output"]["file"] is not None:
+                output_paths.append(args["output"]["file"])
             self.job_cancel_event = threading.Event()
             self.job = threading.Thread(
                 target=transfer,
                 args=[
                     args["flowSource"]["file"],
                     bitmap_path,
-                    output_path,
+                    output_paths,
                     None,
                 ],
                 kwargs={
+                    "execute": False,
+                    "replace": False,
                     "cancel_event": self.job_cancel_event,
+                    "safe": True,
                     "use_mvs": args["flowSource"]["useMvs"],
                     "direction": args["flowSource"]["direction"],
                     "acc_method": args["accumulator"]["method"],
@@ -100,13 +118,23 @@ class WebsocketServer(threading.Thread):
                     "bitmap_mask_path": args["accumulator"]["bitmapMask"],
                     "crumble": args["accumulator"]["crumble"],
                     "bitmap_alteration_path": args["bitmapSource"]["alterationPath"],
+                    "preview_output": False,
+                    "vcodec": args["output"]["vcodec"],
+                    "round_flow": args["flowSource"]["roundFlow"],
+                    "export_flow": args["flowSource"]["exportFlow"],
+                    "output_intensity": args["output"]["outputIntensity"],
+                    "output_heatmap": args["output"]["outputHeatmap"],
+                    "output_accumulator": args["output"]["outputAccumulator"],
+                    "render_scale": args["output"]["renderScale"],
+                    "render_colors": args["output"]["renderColors"],
+                    "render_binary": args["output"]["renderBinary"],
+                    "checkpoint_every": args["output"]["checkpointEvery"],
+                    "checkpoint_end": args["output"]["checkpointEnd"]
                 })
             self.job.start()
             self._broadcast(f"OUT http://{self.host}:{self.mjpeg_port}/transflow")
-            return
-        if cmd == "INTERRUPT":
+        elif cmd == "INTERRUPT":
             self.job_cancel_event.set()
-            return
 
     def run(self):
         async def register(websocket):

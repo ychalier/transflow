@@ -159,13 +159,6 @@ video {
     border-right: 1px solid black;
 }
 
-.tabsbar {
-    display: flex;
-    gap: .4rem;
-    border-bottom: 1px solid black;
-    margin-bottom: .4rem;
-}
-
 .pane {
     padding: .4rem;
 }
@@ -174,9 +167,18 @@ video {
     border-top: 1px solid black;
 }
 
+.tabsbar {
+    display: flex;
+    border-bottom: 1px solid black;
+    margin-bottom: .4rem;
+    background: #eee;
+}
+
 .tabsbar-item {
-    padding: .1rem .2rem;
+    padding: .1rem .4rem;
     cursor: default;
+    border-right: 1px solid black;
+    background: white;
 }
 
 .tabsbar-item.active {
