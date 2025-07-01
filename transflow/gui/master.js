@@ -271,6 +271,19 @@ function setWssConnectionIndicator(state) {
     wssConnectionIndicator.textContent = state;
 }
 
+function formatDuration(totalSeconds) {
+    let s = totalSeconds;
+    const hours = Math.floor(s / 3600);
+    s -= hours * 3600;
+    const minutes = Math.floor(s / 60);
+    s -= minutes * 60;
+    const seconds = Math.floor(s);
+    if (hours == 0) {
+        return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    }
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+}
+
 function connectWebsocket(wssUrl) {
     setWssConnectionIndicator(`Connecting… [${websocketRetryCount}]`);
     websocket = new WebSocket(wssUrl);
@@ -307,12 +320,17 @@ function connectWebsocket(wssUrl) {
             document.getElementById("button-generate").removeAttribute("disabled");
             document.getElementById("button-interrupt").setAttribute("disabled", true);
         } else if (message.data.startsWith("STATUS")) {
-            const progressBar = document.getElementById("progress-bar");
-            if (progressBar == null) return;
+            const progressBarContainer = document.getElementById("progress-bar");
+            if (progressBarContainer == null) return;
             const status = JSON.parse(message.data.slice(7));
-            progressBar.min = 0;
-            progressBar.max = status.total;
-            progressBar.value = status.cursor;
+            const progress = progressBarContainer.querySelector("progress");
+            const progressInfo = progressBarContainer.querySelector(".progress-info");
+            progress.min = 0;
+            progress.max = status.total;
+            progress.value = status.cursor;
+            const rate = status.cursor / status.elapsed;
+            const remaining = (status.total - status.cursor) / rate;
+            progressInfo.textContent = `${(100*status.cursor/status.total).toFixed(0)}% ${status.cursor}/${status.total} [${formatDuration(status.elapsed)}<${formatDuration(remaining)}, ${rate.toFixed(2)}frame/s]`
         }
         websocket.send("PONG");
     };
@@ -487,7 +505,9 @@ function inflateRightPanel(container) {
             img.src = config.previewUrl + "?t=" + new Date().getTime();
         });
         const progressBarContainer = create(pane, "div", "progress-bar-container");
-        create(progressBarContainer, "progress").setAttribute("id", "progress-bar");
+        progressBarContainer.setAttribute("id", "progress-bar")
+        create(progressBarContainer, "progress");
+        create(progressBarContainer, "div", "progress-info");
     }
 
     const buttonRow = create(pane, "div", "row");

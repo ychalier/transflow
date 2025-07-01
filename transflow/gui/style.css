@@ -235,3 +235,7 @@ video {
     display: flex;
     gap: .2rem;
 }
+
+.progress-info {
+    margin-bottom: .4rem;
+}

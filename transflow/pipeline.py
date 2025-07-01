@@ -233,6 +233,7 @@ class Status:
 
     cursor: int
     total: int
+    elapsed: float
 
 
 def transfer(
@@ -480,8 +481,10 @@ def transfer(
 
         exception = False
         cursor = ckpt_meta.get("cursor", 0)
+        expected_length = get_expected_length(fs_length, bs_length, cursor)
 
-        pbar = tqdm.tqdm(total=get_expected_length(fs_length, bs_length, cursor), unit="frame", disable=status_queue is not None)
+        start_t = time.time()
+        pbar = tqdm.tqdm(total=expected_length, unit="frame", disable=status_queue is not None)
         while True:
             if cancel_event is not None and cancel_event.is_set():
                 break
@@ -524,7 +527,7 @@ def transfer(
                                       config.replace, cursor, accumulator, config.seed)
                 pbar.update(1)
                 if status_queue is not None:
-                    status_queue.put(Status(cursor, pbar.total))
+                    status_queue.put(Status(cursor, expected_length, time.time() - start_t))
             except (queue.Empty, queue.Full):
                 pass
             except KeyboardInterrupt:
