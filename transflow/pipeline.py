@@ -1,5 +1,6 @@
 import dataclasses
 import multiprocessing
+import multiprocessing.queues
 import os
 import queue
 import random
@@ -227,9 +228,17 @@ class Config:
     seed: int | None = None
 
 
+@dataclasses.dataclass
+class Status:
+
+    cursor: int
+    total: int
+
+
 def transfer(
         config: Config,
-        cancel_event: threading.Event | None = None):
+        cancel_event: threading.Event | None = None,
+        status_queue: multiprocessing.queues.Queue | None = None):
 
     if config.safe:
         append_history()
@@ -362,7 +371,7 @@ def transfer(
                 return
 
         if config.export_flow:
-            archive_path = get_secondary_output_path(config.flow_path, output_path, ".flow.zip")
+            archive_path = get_secondary_output_path(config.flow_path, config.output_path, ".flow.zip")
             flow_output = NumpyOutput(archive_path, config.replace)
             flow_output.write_meta({
                 "path": config.flow_path,
@@ -472,7 +481,7 @@ def transfer(
         exception = False
         cursor = ckpt_meta.get("cursor", 0)
 
-        pbar = tqdm.tqdm(total=get_expected_length(fs_length, bs_length, cursor), unit="frame")
+        pbar = tqdm.tqdm(total=get_expected_length(fs_length, bs_length, cursor), unit="frame", disable=status_queue is not None)
         while True:
             if cancel_event is not None and cancel_event.is_set():
                 break
@@ -511,9 +520,11 @@ def transfer(
                         oq.put(out_frame, timeout=1)
                 cursor += 1
                 if config.checkpoint_every is not None and cursor % config.checkpoint_every == 0:
-                    export_checkpoint(config.flow_path, config.bitmap_path, output_path,
+                    export_checkpoint(config.flow_path, config.bitmap_path, config.output_path,
                                       config.replace, cursor, accumulator, config.seed)
                 pbar.update(1)
+                if status_queue is not None:
+                    status_queue.put(Status(cursor, pbar.total))
             except (queue.Empty, queue.Full):
                 pass
             except KeyboardInterrupt:
@@ -532,7 +543,7 @@ def transfer(
                     break
         pbar.close()
         if (exception and config.safe) or config.checkpoint_end:
-            export_checkpoint(config.flow_path, config.bitmap_path, output_path, config.replace,
+            export_checkpoint(config.flow_path, config.bitmap_path, config.output_path, config.replace,
                               cursor, accumulator, config.seed)
         close()
 

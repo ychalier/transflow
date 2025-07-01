@@ -1,12 +1,17 @@
 import asyncio
+import dataclasses
 import http.server
 import json
 import logging
 import mimetypes
+import multiprocessing
+import multiprocessing.queues
 import os
+import queue
 import time
 import threading
 import tkinter
+import traceback
 import webbrowser
 from pathlib import Path
 from tkinter.filedialog import askopenfilename, asksaveasfilename
@@ -19,11 +24,20 @@ logger = logging.getLogger(__name__)
 base_dir = Path(__file__).parent
 
 
-def monitor_job(wss: "WebsocketServer", output_file: str | None):
+def monitor_job(wss: "WebsocketServer", output_file: str | None, status_queue: multiprocessing.queues.Queue):
     if wss.job is None:
         return
     while wss.job.is_alive():
-        time.sleep(1)
+        try:
+            status = status_queue.get(timeout=1)
+            wss._broadcast("STATUS " + json.dumps(dataclasses.asdict(status)))
+        except queue.Empty:
+            continue
+        except TimeoutError:
+            continue
+    while not status_queue.empty():
+        status_queue.get(timeout=1)
+    status_queue.close()
     wss.job = None
     if output_file is not None:
         wss._broadcast("DONE " + output_file)
@@ -153,13 +167,16 @@ class WebsocketServer(threading.Thread):
                 lock_expr=args["flowSource"]["lockExpr"],
             )
             self.job_cancel_event = threading.Event()
+            status_queue = multiprocessing.Queue(maxsize=1)
             self.job = threading.Thread(
                 target=transfer,
                 args=[config],
-                kwargs={"cancel_event": self.job_cancel_event})
+                kwargs={
+                    "cancel_event": self.job_cancel_event,
+                    "status_queue": status_queue})
             self.job.start()
             self._broadcast(f"PREVIEW http://{self.host}:{self.mjpeg_port}/transflow")
-            self.job_monitoring = threading.Thread(target=monitor_job, args=(self, args["output"]["file"]))
+            self.job_monitoring = threading.Thread(target=monitor_job, args=(self, args["output"]["file"], status_queue))
             self.job_monitoring.start()
         elif cmd == "INTERRUPT":
             if self.job is None or self.job_cancel_event is None or self.job_monitoring is None:
@@ -182,6 +199,8 @@ class WebsocketServer(threading.Thread):
                             websocket.id.hex,
                             message,
                             err)
+                        traceback.print_exc()
+                        
             except websockets.exceptions.ConnectionClosedError:
                 pass
             except ConnectionResetError:

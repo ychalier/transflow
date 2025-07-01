@@ -107,6 +107,11 @@ input:disabled {
     background: #f8f8f8;
 }
 
+progress {
+    accent-color: var(--accent);
+    width: 100%;
+}
+
 button {
     background: var(--accent);
     color: black;

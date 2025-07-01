@@ -280,7 +280,7 @@ function connectWebsocket(wssUrl) {
         setWssConnectionIndicator("Connected");
     }
     websocket.onmessage = (message) => {
-        console.log(message);
+        console.log("WS>", message.data);
         if (message.data.startsWith("FILE ")) {
             const query = message.data.slice(5);
             let [key, fileUrl] = query.split(" ", 2);
@@ -306,6 +306,13 @@ function connectWebsocket(wssUrl) {
             config.isRunning = false;
             document.getElementById("button-generate").removeAttribute("disabled");
             document.getElementById("button-interrupt").setAttribute("disabled", true);
+        } else if (message.data.startsWith("STATUS")) {
+            const progressBar = document.getElementById("progress-bar");
+            if (progressBar == null) return;
+            const status = JSON.parse(message.data.slice(7));
+            progressBar.min = 0;
+            progressBar.max = status.total;
+            progressBar.value = status.cursor;
         }
         websocket.send("PONG");
     };
@@ -479,6 +486,8 @@ function inflateRightPanel(container) {
         img.addEventListener("error", () => {
             img.src = config.previewUrl + "?t=" + new Date().getTime();
         });
+        const progressBarContainer = create(pane, "div", "progress-bar-container");
+        create(progressBarContainer, "progress").setAttribute("id", "progress-bar");
     }
 
     const buttonRow = create(pane, "div", "row");
