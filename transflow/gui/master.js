@@ -4,6 +4,8 @@ const IMAGE_FILETYPES = "*.jpg *.jpeg *.png";
 var config = {
     seed: Math.floor(Math.random() * (Math.pow(2, 31) - 1)),
     previewUrl: null,
+    outputUrl: null,
+    isRunning: false,
     flowSource: {
         file: null,
         direction: "backward",
@@ -22,7 +24,7 @@ var config = {
     },
     bitmapSource: {
         file: null,
-        type: "file",
+        type: "bwnoise",
         color: "#cff010",
         alterationPath: null,
         seekTime: null,
@@ -125,7 +127,7 @@ function onConfigChange(key) {
 
 function createFileOpenInput(container, label, key, filetypes) {
     const inputContainer = createInputContainer(container, label);
-    const inputButtons = create(inputContainer, "div", "input-buttons");
+    const inputButtons = create(inputContainer, "div", "row");
     const input = create(inputButtons, "button");
     input.textContent = "Select file";
     input.addEventListener("click", () => {
@@ -155,7 +157,7 @@ function createFileOpenInput(container, label, key, filetypes) {
 
 function createFileSaveInput(container, label, key, defaultextension, filetypes) {
     const inputContainer = createInputContainer(container, label);
-    const inputButtons = create(inputContainer, "div", "input-buttons");
+    const inputButtons = create(inputContainer, "div", "row");
     const input = create(inputButtons, "button");
     input.textContent = "Select file";
     input.addEventListener("click", () => {
@@ -285,10 +287,25 @@ function connectWebsocket(wssUrl) {
             if (fileUrl == "") fileUrl = null;
             configSet(key, fileUrl);
             inflateLeftPanel(leftPanel);
-        } else if (message.data.startsWith("OUT")) {
-            config.previewUrl = message.data.slice(4);
+        } else if (message.data.startsWith("PREVIEW")) {
+            config.isRunning = true;
+            config.previewUrl = message.data.slice(8);
             onConfigChange("previewUrl");
             inflateRightPanel(rightPanel);
+        } else if (message.data.startsWith("DONE")) {
+            config.isRunning = false;
+            document.getElementById("button-generate").removeAttribute("disabled");
+            document.getElementById("button-interrupt").setAttribute("disabled", true);
+            const query = message.data.slice(5);
+            if (query) {
+                config.outputUrl = query;
+                onConfigChange("outputUrl");
+                inflateRightPanel(rightPanel);
+            }
+        } else if (message.data.startsWith("CANCEL")) {
+            config.isRunning = false;
+            document.getElementById("button-generate").removeAttribute("disabled");
+            document.getElementById("button-interrupt").setAttribute("disabled", true);
         }
         websocket.send("PONG");
     };
@@ -450,7 +467,12 @@ function inflateRightPanel(container) {
     container.innerHTML = "";
     const pane = create(container, "div", "pane");
 
-    if (config.previewUrl != null) {
+    if (config.outputUrl != null) {
+        const videoContainer = create(pane, "div");
+        const video = create(videoContainer, "video");
+        video.src = `/media?url=${config.outputUrl}`;
+        video.setAttribute("controls", "1");
+    } else if (config.previewUrl != null) {
         const imgContainer = create(pane, "div");
         const img = create(imgContainer, "img");
         img.src = config.previewUrl;
@@ -459,13 +481,26 @@ function inflateRightPanel(container) {
         });
     }
 
-    const buttonGenerate = create(pane, "button");
+    const buttonRow = create(pane, "div", "row");
+
+    const buttonGenerate = create(buttonRow, "button");
+    buttonGenerate.setAttribute("id", "button-generate");
+    if (config.isRunning) buttonGenerate.setAttribute("disabled", true);
     buttonGenerate.textContent = "Generate";
+    
+    const buttonInterrupt = create(buttonRow, "button");
+    buttonInterrupt.setAttribute("id", "button-interrupt");
+    if (!config.isRunning) buttonInterrupt.setAttribute("disabled", true);
+    buttonInterrupt.textContent = "Interrupt";
+    
     buttonGenerate.addEventListener("click", () => {
+        buttonGenerate.setAttribute("disabled", true);
+        buttonInterrupt.removeAttribute("disabled");
+        config.isRunning = true;
+        config.previewUrl = null;
+        config.outputUrl = null;
         websocket.send(`GENERATE ${JSON.stringify(config)}`);
     });
-    const buttonInterrupt = create(pane, "button");
-    buttonInterrupt.textContent = "Interrupt";
     buttonInterrupt.addEventListener("click", () => {
         websocket.send("INTERRUPT");
     });

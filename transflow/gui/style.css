@@ -114,8 +114,13 @@ button {
     cursor: pointer;
 }
 
-button:hover {
+button:hover:not(:disabled) {
     background-color: var(--accenta);
+}
+
+button:disabled {
+    opacity: .6;
+    cursor: default;
 }
 
 summary {
@@ -221,7 +226,7 @@ video {
     width: fit-content;
 }
 
-.input-buttons {
+.row {
     display: flex;
     gap: .2rem;
 }

@@ -18,6 +18,20 @@ import websockets.exceptions
 logger = logging.getLogger(__name__)
 base_dir = Path(__file__).parent
 
+
+def monitor_job(wss: "WebsocketServer", output_file: str | None):
+    if wss.job is None:
+        return
+    while wss.job.is_alive():
+        time.sleep(1)
+    wss.job = None
+    if output_file is not None:
+        wss._broadcast("DONE " + output_file)
+    else:
+        wss._broadcast("DONE")
+    return
+
+
 class WebsocketServer(threading.Thread):
 
     def __init__(self, host: str, mjpeg_port: int):
@@ -28,6 +42,7 @@ class WebsocketServer(threading.Thread):
         self.connections = set()
         self.job_cancel_event = None
         self.job = None
+        self.job_monitoring = None
 
     def _broadcast(self, message: str):
         logger.debug("Broadcasting %s", message)
@@ -144,9 +159,15 @@ class WebsocketServer(threading.Thread):
                     "lock_expr": args["flowSource"]["lockExpr"],
                 })
             self.job.start()
-            self._broadcast(f"OUT http://{self.host}:{self.mjpeg_port}/transflow")
+            self._broadcast(f"PREVIEW http://{self.host}:{self.mjpeg_port}/transflow")
+            self.job_monitoring = threading.Thread(target=monitor_job, args=(self, args["output"]["file"]))
+            self.job_monitoring.start()
         elif cmd == "INTERRUPT":
+            if self.job is None or self.job_cancel_event is None or self.job_monitoring is None:
+                return
             self.job_cancel_event.set()
+            self.job_monitoring.join()
+            self._broadcast("CANCEL")
 
     def run(self):
         async def register(websocket):
