@@ -194,8 +194,8 @@ def main():
         duration_time = parse_timestamp(args.to) - seek_time
     if duration_time is not None and duration_time < 0:
         raise ValueError(f"Duration must be positive (got {duration_time:f})")
-    from .pipeline import transfer
-    transfer(
+    from .pipeline import transfer, Config
+    transfer(Config(
         args.flow,
         args.bitmap,
         args.output,
@@ -244,4 +244,5 @@ def main():
         bitmap_introduction_flags=args.bitmap_introduction_flags,
         preview_output=args.preview_output,
         lock_expr=args.lock,
-        lock_mode=args.lock_mode)
+        lock_mode=args.lock_mode
+    ))

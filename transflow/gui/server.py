@@ -82,7 +82,7 @@ class WebsocketServer(threading.Thread):
             if filename != "":
                 self._broadcast(f"FILE {args['key']} {filename}")
         elif cmd == "GENERATE":
-            from ..pipeline import transfer
+            from ..pipeline import transfer, Config
             from ..utils import parse_timestamp
             print("Job args:")
             print(args)
@@ -103,61 +103,60 @@ class WebsocketServer(threading.Thread):
             output_paths = [f"mjpeg:{self.mjpeg_port}:{self.host}"]
             if args["output"]["file"] is not None:
                 output_paths.append(args["output"]["file"])
+            config = Config(
+                args["flowSource"]["file"],
+                bitmap_path,
+                output_paths,
+                None,
+                execute=False,
+                replace=False,
+                safe=True,
+                seed=args["seed"],
+                use_mvs=args["flowSource"]["useMvs"],
+                direction=args["flowSource"]["direction"],
+                acc_method=args["accumulator"]["method"],
+                mask_path=args["flowSource"]["maskPath"],
+                kernel_path=args["flowSource"]["kernelPath"],
+                cv_config=args["flowSource"]["cvConfig"],
+                flow_filters=args["flowSource"]["flowFilters"],
+                reset_mode=args["accumulator"]["resetMode"],
+                reset_alpha=args["accumulator"]["resetAlpha"],
+                reset_mask_path=args["accumulator"]["resetMask"],
+                heatmap_mode=args["accumulator"]["heatmapMode"],
+                heatmap_args=args["accumulator"]["heatmapArgs"],
+                heatmap_reset_threshold=args["accumulator"]["heatmapResetThreshold"],
+                accumulator_background=args["accumulator"]["background"],
+                stack_composer=args["accumulator"]["stackComposer"],
+                initial_canvas=initial_canvas,
+                bitmap_mask_path=args["accumulator"]["bitmapMask"],
+                crumble=args["accumulator"]["crumble"],
+                bitmap_alteration_path=args["bitmapSource"]["alterationPath"],
+                preview_output=False,
+                vcodec=args["output"]["vcodec"],
+                round_flow=args["flowSource"]["roundFlow"],
+                export_flow=args["flowSource"]["exportFlow"],
+                output_intensity=args["output"]["outputIntensity"],
+                output_heatmap=args["output"]["outputHeatmap"],
+                output_accumulator=args["output"]["outputAccumulator"],
+                render_scale=args["output"]["renderScale"],
+                render_colors=args["output"]["renderColors"],
+                render_binary=args["output"]["renderBinary"],
+                checkpoint_every=args["output"]["checkpointEvery"],
+                checkpoint_end=args["output"]["checkpointEnd"],
+                seek_time=seek_time,
+                duration_time=duration_time,
+                repeat=args["flowSource"]["repeat"],
+                bitmap_seek_time=parse_timestamp(args["bitmapSource"]["seekTime"]),
+                bitmap_repeat=args["bitmapSource"]["repeat"],
+                bitmap_introduction_flags=args["accumulator"]["bitmapIntroductionFlags"],
+                lock_mode=args["flowSource"]["lockMode"],
+                lock_expr=args["flowSource"]["lockExpr"],
+            )
             self.job_cancel_event = threading.Event()
             self.job = threading.Thread(
                 target=transfer,
-                args=[
-                    args["flowSource"]["file"],
-                    bitmap_path,
-                    output_paths,
-                    None,
-                ],
-                kwargs={
-                    "execute": False,
-                    "replace": False,
-                    "cancel_event": self.job_cancel_event,
-                    "safe": True,
-                    "seed": args["seed"],
-                    "use_mvs": args["flowSource"]["useMvs"],
-                    "direction": args["flowSource"]["direction"],
-                    "acc_method": args["accumulator"]["method"],
-                    "mask_path": args["flowSource"]["maskPath"],
-                    "kernel_path": args["flowSource"]["kernelPath"],
-                    "cv_config": args["flowSource"]["cvConfig"],
-                    "flow_filters": args["flowSource"]["flowFilters"],
-                    "reset_mode": args["accumulator"]["resetMode"],
-                    "reset_alpha": args["accumulator"]["resetAlpha"],
-                    "reset_mask_path": args["accumulator"]["resetMask"],
-                    "heatmap_mode": args["accumulator"]["heatmapMode"],
-                    "heatmap_args": args["accumulator"]["heatmapArgs"],
-                    "heatmap_reset_threshold": args["accumulator"]["heatmapResetThreshold"],
-                    "accumulator_background": args["accumulator"]["background"],
-                    "stack_composer": args["accumulator"]["stackComposer"],
-                    "initial_canvas": initial_canvas,
-                    "bitmap_mask_path": args["accumulator"]["bitmapMask"],
-                    "crumble": args["accumulator"]["crumble"],
-                    "bitmap_alteration_path": args["bitmapSource"]["alterationPath"],
-                    "preview_output": False,
-                    "vcodec": args["output"]["vcodec"],
-                    "round_flow": args["flowSource"]["roundFlow"],
-                    "export_flow": args["flowSource"]["exportFlow"],
-                    "output_intensity": args["output"]["outputIntensity"],
-                    "output_heatmap": args["output"]["outputHeatmap"],
-                    "output_accumulator": args["output"]["outputAccumulator"],
-                    "render_scale": args["output"]["renderScale"],
-                    "render_colors": args["output"]["renderColors"],
-                    "render_binary": args["output"]["renderBinary"],
-                    "checkpoint_every": args["output"]["checkpointEvery"],
-                    "checkpoint_end": args["output"]["checkpointEnd"],
-                    "seek_time": seek_time,
-                    "duration_time": duration_time,
-                    "repeat": args["flowSource"]["repeat"],
-                    "bitmap_seek_time": parse_timestamp(args["bitmapSource"]["seekTime"]),
-                    "bitmap_repeat": args["bitmapSource"]["repeat"],
-                    "bitmap_introduction_flags": args["accumulator"]["bitmapIntroductionFlags"],
-                    "lock_mode": args["flowSource"]["lockMode"],
-                    "lock_expr": args["flowSource"]["lockExpr"],
-                })
+                args=[config],
+                kwargs={"cancel_event": self.job_cancel_event})
             self.job.start()
             self._broadcast(f"PREVIEW http://{self.host}:{self.mjpeg_port}/transflow")
             self.job_monitoring = threading.Thread(target=monitor_job, args=(self, args["output"]["file"]))

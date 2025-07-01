@@ -1,3 +1,4 @@
+import dataclasses
 import multiprocessing
 import os
 import queue
@@ -161,59 +162,76 @@ def get_expected_length(fs_length: int | None, bs_length: int | None, cursor: in
     return expected_length
 
 
+@dataclasses.dataclass
+class Config:
+
+    # Positional Args
+    flow_path: str
+    bitmap_path: str | None
+    output_path: str | list[str] | None
+    extra_flow_paths: list[str] | None
+
+    # Flow Args
+    flows_merging_function: str = "first"
+    use_mvs: bool = False
+    mask_path: str | None = None
+    kernel_path: str | None = None
+    cv_config: str | None = None
+    flow_filters: str | None = None
+    direction: str = "forward"
+    round_flow: bool = False
+    export_flow: bool = False
+    seek_time: float | None = None
+    duration_time: float | None = None
+    repeat: int = 1
+    lock_expr: str | None = None
+    lock_mode: str | LockMode = LockMode.STAY
+
+    # Bitmap Args
+    bitmap_seek_time: float | None = None
+    bitmap_alteration_path: str | None = None
+    bitmap_repeat: int = 1
+
+    # Accumulator Args
+    reset_mode: str = "off"
+    reset_alpha: float = .9
+    reset_mask_path: str | None = None
+    heatmap_mode: str = "discrete"
+    heatmap_args: str = "0:4:2:1"
+    heatmap_reset_threshold: float | None = None
+    acc_method: str = "map"
+    accumulator_background: str = "ffffff"
+    stack_composer: str = "top"
+    initial_canvas: str | None = None
+    bitmap_mask_path: str | None = None
+    crumble: bool = False
+    bitmap_introduction_flags: int = 1
+
+    # Output Args
+    vcodec: str = "h264"
+    execute: bool = False
+    replace: bool = False
+    size: str | None = None
+    output_intensity: bool = False
+    output_heatmap: bool = False
+    output_accumulator: bool = False
+    render_scale: float = 1
+    render_colors: str | None = None
+    render_binary: bool = False
+    checkpoint_every: int | None = None
+    checkpoint_end: bool = False
+    safe: bool = True
+    preview_output: bool = False
+
+    # General Args
+    seed: int | None = None
+
+
 def transfer(
-        flow_path: str,
-        bitmap_path: str | None,
-        output_path: str | list[str] | None,
-        extra_flow_paths: list[str] | None,
-        flows_merging_function: str = "first",
-        use_mvs: bool = False,
-        vcodec: str = "h264",
-        reset_mode: str = "off",
-        reset_alpha: float = .9,
-        heatmap_mode: str = "discrete",
-        heatmap_args: str = "0:4:2:1",
-        heatmap_reset_threshold: float | None = None,
-        execute: bool = False,
-        replace: bool = False,
-        mask_path: str | None = None,
-        kernel_path: str | None = None,
-        reset_mask_path: str | None = None,
-        cv_config: str | None = None,
-        flow_filters: str | None = None,
-        size: str | None = None,
-        acc_method: str = "map",
-        accumulator_background: str = "ffffff",
-        stack_composer: str = "top",
-        direction: str = "forward",
-        round_flow: bool = False,
-        export_flow: bool = False,
-        output_intensity: bool = False,
-        output_heatmap: bool = False,
-        output_accumulator: bool = False,
-        render_scale: float = 1,
-        render_colors: str | None = None,
-        render_binary: bool = False,
-        checkpoint_every: int | None = None,
-        checkpoint_end: bool = False,
-        safe: bool = True,
-        seed: int | None = None,
-        seek_time: float | None = None,
-        bitmap_seek_time: float | None = None,
-        duration_time: float | None = None,
-        bitmap_alteration_path: str | None = None,
-        repeat: int = 1,
-        bitmap_repeat: int = 1,
-        initial_canvas: str | None = None,
-        bitmap_mask_path: str | None = None,
-        crumble: bool = False,
-        bitmap_introduction_flags: int = 1,
-        preview_output: bool = False,
-        lock_expr: str | None = None,
-        lock_mode: str | LockMode = LockMode.STAY,
+        config: Config,
         cancel_event: threading.Event | None = None):
 
-    if safe:
+    if config.safe:
         append_history()
 
     shape_queue = flow_queue = bitmap_queue = flow_process = bitmap_process\
@@ -221,16 +239,16 @@ def transfer(
     output_queues: list[multiprocessing.Queue] = []
     output_processes: list[OutputProcess] = []
 
-    if extra_flow_paths is None:
-        extra_flow_paths: list[str] = []
-        flows_merging_function = "first"
+    if config.extra_flow_paths is None:
+        config.extra_flow_paths = []
+        config.flows_merging_function = "first"
     extra_flow_sources: list[FlowSource] = []
     extra_flow_queues: list[multiprocessing.Queue] = []
     extra_flow_processes: list[SourceProcess] = []
-    merge_flows = flows_merging_functions[flows_merging_function]
+    merge_flows = flows_merging_functions[config.flows_merging_function]
 
     def close():
-        if export_flow:
+        if config.export_flow:
             flow_output.close()
         if shape_queue is not None:
             shape_queue.close()
@@ -260,56 +278,56 @@ def transfer(
     try:
 
         ckpt_meta = {}
-        if flow_path.endswith(".ckpt.zip"):
+        if config.flow_path.endswith(".ckpt.zip"):
             import json, pickle, zipfile
-            with zipfile.ZipFile(flow_path) as archive:
+            with zipfile.ZipFile(config.flow_path) as archive:
                 with archive.open("meta.json") as file:
                     ckpt_meta = json.loads(file.read().decode())
                 with archive.open("accumulator.bin") as file:
                     accumulator = pickle.load(file)
-            flow_path = ckpt_meta["flow_path"]
-            seed = ckpt_meta["seed"]
+            config.flow_path = ckpt_meta["flow_path"]
+            config.seed = ckpt_meta["seed"]
 
-        if seed is None:
-            seed = random.randint(0, 2**32-1)
+        if config.seed is None:
+            config.seed = random.randint(0, 2**32-1)
 
-        if direction == "forward":
-            direction = FlowDirection.FORWARD
-        elif direction == "backward":
-            direction = FlowDirection.BACKWARD
+        if config.direction == "forward":
+            config.direction = FlowDirection.FORWARD
+        elif config.direction == "backward":
+            config.direction = FlowDirection.BACKWARD
         else:
-            raise ValueError(f"Invalid flow direction '{direction}'")
+            raise ValueError(f"Invalid flow direction '{config.direction}'")
 
-        if render_colors is not None:
-            render_colors = render_colors.split(",")
+        if config.render_colors is not None:
+            config.render_colors = config.render_colors.split(",")
 
-        output_bitmap = bitmap_path is not None
-        has_output = output_bitmap or output_intensity or output_heatmap\
-            or output_accumulator
+        output_bitmap = config.bitmap_path is not None
+        has_output = output_bitmap or config.output_intensity or config.output_heatmap\
+            or config.output_accumulator
 
-        if not (has_output or export_flow or checkpoint_end):
+        if not (has_output or config.export_flow or config.checkpoint_end):
             warnings.warn("No output or exportation selected")
 
-        if size is not None:
-            size = tuple(map(int, re.split(r"[^\d]", size)))
+        if config.size is not None:
+            config.size = tuple(map(int, re.split(r"[^\d]", config.size)))
             
         fs_args = {
-            "use_mvs": use_mvs,
-            "mask_path": mask_path,
-            "kernel_path": kernel_path,
-            "cv_config": cv_config,
-            "flow_filters": flow_filters,
-            "size": size,
-            "direction": direction,
+            "use_mvs": config.use_mvs,
+            "mask_path": config.mask_path,
+            "kernel_path": config.kernel_path,
+            "cv_config": config.cv_config,
+            "flow_filters": config.flow_filters,
+            "size": config.size,
+            "direction": config.direction,
             "seek_ckpt": ckpt_meta.get("cursor"),
-            "seek_time": seek_time,
-            "duration_time": duration_time,
-            "repeat": repeat,
-            "lock_expr": lock_expr,
-            "lock_mode": lock_mode
+            "seek_time": config.seek_time,
+            "duration_time": config.duration_time,
+            "repeat": config.repeat,
+            "lock_expr": config.lock_expr,
+            "lock_mode": config.lock_mode
         }
 
-        flow_source = FlowSource.from_args(flow_path, **fs_args)
+        flow_source = FlowSource.from_args(config.flow_path, **fs_args)
 
         shape_queue = multiprocessing.Queue()
 
@@ -317,7 +335,7 @@ def transfer(
         flow_process = SourceProcess(flow_source, flow_queue, shape_queue)
         flow_process.start()
 
-        for extra_flow_path in extra_flow_paths:
+        for extra_flow_path in config.extra_flow_paths:
             extra_flow_sources.append(FlowSource.from_args(extra_flow_path, **fs_args))
             extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
             extra_flow_processes.append(SourceProcess(
@@ -343,33 +361,33 @@ def transfer(
                 close()
                 return
 
-        if export_flow:
-            archive_path = get_secondary_output_path(flow_path, output_path, ".flow.zip")
-            flow_output = NumpyOutput(archive_path, replace)
+        if config.export_flow:
+            archive_path = get_secondary_output_path(config.flow_path, output_path, ".flow.zip")
+            flow_output = NumpyOutput(archive_path, config.replace)
             flow_output.write_meta({
-                "path": flow_path,
+                "path": config.flow_path,
                 "width": fs_width,
                 "height": fs_height,
                 "framerate": fs_framerate,
                 "direction": flow_source.direction.value,
-                "seek_time": seek_time,
+                "seek_time": config.seek_time,
             })
 
-        if size is None:
-            size = fs_width, fs_height
+        if config.size is None:
+            config.size = fs_width, fs_height
         
         fs_width_factor = fs_height_factor = 1
 
         if output_bitmap:
             bitmap_source = BitmapSource.from_args(
-                bitmap_path,
-                size,
+                config.bitmap_path,
+                config.size,
                 seek=ckpt_meta.get("cursor"),
-                seed=seed,
-                seek_time=bitmap_seek_time,
-                alteration_path=bitmap_alteration_path,
-                repeat=bitmap_repeat,
-                flow_path=flow_path)
+                seed=config.seed,
+                seek_time=config.bitmap_seek_time,
+                alteration_path=config.bitmap_alteration_path,
+                repeat=config.bitmap_repeat,
+                flow_path=config.flow_path)
             bitmap_queue = multiprocessing.Queue(maxsize=1)
             bitmap_process = SourceProcess(bitmap_source, bitmap_queue, shape_queue)
             bitmap_process.start()
@@ -388,7 +406,7 @@ def transfer(
 
             if bs_width == 0 or bs_height == 0:
                 raise ValueError(
-                    f"Encountered an error opening bitmap '{bitmap_path}', "\
+                    f"Encountered an error opening bitmap '{config.bitmap_path}', "\
                     f"shape is ({bs_height}, {bs_width})")
 
             if fs_width != bs_width or fs_height != bs_height:
@@ -400,7 +418,7 @@ def transfer(
                 fs_width_factor = bs_width // fs_width
                 fs_height_factor = bs_height // fs_height
         
-        elif bitmap_alteration_path is not None:
+        elif config.bitmap_alteration_path is not None:
             warnings.warn(
                 "An alteration path was passed but no bitmap was provided")
 
@@ -410,37 +428,37 @@ def transfer(
             accumulator = Accumulator.from_args(
                 fs_width * fs_width_factor, 
                 fs_height * fs_height_factor,
-                method=acc_method,
-                reset_mode=reset_mode,
-                reset_alpha=reset_alpha,
-                reset_mask_path=reset_mask_path,
-                heatmap_mode=heatmap_mode,
-                heatmap_args=heatmap_args,
-                heatmap_reset_threshold=heatmap_reset_threshold,
-                bg_color=accumulator_background,
-                stack_composer=stack_composer,
-                initial_canvas=initial_canvas,
-                bitmap_mask_path=bitmap_mask_path,
-                crumble=crumble,
-                bitmap_introduction_flags=bitmap_introduction_flags)
+                method=config.acc_method,
+                reset_mode=config.reset_mode,
+                reset_alpha=config.reset_alpha,
+                reset_mask_path=config.reset_mask_path,
+                heatmap_mode=config.heatmap_mode,
+                heatmap_args=config.heatmap_args,
+                heatmap_reset_threshold=config.heatmap_reset_threshold,
+                bg_color=config.accumulator_background,
+                stack_composer=config.stack_composer,
+                initial_canvas=config.initial_canvas,
+                bitmap_mask_path=config.bitmap_mask_path,
+                crumble=config.crumble,
+                bitmap_introduction_flags=config.bitmap_introduction_flags)
 
         if has_output:
             vout_args = (
                 fs_width * fs_width_factor,
                 fs_height * fs_height_factor,
                 bs_framerate if bs_framerate is not None else fs_framerate,
-                vcodec,
-                execute,
-                replace,
-                safe
+                config.vcodec,
+                config.execute,
+                config.replace,
+                config.safe
             )
-            if isinstance(output_path, list) and not output_path:
-                output_path = None
-            if output_path is None or isinstance(output_path, str):
-                output_paths = [output_path]
+            if isinstance(config.output_path, list) and not config.output_path:
+                config.output_path = None
+            if config.output_path is None or isinstance(config.output_path, str):
+                output_paths = [config.output_path]
             else:
-                output_paths = output_path
-            if output_path is not None and preview_output:
+                output_paths = config.output_path
+            if config.output_path is not None and config.preview_output:
                 output_paths.append(None)
             for path in output_paths:
                 output = VideoOutput.from_args(path, *vout_args)
@@ -472,17 +490,17 @@ def transfer(
                 flow = merge_flows(flows)
                 if fs_width_factor != 1 or fs_height_factor != 1:
                     flow = upscale_flow(flow, fs_width_factor, fs_height_factor)
-                if export_flow:
-                    flow_output.write_array(numpy.round(flow).astype(int) if round_flow else flow)
+                if config.export_flow:
+                    flow_output.write_array(numpy.round(flow).astype(int) if config.round_flow else flow)
                 accumulator.update(flow, fs_direction)
                 out_frame = None
-                if output_intensity:
+                if config.output_intensity:
                     flow_intensity = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
-                    out_frame = render1d(flow_intensity, render_scale, render_colors, render_binary)
-                elif output_heatmap:
-                    out_frame = render1d(accumulator.get_heatmap_array(), render_scale, render_colors, render_binary)
-                elif output_accumulator:
-                    out_frame = render2d(accumulator.get_accumulator_array(), render_scale, render_colors),
+                    out_frame = render1d(flow_intensity, config.render_scale, config.render_colors, config.render_binary)
+                elif config.output_heatmap:
+                    out_frame = render1d(accumulator.get_heatmap_array(), config.render_scale, config.render_colors, config.render_binary)
+                elif config.output_accumulator:
+                    out_frame = render2d(accumulator.get_accumulator_array(), config.render_scale, config.render_colors),
                 elif output_bitmap:
                     bitmap = bitmap_queue.get(timeout=1)
                     if bitmap is None:
@@ -492,9 +510,9 @@ def transfer(
                     for oq in output_queues:
                         oq.put(out_frame, timeout=1)
                 cursor += 1
-                if checkpoint_every is not None and cursor % checkpoint_every == 0:
-                    export_checkpoint(flow_path, bitmap_path, output_path,
-                                      replace, cursor, accumulator, seed)
+                if config.checkpoint_every is not None and cursor % config.checkpoint_every == 0:
+                    export_checkpoint(config.flow_path, config.bitmap_path, output_path,
+                                      config.replace, cursor, accumulator, config.seed)
                 pbar.update(1)
             except (queue.Empty, queue.Full):
                 pass
@@ -513,9 +531,9 @@ def transfer(
                     exception = True
                     break
         pbar.close()
-        if (exception and safe) or checkpoint_end:
-            export_checkpoint(flow_path, bitmap_path, output_path, replace,
-                              cursor, accumulator, seed)
+        if (exception and config.safe) or config.checkpoint_end:
+            export_checkpoint(config.flow_path, config.bitmap_path, output_path, config.replace,
+                              cursor, accumulator, config.seed)
         close()
 
     except Exception as err:
