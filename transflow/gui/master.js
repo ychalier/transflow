@@ -89,12 +89,17 @@ var websocketRetryCount = 0;
 var leftPanel;
 var rightPanel;
 var wssConnectionIndicator;
+var overlayInterval;
 
 function create(parent=null, tag="div", className=null) {
     const element = document.createElement(tag);
     if (parent != null) parent.appendChild(element);
     if (className != null) element.className = className;
     return element;
+}
+
+function remove(element) {
+    element.parentElement.removeChild(element);
 }
 
 function getSelectedValue(select) {
@@ -315,6 +320,11 @@ function connectWebsocket(wssUrl) {
         websocketRetryCount = 0;
         console.log("Websocket is connected");
         setWssConnectionIndicator("Connected");
+        const overlay = document.querySelector(".overlay");
+        if (overlay != null) {
+            clearInterval(overlayInterval);
+            remove(overlay);
+        }
         websocket.send("RELOAD");
     }
     websocket.onmessage = (message) => {
@@ -592,6 +602,17 @@ function inflate() {
     inflateBody(body);
     const footer = create(document.body, "div", "footer");
     inflateFooter(footer);
+    const overlay = create(document.body, "div", "overlay");
+    const overlaySpan = create(overlay, "span")
+    overlaySpan.setAttribute("state", "-1");
+    function writeOverlay() {
+        let state = parseInt(overlaySpan.getAttribute("state"));
+        state = (state + 1) % 4;
+        overlaySpan.setAttribute("state", state);
+        overlaySpan.textContent = "Connecting" + ".".repeat(state);
+    }
+    writeOverlay();
+    overlayInterval = setInterval(writeOverlay, 500);
 }
 
 function onLoad() {
