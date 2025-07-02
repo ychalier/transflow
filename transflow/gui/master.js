@@ -78,6 +78,7 @@ function loadConfigFromStorage() {
     }
 }
 loadConfigFromStorage();
+config.isRunning = false;
 
 function saveConfigToStorage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
@@ -542,15 +543,23 @@ function inflateRightPanel(container) {
         const video = create(videoContainer, "video");
         video.src = `/media?url=${config.outputUrl}`;
         video.setAttribute("controls", "1");
-    } else if (config.previewUrl != null) {
+    } else if (config.previewUrl != null && config.isRunning) {
+        var imgLoaded = false;
         const imgContainer = create(pane, "div");
         const img = create(imgContainer, "img");
-        img.src = config.previewUrl;
-        img.addEventListener("error", () => {
+        img.src = "wait.gif";
+        const dummyImg = new Image();
+        dummyImg.onload = () => {
+            if (imgLoaded) return;
+            img.src = dummyImg.src;
+            imgLoaded = true;
+        };
+        dummyImg.onerror = () => {
             if (config.isRunning) {
-                img.src = config.previewUrl + "?t=" + new Date().getTime();
+                dummyImg.src = config.previewUrl + "?t=" + new Date().getTime();
             }
-        });
+        }
+        dummyImg.src = config.previewUrl;
         const progressBarContainer = create(pane, "div", "progress-bar-container");
         progressBarContainer.setAttribute("id", "progress-bar")
         create(progressBarContainer, "progress");

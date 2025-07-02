@@ -189,11 +189,11 @@ class WebsocketServer(threading.Thread):
             self.job_monitoring.join()
             self._broadcast("CANCEL")
         elif cmd == "RELOAD":
-            self._broadcast(f'RELOAD {json.dumps({
+            self._broadcast(f"""RELOAD {json.dumps({
                 "ongoing": self.job is not None,
                 "outputFile": self.output_file,
                 "previewUrl": f"http://{self.host}:{self.mjpeg_port}/transflow",
-            })}')
+            })}""")
 
     def run(self):
         async def register(websocket):
