@@ -57,6 +57,7 @@ class WebsocketServer(threading.Thread):
         self.job_cancel_event = None
         self.job = None
         self.job_monitoring = None
+        self.output_file = None
 
     def _broadcast(self, message: str):
         logger.debug("Broadcasting %s", message)
@@ -117,6 +118,9 @@ class WebsocketServer(threading.Thread):
             output_paths = [f"mjpeg:{self.mjpeg_port}:{self.host}"]
             if args["output"]["file"] is not None:
                 output_paths.append(args["output"]["file"])
+                self.output_file = args["output"]["file"]
+            else:
+                self.output_file = None
             config = Config(
                 args["flowSource"]["file"],
                 bitmap_path,
@@ -184,6 +188,12 @@ class WebsocketServer(threading.Thread):
             self.job_cancel_event.set()
             self.job_monitoring.join()
             self._broadcast("CANCEL")
+        elif cmd == "RELOAD":
+            self._broadcast(f'RELOAD {json.dumps({
+                "ongoing": self.job is not None,
+                "outputFile": self.output_file,
+                "previewUrl": f"http://{self.host}:{self.mjpeg_port}/transflow",
+            })}')
 
     def run(self):
         async def register(websocket):

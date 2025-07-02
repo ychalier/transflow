@@ -60,6 +60,29 @@ var config = {
     }
 };
 
+const STORAGE_KEY = "transflow-gui";
+
+function loadConfigFromStorage() {
+    if (localStorage.getItem(STORAGE_KEY) != null) {
+        function mergeConfig(configObj, storageObj) {
+            for (const key in storageObj) {
+                if (typeof(storageObj[key]) == "object") {
+                    if (!(key in configObj)) configObj[key] = {};
+                    mergeConfig(configObj[key], storageObj[key]);
+                } else {
+                    configObj[key] = storageObj[key];
+                }
+            }
+        }
+        mergeConfig(config, JSON.parse(localStorage.getItem(STORAGE_KEY)));
+    }
+}
+loadConfigFromStorage();
+
+function saveConfigToStorage() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
+
 var leftPanelActiveTab = "Flow Source";
 var websocket;
 var websocketRetryCount = 0;
@@ -123,6 +146,7 @@ function configSet(key, value) {
 
 function onConfigChange(key) {
     console.log("Config changed", key, configGet(key));
+    saveConfigToStorage();
 }
 
 function createFileOpenInput(container, label, key, filetypes) {
@@ -291,6 +315,7 @@ function connectWebsocket(wssUrl) {
         websocketRetryCount = 0;
         console.log("Websocket is connected");
         setWssConnectionIndicator("Connected");
+        websocket.send("RELOAD");
     }
     websocket.onmessage = (message) => {
         console.log("WS>", message.data);
@@ -331,6 +356,12 @@ function connectWebsocket(wssUrl) {
             const rate = status.cursor / status.elapsed;
             const remaining = (status.total - status.cursor) / rate;
             progressInfo.textContent = `${(100*status.cursor/status.total).toFixed(0)}% ${status.cursor}/${status.total} [${formatDuration(status.elapsed)}<${formatDuration(remaining)}, ${rate.toFixed(2)}frame/s]`
+        } else if (message.data.startsWith("RELOAD")) {
+            const data = JSON.parse(message.data.slice(7));
+            config.isRunning = data.ongoing;
+            config.outputUrl = data.outputFile;
+            config.previewUrl = data.previewUrl;
+            inflateRightPanel(rightPanel);
         }
         websocket.send("PONG");
     };
@@ -502,7 +533,9 @@ function inflateRightPanel(container) {
         const img = create(imgContainer, "img");
         img.src = config.previewUrl;
         img.addEventListener("error", () => {
-            img.src = config.previewUrl + "?t=" + new Date().getTime();
+            if (config.isRunning) {
+                img.src = config.previewUrl + "?t=" + new Date().getTime();
+            }
         });
         const progressBarContainer = create(pane, "div", "progress-bar-container");
         progressBarContainer.setAttribute("id", "progress-bar")
