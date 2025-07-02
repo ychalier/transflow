@@ -293,7 +293,7 @@ class WebServer(http.server.HTTPServer):
         self.wss.start()
 
 
-def start_gui(host: str = "localhost", port: int = 8000, mjpeg_port: int = 8080):
+def start_gui(host: str = "localhost", port: int = 8000, mjpeg_port: int = 8001):
     with WebServer(host, port, mjpeg_port) as httpd:
         url = f"http://{host}:{port}"
         logger.info(f"Listening at {url}")

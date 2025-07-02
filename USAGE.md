@@ -6,6 +6,7 @@ This document provides details on how to use the `transflow` module for performi
 
 - [Basic Flow Transfer](#basic-flow-transfer)
 - [Detailed Example](#detailed-example)
+- [GUI](#gui)
 - [Flow Estimation Methods](#flow-estimation-methods)
 - [Using Motion Vectors](#using-motion-vectors)
 - [Flow Direction](#flow-direction)
@@ -80,6 +81,18 @@ A final detail could be to control the flow scale to ease the start and the end,
 The formula is based on time `t`. The river video lasts for about 30 seconds. Such formulas can be obtained via [Lagrange interpolation](https://en.wikipedia.org/wiki/Lagrange_polynomial), I published a hacky tool for that, the [Online Lagrange Polynomial Editor](https://chalier.fr/lagrange/):
 
 [![](https://drive.chalier.fr/protected/transflow/lagrange-polynomial.png)](https://chalier.fr/lagrange/)
+
+## GUI
+
+You can run Transflow with `gui` as the only argument to open a graphical user interface. This GUI allows you to set various parameters interactively. It also provides a live preview of the output. It runs as a local webserver. You may use arguments `--gui-host`, `--gui-port` and `--gui-mjpeg-port` to specify the host and ports to use. By default, it listens on `localhost:8000` for the GUI and `localhost:8001` for the MJPEG stream. Once started, your browser should automatically open the GUI. If not, you can open it manually by navigating to the URL
+
+```console
+transflow gui
+```
+
+Here is a screenshot of the GUI:
+
+![](https://drive.chalier.fr/protected/transflow/gui.jpg)
 
 ## Flow Estimation Methods
 

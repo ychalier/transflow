@@ -59,7 +59,16 @@ The simplest process consists in taking the motion from a video file and applyin
 transflow flow.mp4 -b image.jpg -o output.mp4
 ```
 
+If your are not too familiar with the command line, you can use the graphical user interface (GUI) to set parameters interactively. You can run the GUI with (see [USAGE.md](USAGE.md#gui) for more details):
+
+```console
+transflow gui
+```
+
+![Screenshot of Transflow GUI](https://drive.chalier.fr/protected/transflow/gui.jpg)
+
 The alias `transflow` represents either `python -m transflow` or `python transflow.py`, depending on the chosen installation method. For more details, see [USAGE.md](USAGE.md).
+
 
 ## Additional Resources
 

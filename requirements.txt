@@ -8,3 +8,4 @@ scipy
 tqdm
 aiohttp   # for 'mjpeg-streamer'
 netifaces # for 'mjpeg-streamer'
+websockets

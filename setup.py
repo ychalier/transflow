@@ -9,7 +9,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
     name='transflow',
-    version='1.8.0',
+    version='1.9.0',
     packages=find_packages(),
     include_package_data=True,
     license='GNU GPLv3',
@@ -19,7 +19,9 @@ setup(
     author='Yohan Chalier',
     author_email='yohan@chalier.fr',
     install_requires=[
+        "aiohttp",
         "av",
+        "netifaces",
         "numpy",
         "opencv-python",
         "Pillow",
@@ -27,5 +29,6 @@ setup(
         "pyside6",
         "scipy",
         "tqdm",
+        "websockets",
     ],
 )

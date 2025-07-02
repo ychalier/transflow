@@ -71,7 +71,7 @@ input,
 select,
 input,
 .input-file-label {
-    width: 18em;
+    max-width: 100%;
 }
 
 .input-file-label {
@@ -143,6 +143,7 @@ img,
 video {
     width: 100%;
     border: 1px solid black;
+    image-rendering: crisp-edges;
 }
 
 .header {
@@ -153,15 +154,21 @@ video {
     display: flex;
     width: 100%;
     height: 100%;
-    border-top: 1px solid black;
     border-bottom: 1px solid black;
     overflow: hidden;
 }
 
 .footer {
     display: flex;
-    gap: .4rem;
     padding: .4rem;
+    display: flex;
+    justify-content: space-between;
+    background: #eee;
+}
+
+.footer-left {
+    display: flex;
+    gap: .4rem;
 }
 
 .panel {
@@ -229,6 +236,11 @@ video {
 
 .input-container-bool input[type=checkbox] {
     width: fit-content;
+}
+
+input[type=checkbox] {
+    width: fit-content;
+    min-width: 0;
 }
 
 .row {

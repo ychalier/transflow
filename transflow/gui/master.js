@@ -239,10 +239,13 @@ function createSelect(container, label, key, values) {
     return select;
 }
 
-function createTextInput(container, label, key) {
+function createTextInput(container, label, key, placeholder=undefined) {
     const inputContainer = createInputContainer(container, label);
     const input = create(inputContainer, "input");
     input.value = configGet(key);
+    if (placeholder != undefined) {
+        input.placeholder = placeholder;
+    }
     input.addEventListener("change", () => {
         let value = input.value.trim();
         if (value == "") value = null;
@@ -315,12 +318,12 @@ function formatDuration(totalSeconds) {
 }
 
 function connectWebsocket(wssUrl) {
-    setWssConnectionIndicator(`Connecting… [${websocketRetryCount}]`);
+    setWssConnectionIndicator(`connecting… [${websocketRetryCount}]`);
     websocket = new WebSocket(wssUrl);
     websocket.onopen = () => {
         websocketRetryCount = 0;
         console.log("Websocket is connected");
-        setWssConnectionIndicator("Connected");
+        setWssConnectionIndicator("connected");
         const overlay = document.querySelector(".overlay");
         if (overlay != null) {
             clearInterval(overlayInterval);
@@ -389,27 +392,22 @@ function connectWebsocket(wssUrl) {
             delay = 1;
         }
         console.log(`Socket is closed. Reconnect will be attempted in ${delay} second.`, event.reason);
-        setWssConnectionIndicator("Closed");
+        setWssConnectionIndicator("closed");
         setTimeout(() => { connectWebsocket(wssUrl); }, delay * 1000);
     };
     websocket.onerror = (err) => {
         console.error("Socket encountered error: ", err.message, "Closing socket");
-        setWssConnectionIndicator("Error");
+        setWssConnectionIndicator("error");
         websocket.close();
     };
 }
 
 function openWssConnection() {
-    setWssConnectionIndicator("Scanning…");
+    setWssConnectionIndicator("scanning…");
     fetch("/wss").then(res => res.text()).then(text => {
         const wssUrl = text;  // `ws://${res.headers.get("Wss-Host")}:${res.headers.get("Wss-Port")}`;
         connectWebsocket(wssUrl);
     });
-}
-
-function inflateHeader(container) {
-    container.innerHTML = "";
-    create(container).textContent = "transflow";
 }
 
 function inflatePaneFlowSource(container) {
@@ -420,14 +418,14 @@ function inflatePaneFlowSource(container) {
     createFileOpenInput(container, "Mask", "flowSource.maskPath", IMAGE_FILETYPES);
     createFileOpenInput(container, "Kernel", "flowSource.kernelPath", "*.npy");
     createFileOpenInput(container, "CV Config", "flowSource.cvConfig", "*.json");
-    createTextInput(container, "Filters", "flowSource.flowFilters");
+    createTextInput(container, "Filters", "flowSource.flowFilters", "scale=2;clip=5;polar=r:a");
     createBoolInput(container, "Round Flow", "flowSource.roundFlow");
     createBoolInput(container, "Export Flow", "flowSource.exportFlow");
-    createTimestampInput(container, "Seek Time", "flowSource.seekTime");
-    createTimestampInput(container, "Duration Time", "flowSource.durationTime");
+    createTimestampInput(container, "Seek Time", "flowSource.seekTime", "00:00:00");
+    createTimestampInput(container, "Duration Time", "flowSource.durationTime", "00:00:00");
     createNumberInput(container, "Repeat", "flowSource.repeat", 0, null, 1);
     createSelect(container, "Lock Mode", "flowSource.lockMode", ["stay", "skip"]);
-    createTextInput(container, "Lock Expression", "flowSource.lockExpr");
+    createTextInput(container, "Lock Expression", "flowSource.lockExpr", "(1,1),(4,1) (stay) t>=2 and t<=3 (skip)");
 }
 
 function inflatePaneBitmapSource(container) {
@@ -446,7 +444,7 @@ function inflatePaneBitmapSource(container) {
     bitmapSelect.addEventListener("change", onBitmapSelectChange);
     onBitmapSelectChange();
     createFileOpenInput(container, "Alteration", "bitmapSource.alterationPath", "*.png");
-    createTimestampInput(container, "Seek Time", "bitmapSource.seekTime");
+    createTimestampInput(container, "Seek Time", "bitmapSource.seekTime", "00:00:00");
     createNumberInput(container, "Repeat", "bitmapSource.repeat", 0, null, 1);
 }
 
@@ -475,19 +473,19 @@ function inflatePaneAccumulator(container) {
     createRangeInput(container, "Reset Alpha", "accumulator.resetAlpha");
     createFileOpenInput(container, "Reset Mask", "accumulator.resetMask", "*.jpg *.jpeg *.png");
     createSelect(container, "Heatmap Mode", "accumulator.heatmapMode", ["discrete", "continuous"]);
-    createTextInput(container, "Heatmap Args", "accumulator.heatmapArgs");
+    createTextInput(container, "Heatmap Args", "accumulator.heatmapArgs", "min:max:add:sub (discrete) max:decay:threshold (continuous)");
     createTextInput(container, "Heatmap Reset Threshold", "accumulator.heatmapResetThreshold"); // TODO: maybe set to null if empty or parseFloat
 }
 
 function inflatePaneOutput(container) {
     container.innerHTML = "";
     createFileSaveInput(container, "File", "output.file", ".mp4", VIDEO_FILETYPES);
-    createTextInput(container, "Video Codec", "output.vcodec");
+    createTextInput(container, "Video Codec", "output.vcodec", "h264");
     createBoolInput(container, "Output Intensity", "output.outputIntensity");
     createBoolInput(container, "Output Heatmap", "output.outputHeatmap");
     createBoolInput(container, "Output Accumulator", "output.outputAccumulator");
     createNumberInput(container, "Render Scale", "output.renderScale", null, null, 0.001);
-    createTextInput(container, "Render Colors", "output.renderColors");
+    createTextInput(container, "Render Colors", "output.renderColors", "#000000,#ffffff");
     createBoolInput(container, "Render Binary", "output.renderBinary");
     createNumberInput(container, "Checkpoint Every", "output.checkpointEvery", 0, null, 1);
     createBoolInput(container, "Checkpoint End", "output.checkpointEnd");
@@ -522,16 +520,6 @@ function inflateLeftPanel(container) {
             inflatePaneOutput(paneMain);
             break;
     }
-    const paneFooter = create(container, "div", "pane pane-shrink");
-    const seedInput = createNumberInput(paneFooter, "Seed", "seed", 0, 2147483647, 1);
-    const seedInputContainer = seedInput.parentElement;
-    const seedRandomButton = create(seedInputContainer, "button");
-    seedRandomButton.textContent = "Random";
-    seedRandomButton.addEventListener("click", () => {
-        const value = Math.floor(Math.random() * Math.pow(2, 31) - 1);
-        configSet("seed", value);
-        seedInput.value = value;
-    });
 }
 
 function inflateRightPanel(container) {
@@ -590,6 +578,17 @@ function inflateRightPanel(container) {
         websocket.send("INTERRUPT");
     });
 
+    const paneFooter = create(container, "div", "pane pane-shrink");
+    const seedInput = createNumberInput(paneFooter, "Seed", "seed", 0, 2147483647, 1);
+    const seedInputContainer = seedInput.parentElement;
+    const seedRandomButton = create(seedInputContainer, "button");
+    seedRandomButton.textContent = "Random";
+    seedRandomButton.addEventListener("click", () => {
+        const value = Math.floor(Math.random() * Math.pow(2, 31) - 1);
+        configSet("seed", value);
+        seedInput.value = value;
+    });
+
 }
 
 function inflateBody(container) {
@@ -602,15 +601,19 @@ function inflateBody(container) {
 
 function inflateFooter(container) {
     container.innerHTML = "";
-    wssConnectionIndicator = create(container, "span");
-    wssConnectionIndicator.textContent = "Disconnected";
-    create(container, "span").innerHTML = `<a href="https://github.com/ychalier/transflow">GitHub</a>`;
+    const footerLeft = create(container, "div", "footer-left");
+    create(footerLeft, "span").textContent = "transflow";
+    create(footerLeft, "span").innerHTML = `<a href="https://chalier.fr/transflow/">web version</a>`;
+    create(footerLeft, "span").innerHTML = `<a href="https://github.com/ychalier/transflow">github</a>`;
+    create(footerLeft, "span").innerHTML = `<a href="    https://github.com/ychalier/transflow/blob/main/USAGE.md">documentation</a>`;
+    create(footerLeft, "span").innerHTML = `<a href="https://chalier.fr/">author</a>`;
+    const footerRight = create(container, "div", "footer-right");
+    wssConnectionIndicator = create(footerRight, "span");
+    wssConnectionIndicator.textContent = "disconnected";
 }
 
 function inflate() {
     document.body.innerHTML = "";
-    const header = create(document.body, "div", "header");
-    inflateHeader(header);
     const body = create(document.body, "div", "body");
     inflateBody(body);
     const footer = create(document.body, "div", "footer");

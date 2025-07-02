@@ -182,6 +182,9 @@ def main():
     parser.add_argument("-lm", "--lock-mode",
         type=str, default="stay", choices=["skip", "stay"],
         help="When the flow is locked, either pause the source ('stay') or continue reading it ('skip')")
+    parser.add_argument("--gui-host", type=str, default="localhost", help="GUI host address")
+    parser.add_argument("--gui-port", type=int, default=8000, help="GUI port")
+    parser.add_argument("--gui-mjpeg-port", type=int, default=8001, help="GUI MJPEG port")
     args = parser.parse_args()
     if args.flow == "gui":
         from .gui import start_gui
