@@ -232,8 +232,9 @@ class Config:
 class Status:
 
     cursor: int
-    total: int
+    total: int | None
     elapsed: float
+    error: str | None
 
 
 def transfer(
@@ -527,15 +528,17 @@ def transfer(
                                       config.replace, cursor, accumulator, config.seed)
                 pbar.update(1)
                 if status_queue is not None:
-                    status_queue.put(Status(cursor, expected_length, time.time() - start_t))
+                    status_queue.put(Status(cursor, expected_length, time.time() - start_t, None))
             except (queue.Empty, queue.Full):
                 pass
             except KeyboardInterrupt:
                 exception = True
                 break
-            except Exception:
+            except Exception as err:
                 exception = True
                 traceback.print_exc()
+                if status_queue is not None:
+                    status_queue.put(Status(cursor, expected_length, time.time() - start_t, str(err)))
                 break
             finally:
                 if (not flow_process.is_alive())\

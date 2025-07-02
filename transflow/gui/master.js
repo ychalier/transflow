@@ -363,9 +363,13 @@ function connectWebsocket(wssUrl) {
             progress.min = 0;
             progress.max = status.total;
             progress.value = status.cursor;
-            const rate = status.cursor / status.elapsed;
-            const remaining = (status.total - status.cursor) / rate;
-            progressInfo.textContent = `${(100*status.cursor/status.total).toFixed(0)}% ${status.cursor}/${status.total} [${formatDuration(status.elapsed)}<${formatDuration(remaining)}, ${rate.toFixed(2)}frame/s]`
+            if (status.error != null) {
+                progressInfo.textContent = `Error: ${status.error}`;
+            } else {
+                const rate = status.cursor / status.elapsed;
+                const remaining = (status.total - status.cursor) / rate;
+                progressInfo.textContent = `${(100*status.cursor/status.total).toFixed(0)}% ${status.cursor}/${status.total} [${formatDuration(status.elapsed)}<${formatDuration(remaining)}, ${rate.toFixed(2)}frame/s]`
+            }
         } else if (message.data.startsWith("RELOAD")) {
             const data = JSON.parse(message.data.slice(7));
             config.isRunning = data.ongoing;
