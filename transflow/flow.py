@@ -870,13 +870,13 @@ class CvFlowSource(FlowSource):
         self.config.start()
 
     def rewind(self):
-        self.frame_cursor = self.start_frame
+        self.input_frame_index = self.start_frame
         self.capture.set(cv2.CAP_PROP_POS_MSEC, 0)
-        for i in range(self.frame_cursor + 1):
+        for i in range(self.input_frame_index + 1):
             success, frame = self.capture.read()
             if not success or frame is None:
                 raise RuntimeError(f"Could not open video at {self.file}")
-            if i == self.frame_cursor:
+            if i == self.input_frame_index:
                 resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
                 self.prev_gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
                 self.prev_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
