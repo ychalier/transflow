@@ -210,7 +210,7 @@ class WebsocketServer(threading.Thread):
                             message,
                             err)
                         traceback.print_exc()
-                        
+
             except websockets.exceptions.ConnectionClosedError:
                 pass
             except ConnectionResetError:
@@ -219,13 +219,14 @@ class WebsocketServer(threading.Thread):
             self.connections.remove(websocket)
         async def start_server():
             async with websockets.serve(register, self.host, None) as wserver:
-                self.port = wserver.sockets[0].getsockname()[1]
+                self.port = list(wserver.sockets)[0].getsockname()[1]
                 logger.info("Starting websocket server at ws://%s:%d", self.host, self.port)
                 await asyncio.Future()
         asyncio.run(start_server())
 
 
 class WebHandler(http.server.SimpleHTTPRequestHandler):
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=os.path.dirname(__file__), **kwargs)
 
@@ -239,6 +240,7 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 return self.send_error(404, "File not found")
         elif parsed.path == "/wss":
+            assert isinstance(self.server, "WebServer")
             return self.serve_text(f"ws://{self.server.wss.host}:{self.server.wss.port}")
         return super().do_GET()
 

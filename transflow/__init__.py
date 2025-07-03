@@ -194,7 +194,9 @@ def main():
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
     duration_time = parse_timestamp(args.duration)
     if duration_time is None and (args.to is not None):
-        duration_time = parse_timestamp(args.to) - seek_time
+        to_ts = parse_timestamp(args.to)
+        if to_ts is not None and seek_time is not None:
+            duration_time = to_ts - seek_time
     if duration_time is not None and duration_time < 0:
         raise ValueError(f"Duration must be positive (got {duration_time:f})")
     from .pipeline import transfer, Config
