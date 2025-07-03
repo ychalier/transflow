@@ -2,6 +2,7 @@ import math
 import os
 import random
 import re
+import warnings
 
 import numpy
 
@@ -33,8 +34,9 @@ def find_unique_path(path: str) -> str:
         root, pre_ext = os.path.splitext(root)
         ext = pre_ext + ext
     i = 0
-    if re.match(r".*\.(\d{3})$", root):
-        i = int(re.match(r".*\.(\d{3})$", root).group(1)) + 1
+    m = re.match(r".*\.(\d{3})$", root)
+    if m:
+        i = int(m.group(1)) + 1
         root = root[:-4]
     while os.path.isfile(path):
         path = root + f".{i:03d}" + ext
@@ -45,7 +47,7 @@ def find_unique_path(path: str) -> str:
 def parse_hex_color(string: str) -> tuple[int, int, int]:
     s = string.replace("#", "").replace("0x", "").replace("x", "")
     x = int(s, 16)
-    return [(x >> 16) & 255, (x >> 8) & 255, x & 255]
+    return ((x >> 16) & 255, (x >> 8) & 255, x & 255)
 
 
 def compose_top(*colors: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -53,19 +55,20 @@ def compose_top(*colors: tuple[int, int, int]) -> tuple[int, int, int]:
 
 
 def compose_additive(*colors: tuple[int, int, int]) -> tuple[int, int, int]:
-    return [
+    return (
         min(255, sum(c[0] for c in colors)),
         min(255, sum(c[1] for c in colors)),
         min(255, sum(c[2] for c in colors))
-    ]
+    )
 
 
 def compose_subtractive(*colors: tuple[int, int, int]) -> tuple[int, int, int]:
-    c = [*colors[0]]
-    for c2 in colors[1:]:
-        for k in range(3):
-            c[k] = max(0, c[k] - (255 - c2[k]))
-    return c
+    r, g, b = colors[0]
+    for color in colors[1:]:
+        r = max(0, r - (255 - color[0]))
+        g = max(0, g - (255 - color[1]))
+        b = max(0, b - (255 - color[2]))
+    return (r, g, b)
 
 
 def compose_average(*colors: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -117,6 +120,9 @@ def parse_timestamp(timestamp: str | None) -> float | None:
     if timestamp is None:
         return None
     a = re.match(r"(\d\d):(\d\d):(\d\d)(?:\.(\d\d\d))?", timestamp)
+    if a is None:
+        warnings.warn(f"Could not parse timestamp {timestamp}")
+        return None
     h = int(a.group(1))
     m = int(a.group(2))
     s = int(a.group(3))
