@@ -36,9 +36,12 @@ class VideoOutput:
                   safe: bool = False):
         if path is None:
             return CvVideoOutput(width, height)
+        if framerate is None:
+            framerate = 30
         mjpeg_pattern = re.compile(r"^mjpeg(:[:a-z0-9A-Z\-]+)?$", re.IGNORECASE)
-        if mjpeg_pattern.match(path):
-            mjpeg_query = mjpeg_pattern.match(path).group(1) 
+        m = mjpeg_pattern.match(path)
+        if m:
+            mjpeg_query = m.group(1) 
             mjpeg_args = []
             if mjpeg_query is not None:
                 mjpeg_args = mjpeg_query[1:].split(":")
@@ -95,11 +98,15 @@ class FFmpegVideoOutput(VideoOutput):
         return self
 
     def feed(self, frame: numpy.ndarray):
+        if self.process is None or self.process.stdin is None:
+            raise ValueError("Process not initialized")
         self.process.stdin.write(frame.astype(numpy.uint8).tobytes())
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.process.stdin.close()
-        self.process.wait()
+        if self.process is not None and self.process.stdin is not None:
+            self.process.stdin.close()
+        if self.process is not None:
+            self.process.wait()
         if self.execute:
             startfile(self.path)
 
@@ -141,13 +148,16 @@ class MjpegOutput(VideoOutput):
         return self
     
     def feed(self, frame: numpy.ndarray):
+        if self.stream is None:
+            raise ValueError("Stream not initialized")
         if isinstance(frame, tuple):
             self.stream.set_frame(cv2.cvtColor(frame[0], cv2.COLOR_RGB2BGR))
         else:
             self.stream.set_frame(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
     
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.server.stop()
+        if self.server is not None:
+            self.server.stop()
 
 
 class ZipOutput:
@@ -188,7 +198,7 @@ class NumpyOutput(ZipOutput):
 
 
 def render1d(arr: numpy.ndarray, scale: float = 1,
-             colors: tuple[str] | None = None, binary: bool = False
+             colors: tuple[str, ...] | None = None, binary: bool = False
              ) -> numpy.ndarray:
     if colors is None:
         colors = ("#000000", "#ffffff")
@@ -206,7 +216,7 @@ def render1d(arr: numpy.ndarray, scale: float = 1,
 
 
 def render2d(arr: numpy.ndarray, scale: float = 1,
-              colors: tuple[str] | None = None)-> numpy.ndarray:
+              colors: tuple[str, ...] | None = None)-> numpy.ndarray:
     if colors is None:
         colors = ("#ffff00", "#0000ff", "#ff00ff", "#00ff00")
     color_arrs = [numpy.array(parse_hex_color(c), dtype=numpy.float32) for c in colors]
