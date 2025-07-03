@@ -7,6 +7,7 @@ import re
 import threading
 import warnings
 import zipfile
+from typing import Callable
 
 import cv2
 import numpy
@@ -78,14 +79,22 @@ class FlowFilter:
         raise NotImplementedError()
     
     @classmethod
-    def from_args(cls, filter_name: str, filter_args: tuple[str]):
+    def from_args(cls, filter_name: str, filter_args: tuple[str, ...]):
         if filter_name == "scale":
+            if len(filter_args) != 1:
+                raise ValueError(f"Invalid number of arguments: {filter_name} {filter_args}")
             return ScaleFlowFilter(filter_args)
         if filter_name == "threshold":
+            if len(filter_args) != 1:
+                raise ValueError(f"Invalid number of arguments: {filter_name} {filter_args}")
             return ThresholdFlowFilter(filter_args)
         if filter_name == "clip":
+            if len(filter_args) != 1:
+                raise ValueError(f"Invalid number of arguments: {filter_name} {filter_args}")
             return ClipFlowFilter(filter_args)
         if filter_name == "polar":
+            if len(filter_args) != 2:
+                raise ValueError(f"Invalid number of arguments: {filter_name} {filter_args}")
             return PolarFlowFilter(filter_args)
         raise ValueError(f"Unknown filter name '{filter_name}'")
 
@@ -130,7 +139,7 @@ class ClipFlowFilter(FlowFilter):
 
 class PolarFlowFilter(FlowFilter):
 
-    def __init__(self, filter_args: tuple[str]):
+    def __init__(self, filter_args: tuple[str, str]):
         self.expr_radius = parse_lambda_expression(filter_args[0], ("t", "r", "a"))
         self.expr_theta = parse_lambda_expression(filter_args[1], ("t", "r", "a"))
     
@@ -158,37 +167,38 @@ class FlowSource:
             lock_expr: str | None = None,
             lock_mode: str | LockMode = LockMode.STAY):
         self.direction = direction
-        self.width: int = None
-        self.height: int = None
-        self.framerate: float = None
-        self.mask: numpy.ndarray | None = None\
-            if mask_path is None else load_mask(mask_path, newaxis=True)
-        self.kernel: numpy.ndarray | None = None\
-            if kernel_path is None else numpy.load(kernel_path)
-        self.flow_filters = None
-        self.flow_filters_string = flow_filters
-        self.seek_ckpt = seek_ckpt
-        self.seek_time = seek_time
-        self.duration_time = duration_time
-        self.input_frame_index = 0
-        self.output_frame_index = 0
+        self.width: int | None = None
+        self.height: int | None = None
+        self.framerate: float | None = None
+        self.mask: numpy.ndarray | None = None if mask_path is None else load_mask(mask_path, newaxis=True)
+        self.kernel: numpy.ndarray | None = None if kernel_path is None else numpy.load(kernel_path)
+        self.flow_filters: list[FlowFilter] = []
+        self.flow_filters_string: str | None = flow_filters
+        self.seek_ckpt: int | None = seek_ckpt
+        self.seek_time: float | None = seek_time
+        self.duration_time: float | None = duration_time
+        self.input_frame_index: int = 0
+        self.output_frame_index: int = 0
         self.is_stream: bool = False
         self.length: int | None = None
         self.start_frame: int = 0
         self.end_frame: int = 0
-        self.repeat = repeat
-        self.prev_flow = None
-        self.lock_expr = lock_expr
-        self.lock_mode = LockMode.from_arg(lock_mode)
-        self.lock_start = None
+        self.repeat: int = repeat
+        self.prev_flow: numpy.ndarray | None = None
+        self.lock_expr_string: str | None = lock_expr
+        self.lock_expr_stay: tuple[tuple[float, float]] | None = None
+        self.lock_expr_stay_index: int = 0
+        self.lock_expr_skip: Callable[[float], bool] | None = None
+        self.lock_mode: LockMode = LockMode.from_arg(lock_mode)
+        self.lock_start: float | None = None
 
-    def set_metadata(self, width: int, height: int, framerate: float, length: int):
+    def set_metadata(self, width: int, height: int, framerate: float, length: int | None):
 
         self.width = width
         self.height = height
         self.framerate = framerate
 
-        if length <= 0:
+        if length is not None and length <= 0:
             length = None
 
         self.is_stream = length == None
@@ -208,7 +218,7 @@ class FlowSource:
             self.end_frame = self.start_frame + int(self.duration_time * self.framerate)
             if length is not None:
                 self.end_frame = min(self.end_frame, length)
-        else:
+        elif length is not None:
             self.end_frame = length
 
         if self.repeat == 0:
@@ -218,8 +228,8 @@ class FlowSource:
         else:
             self.length = self.repeat * (self.end_frame - self.start_frame)
 
-        if self.length is not None and self.lock_mode == LockMode.STAY and self.lock_expr is not None:
-            for _, lock_duration in self.lock_expr:
+        if self.length is not None and self.lock_mode == LockMode.STAY and self.lock_expr_stay is not None:
+            for _, lock_duration in self.lock_expr_stay:
                 self.length += int(lock_duration * framerate)
 
         real_start_frame = self.start_frame
@@ -245,22 +255,26 @@ class FlowSource:
         if self.length is not None and self.output_frame_index >= self.length:
             raise StopIteration
         locked = False
-        if self.lock_expr is not None:
-            if self.lock_mode == LockMode.STAY:
-                was_locked = self.lock_start is not None
-                if was_locked:
-                    lock_elapsed = self.t - self.lock_start
-                    locked = lock_elapsed < self.lock_expr[0][1]
-                    if not locked:
-                        self.lock_expr.pop(0)
-                        self.lock_start = None
-                if self.lock_expr and ((not was_locked) or (not locked)):
-                    locked = self.t >= self.lock_expr[0][0]
-                    if locked:
-                        self.lock_start = self.t
-            elif self.lock_mode == LockMode.SKIP:
-                locked = self.lock_expr(self.t)            
-        flow = self.prev_flow if locked else self.read_next_flow()
+        if self.lock_mode == LockMode.STAY and self.lock_expr_stay is not None:
+            was_locked = self.lock_start is not None
+            if was_locked:
+                lock_elapsed = self.t - self.lock_start # type: ignore
+                locked = lock_elapsed < self.lock_expr_stay[self.lock_expr_stay_index][1]
+                if not locked:
+                    self.lock_expr_stay_index += 1
+                    self.lock_start = None
+            if (not was_locked) or (not locked):
+                locked = self.t >= self.lock_expr_stay[self.lock_expr_stay_index][0]
+                if locked:
+                    self.lock_start = self.t
+        elif self.lock_mode == LockMode.SKIP and self.lock_expr_skip is not None:
+            locked = self.lock_expr_skip(self.t)
+        if locked:
+            if self.prev_flow is None:
+                raise RuntimeError("Flow is locked but has not been initialized. Maybe lock the flow later?")
+            flow = self.prev_flow
+        else:
+            flow = self.read_next_flow()
         self.prev_flow = flow
         if locked and self.lock_mode == LockMode.SKIP:
             self.read_next_flow()
@@ -285,14 +299,13 @@ class FlowSource:
         return self
 
     def setup(self):
-        if self.lock_expr is not None:
-            assert isinstance(self.lock_expr, str)
+        if self.lock_expr_string is not None:
             if self.lock_mode == LockMode.STAY:
-                if "(" not in self.lock_expr:
-                    self.lock_expr = f"({self.lock_expr})"
-                self.lock_expr = eval(f"[{self.lock_expr},]")
+                if "(" not in self.lock_expr_string:
+                    self.lock_expr_string = f"({self.lock_expr_string})"
+                self.lock_expr_stay = tuple(eval(f"[{self.lock_expr_string},]"))
             elif self.lock_mode == LockMode.SKIP:
-                self.lock_expr = parse_lambda_expression(self.lock_expr)
+                self.lock_expr_skip = parse_lambda_expression(self.lock_expr_string)
         if self.flow_filters_string is not None:
             self.flow_filters: list[FlowFilter] = []
             for filter_string in self.flow_filters_string.strip().split(";"):
@@ -301,7 +314,7 @@ class FlowSource:
                 i = filter_string.index("=")
                 self.flow_filters.append(FlowFilter.from_args(
                     filter_string[:i].strip(),
-                    filter_string[i+1:].strip().split(":")))
+                    tuple(filter_string[i+1:].strip().split(":"))))
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         pass
@@ -379,8 +392,8 @@ class AvFlowSource(FlowSource):
 
     def setup(self):
         FlowSource.setup(self)
-        import av
-        self.container = av.open(format=self.avformat, file=self.file)
+        import av.container
+        self.container = av.container.open(format=self.avformat, file=self.file)
         context = self.container.streams.video[0].codec_context
         context.options = {"flags2": "+export_mvs"}
         self.iterator = self.container.decode(video=0)
@@ -394,14 +407,24 @@ class AvFlowSource(FlowSource):
 
     def rewind(self):
         self.input_frame_index = self.start_frame
+        if self.container is None:
+            raise ValueError("Container not initialized")
         self.container.seek(0)
+        if self.iterator is None:
+            raise ValueError("Iterator not initialized")
         for _ in range(self.input_frame_index + 1):
             next(self.iterator)
 
     def next(self) -> numpy.ndarray:
-        frame = next(self.iterator)
-        vectors = frame.side_data.get("MOTION_VECTORS")
+        if self.height is None or self.width is None:
+            raise ValueError("")
         flow = numpy.zeros((self.height, self.width, 2), dtype=numpy.float32)
+        if self.iterator is None:
+            raise ValueError("Iterator not inizalized")
+        frame = next(self.iterator)
+        from typing import Optional, cast
+        from av.sidedata.motionvectors import MotionVectors
+        vectors = cast(Optional[MotionVectors], frame.side_data.get("MOTION_VECTORS"))
         if vectors is None:
             return flow
         for mv in vectors:
@@ -416,7 +439,8 @@ class AvFlowSource(FlowSource):
         return flow
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.container.close()
+        if self.container is not None:
+            self.container.close()
 
 
 class CvFlowConfigWindow(threading.Thread):
@@ -708,7 +732,7 @@ class CvFlowConfig:
         self.lk_max_level = lk_max_level
         self.lk_step = lk_step
         self.show_window = show_window
-        self.window: CvFlowConfigWindow = None
+        self.window: CvFlowConfigWindow | None = None
 
     def start(self):
         if not self.show_window:
@@ -823,13 +847,14 @@ def calc_optical_flow_lukas_kanade(
         .astype(numpy.float32)
     p, q = p0.shape[:2]
     p0 = p0.reshape((p * q, 1, 2))
-    p1 = cv2.calcOpticalFlowPyrLK(
+    p1 = p0.copy()
+    cv2.calcOpticalFlowPyrLK(
         prev_grey,
         next_grey,
         p0,
-        None,
+        p1,
         winSize=(win_size, win_size),
-        maxLevel=max_level)[0]
+        maxLevel=max_level)
     flow = p1.reshape((p, q, 2)) - p0.reshape((p, q, 2))
     if step == 1:
         return flow
@@ -871,6 +896,10 @@ class CvFlowSource(FlowSource):
 
     def rewind(self):
         self.input_frame_index = self.start_frame
+        if self.capture is None:
+            raise ValueError("Capture not initialized")
+        if self.width is None or self.height is None:
+            raise ValueError("Width or height not initialized")
         self.capture.set(cv2.CAP_PROP_POS_MSEC, 0)
         for i in range(self.input_frame_index + 1):
             success, frame = self.capture.read()
@@ -883,9 +912,13 @@ class CvFlowSource(FlowSource):
         self.prev_flow = None
 
     def next(self) -> numpy.ndarray:
+        if self.capture is None:
+            raise ValueError("Capture not initialized")
         success, frame = self.capture.read()
         if frame is None or not success:
             raise StopIteration
+        if self.width is None or self.height is None:
+            raise ValueError("Width or height not initialized")
         resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
         gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
@@ -897,11 +930,14 @@ class CvFlowSource(FlowSource):
             left_rgb, right_rgb = rgb, self.prev_rgb
         else:
             raise ValueError(f"Invalid flow direction '{self.direction}'")
+        if left_gray is None or right_gray is None:
+            raise ValueError("Missing reference frames")
         if self.config.method == FlowMethod.FARNEBACK:
+            flow = self.prev_flow.copy() if self.prev_flow is not None else numpy.zeros((self.height, self.width, 2), dtype=numpy.float32)
             flow = cv2.calcOpticalFlowFarneback(
                 prev=left_gray,
                 next=right_gray,
-                flow=self.prev_flow.copy() if self.prev_flow is not None else None,
+                flow=flow,
                 pyr_scale=self.config.fb_pyr_scale,
                 levels=self.config.fb_levels,
                 winsize=self.config.fb_winsize,
@@ -933,13 +969,18 @@ class CvFlowSource(FlowSource):
                 from .liteflownet import calc_optical_flow_liteflownet
             except Exception as err:
                 raise ImportError("LiteFlowNet method cannot be used. Are 'cupy' and 'torch' modules installed correctly?") from err
+            if left_rgb is None or right_rgb is None:
+                raise ValueError("Missing reference frames")
             flow = calc_optical_flow_liteflownet(left_rgb, right_rgb)
+        else:
+            raise ValueError(f"Unknown flow method '{self.config.method}'")
         self.prev_gray = gray
         self.prev_rgb = rgb
         return flow
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.capture.release()
+        if self.capture is not None:
+            self.capture.release()
 
 
 class ArchiveFlowSource(FlowSource):
@@ -967,9 +1008,12 @@ class ArchiveFlowSource(FlowSource):
         self.input_frame_index = self.start_frame
 
     def next(self) -> numpy.ndarray:
+        if self.archive is None:
+            raise ValueError("Archive not initialized")
         with self.archive.open(f"{self.input_frame_index:09d}.npy") as file:
             flow = numpy.load(file)
         return flow
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.archive.close()
+        if self.archive is not None:
+            self.archive.close()

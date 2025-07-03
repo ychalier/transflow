@@ -3,6 +3,7 @@ import os
 import random
 import re
 import warnings
+from typing import Callable
 
 import numpy
 
@@ -132,7 +133,7 @@ def parse_timestamp(timestamp: str | None) -> float | None:
     return 3600 * h + 60 * m + s + ms/1000
 
 
-def parse_lambda_expression(expr_string: str, vars: tuple[str] = ("t", )):
+def parse_lambda_expression(expr_string: str, vars: tuple[str, ...] = ("t", )) -> Callable:
     if len(vars) == 1:
         vars_str = vars[0]
     else:
