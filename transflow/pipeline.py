@@ -44,13 +44,12 @@ class SourceProcess(multiprocessing.Process):
         put_none = True
         try:
             with self.source:
-                is_fs = isinstance(self.source, FlowSource)
                 self.shape_queue.put((
                     self.source.width,
                     self.source.height,
                     self.source.framerate,
                     self.source.length,
-                    self.source.direction if is_fs else None
+                    self.source.direction if isinstance(self.source, FlowSource) else None
                 ))
                 try:
                     for item in self.source:
@@ -114,7 +113,7 @@ def get_secondary_output_path(
 def export_checkpoint(
         flow_path: str,
         bitmap_path: str | None,
-        output_path: str | None,
+        output_path: str | list[str] | None,
         replace: bool,
         cursor: int,
         accumulator: Accumulator,
@@ -136,8 +135,8 @@ def export_checkpoint(
 
 flows_merging_functions: dict[str, typing.Callable[[list[numpy.ndarray]], numpy.ndarray]] = {
     "first": lambda flows: flows[0],
-    "sum": sum,
-    "average": lambda flows: sum(flows) / len(flows),
+    "sum": lambda flows: numpy.sum(flows, axis=0),
+    "average": lambda flows: numpy.sum(flows, axis=0) / len(flows),
     "difference": lambda flows: flows[0] - sum(flows[1:]),
     "product": multiply_arrays,
     "maskbin": lambda flows: multiply_arrays([flows[0]] + binarize_arrays(flows[1:])),
@@ -179,7 +178,7 @@ class Config:
     kernel_path: str | None = None
     cv_config: str | None = None
     flow_filters: str | None = None
-    direction: str = "forward"
+    direction: str | FlowDirection = "forward"
     round_flow: bool = False
     export_flow: bool = False
     seek_time: float | None = None
@@ -212,12 +211,12 @@ class Config:
     vcodec: str = "h264"
     execute: bool = False
     replace: bool = False
-    size: str | None = None
+    size: str | tuple[int, int] | None = None
     output_intensity: bool = False
     output_heatmap: bool = False
     output_accumulator: bool = False
     render_scale: float = 1
-    render_colors: str | None = None
+    render_colors: str | tuple[str, ...] | None = None
     render_binary: bool = False
     checkpoint_every: int | None = None
     checkpoint_end: bool = False
@@ -259,7 +258,7 @@ def transfer(
     merge_flows = flows_merging_functions[config.flows_merging_function]
 
     def close():
-        if config.export_flow:
+        if flow_output is not None:
             flow_output.close()
         if shape_queue is not None:
             shape_queue.close()
@@ -309,19 +308,19 @@ def transfer(
         else:
             raise ValueError(f"Invalid flow direction '{config.direction}'")
 
-        if config.render_colors is not None:
-            config.render_colors = config.render_colors.split(",")
+        if isinstance(config.render_colors, str):
+            config.render_colors = tuple(config.render_colors.split(","))
 
-        output_bitmap = config.bitmap_path is not None
-        has_output = output_bitmap or config.output_intensity or config.output_heatmap\
+        has_output = config.bitmap_path is not None or config.output_intensity or config.output_heatmap\
             or config.output_accumulator
 
         if not (has_output or config.export_flow or config.checkpoint_end):
             warnings.warn("No output or exportation selected")
 
-        if config.size is not None:
-            config.size = tuple(map(int, re.split(r"[^\d]", config.size)))
-            
+        if isinstance(config.size, str):
+            width, height = tuple(map(int, re.split(r"[^\d]", config.size)))
+            config.size = width, height
+
         fs_args = {
             "use_mvs": config.use_mvs,
             "mask_path": config.mask_path,
@@ -356,6 +355,8 @@ def transfer(
         flow_sources_to_load = 1 + len(extra_flow_processes)
         flow_sources_loaded = 0
 
+        fs_width = fs_height = fs_framerate = fs_length = fs_direction = None
+
         while True:
             try:
                 shape_info = shape_queue.get(timeout=1)
@@ -372,6 +373,9 @@ def transfer(
                 close()
                 return
 
+        if fs_width is None or fs_height is None or fs_framerate is None or fs_direction is None:
+            raise ValueError("Could not initialize FlowSource metadata")
+
         if config.export_flow:
             archive_path = get_secondary_output_path(config.flow_path, config.output_path, ".flow.zip")
             flow_output = NumpyOutput(archive_path, config.replace)
@@ -386,10 +390,10 @@ def transfer(
 
         if config.size is None:
             config.size = fs_width, fs_height
-        
+
         fs_width_factor = fs_height_factor = 1
 
-        if output_bitmap:
+        if config.bitmap_path is not None:
             bitmap_source = BitmapSource.from_args(
                 config.bitmap_path,
                 config.size,
@@ -428,7 +432,7 @@ def transfer(
                         f"while bitmap is {bs_width}x{bs_height}.")
                 fs_width_factor = bs_width // fs_width
                 fs_height_factor = bs_height // fs_height
-        
+
         elif config.bitmap_alteration_path is not None:
             warnings.warn(
                 "An alteration path was passed but no bitmap was provided")
@@ -437,7 +441,7 @@ def transfer(
 
         if accumulator is None:
             accumulator = Accumulator.from_args(
-                fs_width * fs_width_factor, 
+                fs_width * fs_width_factor,
                 fs_height * fs_height_factor,
                 method=config.acc_method,
                 reset_mode=config.reset_mode,
@@ -465,10 +469,11 @@ def transfer(
             )
             if isinstance(config.output_path, list) and not config.output_path:
                 config.output_path = None
-            if config.output_path is None or isinstance(config.output_path, str):
-                output_paths = [config.output_path]
+            output_paths: list[str | None] = []
+            if isinstance(config.output_path, list):
+                output_paths += config.output_path
             else:
-                output_paths = config.output_path
+                output_paths.append(config.output_path)
             if config.output_path is not None and config.preview_output:
                 output_paths.append(None)
             for path in output_paths:
@@ -503,7 +508,7 @@ def transfer(
                 flow = merge_flows(flows)
                 if fs_width_factor != 1 or fs_height_factor != 1:
                     flow = upscale_flow(flow, fs_width_factor, fs_height_factor)
-                if config.export_flow:
+                if flow_output is not None:
                     flow_output.write_array(numpy.round(flow).astype(int) if config.round_flow else flow)
                 accumulator.update(flow, fs_direction)
                 out_frame = None
@@ -514,7 +519,7 @@ def transfer(
                     out_frame = render1d(accumulator.get_heatmap_array(), config.render_scale, config.render_colors, config.render_binary)
                 elif config.output_accumulator:
                     out_frame = render2d(accumulator.get_accumulator_array(), config.render_scale, config.render_colors),
-                elif output_bitmap:
+                elif bitmap_queue is not None:
                     bitmap = bitmap_queue.get(timeout=1)
                     if bitmap is None:
                         break

@@ -26,7 +26,7 @@ class VideoOutput:
     def feed(self, frame: numpy.ndarray):
         raise NotImplementedError()
 
-    def __close__(self):
+    def __exit__(self, exc_type, exc_value, exc_traceback):
         pass
 
     @classmethod
