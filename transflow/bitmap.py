@@ -3,6 +3,7 @@ import random
 import re
 import typing
 import warnings
+from typing import cast
 
 import cv2
 import numpy
@@ -17,8 +18,8 @@ class BitmapSource:
 
     def __init__(self, alteration_path: str | None, length: int | None = None):
         self.alteration_path: str | None = alteration_path
-        self.width: int = None
-        self.height: int = None
+        self.width: int | None = None
+        self.height: int | None = None
         self.framerate: int | None = None
         self.alteration: tuple[list[int], list[int]] | None = None
         self.length: int | None = length
@@ -42,15 +43,17 @@ class BitmapSource:
         image = numpy.array(PIL.Image.open(self.alteration_path))
         inds = []
         vals = []
+        if self.width is None:
+            raise ValueError("Width not initialized")
         for i in range(image.shape[0]):
             for j in range(image.shape[1]):
                 if image[i, j, 3] == 0:
                     continue
                 k = (i * self.width + j) * 3
                 inds += [k, k + 1, k + 2]
-                vals += image[i, j, :3].tolist()
+                vals += cast(list[int], image[i, j, :3].tolist())
         self.alteration = (inds, vals)
-            
+
     def setup(self):
         self.load_alteration()
 
@@ -142,6 +145,8 @@ class ColorBitmapSource(StillBitmapSource):
             color = list(numpy.random.randint(0, 256, size=(3), dtype=numpy.uint8))
         else:
             color = parse_hex_color(self.bitmap_color)
+        if self.width is None or self.height is None:
+            raise ValueError("Width or height not initialized")
         array = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
         array[:,:,:] = color
         return array
@@ -151,6 +156,8 @@ class NoiseBitmapSource(StillBitmapSource):
 
     def _init_array(self):
         numpy.random.seed(self.seed)
+        if self.width is None or self.height is None:
+            raise ValueError("Width or height not initialized")
         return numpy.repeat(
             numpy.random.randint(0, 256, size=(self.height, self.width, 1), dtype=numpy.uint8),
             3, axis=2)
@@ -160,6 +167,8 @@ class BwNoiseBitmapSource(StillBitmapSource):
 
     def _init_array(self):
         numpy.random.seed(self.seed)
+        if self.width is None or self.height is None:
+            raise ValueError("Width or height not initialized")
         return numpy.repeat(numpy.random.choice([0, 255], size=(self.height, self.width, 1)),
                             3, axis=2).astype(numpy.uint8)
 
@@ -168,6 +177,8 @@ class ColoredNoiseBitmapSource(StillBitmapSource):
 
     def _init_array(self):
         numpy.random.seed(self.seed)
+        if self.width is None or self.height is None:
+            raise ValueError("Width or height not initialized")
         return numpy.random.randint(0, 256, size=(self.height, self.width, 3), dtype=numpy.uint8)
 
 
@@ -196,7 +207,7 @@ class GradientBitmapSource(StillBitmapSource):
                 return self.generate(self.NODE_Z, depth - 1)
             return self.generate(self.NODE_MIX, depth - 1)
         elif node_type == self.NODE_Z:
-            x = random.random() 
+            x = random.random()
             if x < .333:
                 return (self.NODE_I, None, None, None)
             elif x < .666:
@@ -206,7 +217,8 @@ class GradientBitmapSource(StillBitmapSource):
                 random.random() * 2 - 1,
                 random.random() * 2 - 1,
                 random.random() * 2 - 1)
-    
+        raise ValueError(f"Unkown node type {node_type}")
+
     def evaluate(self, tree: tuple, i: int, j: int) -> tuple[float, float, float]:
         nt, a, b, c = tree
         if nt == self.NODE_TRIPLE:
@@ -215,28 +227,33 @@ class GradientBitmapSource(StillBitmapSource):
                 self.evaluate(b, i, j)[1],
                 self.evaluate(c, i, j)[2])
         if nt == self.NODE_MIX:
-            out = [0, 0, 0]
+            out: list[float] = [0, 0, 0]
             evals = [
                 self.evaluate(a, i, j),
                 self.evaluate(b, i, j),
-                self.evaluate(c, i, j)]
+                self.evaluate(c, i, j)
+            ]
             for k in range(3):
                 w = (1 + evals[0][k]) / 2
                 out[k] = (1 - w) * evals[1][k] + w * evals[2][k]
-            return out
+            return (out[0], out[1], out[2])
         if nt == self.NODE_RGB:
             return (a, b, c)
+        if self.width is None or self.height is None:
+            raise ValueError("Width or height not initialized")
         if nt == self.NODE_I:
             z = 2 * (i / (self.height - 1)) - 1
             return (z, z, z)
         if nt == self.NODE_J:
             z = 2 * (j / (self.width - 1)) - 1
             return (z, z, z)
-        return NotImplementedError(f"Unknown node type {nt}")
+        raise NotImplementedError(f"Unknown node type {nt}")
 
     def _init_array(self):
         random.seed(self.seed)
         tree = self.generate(self.NODE_TRIPLE, 5)
+        if self.width is None or self.height is None:
+            raise ValueError("Width or height not initialized")
         array = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
         for i in range(self.height):
             for j in range(self.width):
@@ -262,7 +279,7 @@ class ImageBitmapSource(StillBitmapSource):
 
 
 class VideoStillBitmapSource(ImageBitmapSource):
-    
+
     def _init_array(self):
         capture = cv2.VideoCapture(self.path)
         success, frame = capture.read()
@@ -284,8 +301,10 @@ class CvBitmapSource(BitmapSource):
         self.seek_time = seek_time
         self.repeat = repeat
         self.loop_index = 1
-    
+
     def rewind(self):
+        if self.capture is None:
+            raise ValueError("Capture not initialized")
         self.capture.set(cv2.CAP_PROP_POS_MSEC, 0)
         if self.seek is not None:
             for _ in range(self.seek):
@@ -296,7 +315,7 @@ class CvBitmapSource(BitmapSource):
         self.capture = cv2.VideoCapture(self.path)
         self.width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.framerate = self.capture.get(cv2.CAP_PROP_FPS)
+        self.framerate = round(self.capture.get(cv2.CAP_PROP_FPS))
         frame_count = self.capture.get(cv2.CAP_PROP_FRAME_COUNT)
         if self.repeat > 0 and frame_count is not None and int(frame_count) > 0:
             self.length = int(frame_count) * self.repeat
@@ -324,5 +343,6 @@ class CvBitmapSource(BitmapSource):
         return self.alter(numpy.array(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.capture.release()
+        if self.capture is not None:
+            self.capture.release()
 
