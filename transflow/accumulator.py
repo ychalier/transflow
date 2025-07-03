@@ -58,15 +58,15 @@ class Accumulator:
             width: int,
             height: int,
             heatmap_mode: HeatmapMode | str = "discrete",
-            heatmap_args: str | tuple[int|float] = "0:0:0:0",
+            heatmap_args: str | tuple[int|float, ...] = "0:0:0:0",
             heatmap_reset_threshold: float | None = None,
             reset_mode: ResetMode | str = "off",
             reset_alpha: float = .9,
             reset_mask_path: str | None = None):
         self.width = width
         self.height = height
-        self.flow_int: numpy.ndarray = None
-        self.flow_flat: numpy.ndarray = None
+        self.flow_int: numpy.ndarray = numpy.zeros((height, width, 2))
+        self.flow_flat: numpy.ndarray = numpy.zeros((height * width * 2,))
         self.heatmap_mode = HeatmapMode.from_string(heatmap_mode)\
             if isinstance(heatmap_mode, str) else heatmap_mode
         self.heatmap_reset_threshold = heatmap_reset_threshold if heatmap_reset_threshold is not None else float("inf")
@@ -478,6 +478,9 @@ class CanvasAccumulator(Accumulator):
             else:
                 bitmap_target = numpy.nonzero(numpy.multiply(new_bitmap_mask.flat, self.flow_flat))[0]
             bitmap_source = bitmap_target + self.flow_flat[bitmap_target]
+            
+        else:
+            raise ValueError(f"Unknown flow direction {self.direction}")
 
         aux = self.canvas.copy()
 
