@@ -64,7 +64,9 @@ class TestFlowSource(unittest.TestCase):
     def test_mask(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH, mask_path=self.MASK_PATH)
         self._test_fs(fs)
-        self.assertEqual(fs.mask.shape, (self.HEIGHT, self.WIDTH, 1))
+        self.assertIsNotNone(fs.mask)
+        if fs.mask is not None:
+            self.assertEqual(fs.mask.shape, (self.HEIGHT, self.WIDTH, 1))
 
     def test_blurred(self):
         self._test_fs(transflow.flow.FlowSource.from_args(self.VIDEO_PATH, cv_config="configs/blurred.json"))
