@@ -41,6 +41,9 @@ class BitmapSource:
             return
         import PIL.Image
         image = numpy.array(PIL.Image.open(self.alteration_path))
+        while image.shape[2] < 4:
+            appendee = numpy.ones((*image.shape[:2],1), dtype=numpy.uint8)
+            image = numpy.append(image, appendee, 2)
         inds = []
         vals = []
         if self.width is None:
