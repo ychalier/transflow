@@ -240,7 +240,7 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 return self.send_error(404, "File not found")
         elif parsed.path == "/wss":
-            assert isinstance(self.server, "WebServer")
+            assert isinstance(self.server, WebServer)
             return self.serve_text(f"ws://{self.server.wss.host}:{self.server.wss.port}")
         return super().do_GET()
 
