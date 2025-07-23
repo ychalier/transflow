@@ -4,26 +4,36 @@ This document provides details on how to use the `transflow` module for performi
 
 ## Contents
 
-- [Basic Flow Transfer](#basic-flow-transfer)
-- [Detailed Example](#detailed-example)
-- [GUI](#gui)
-- [Flow Estimation Methods](#flow-estimation-methods)
-- [Using Motion Vectors](#using-motion-vectors)
-- [Flow Direction](#flow-direction)
-- [Flow Preprocessing](#flow-preprocessing)
-- [Flow Transformations](#flow-transformations)
-- [Multiple Flow Sources](#multiple-flow-sources)
-- [Accumulation Methods](#accumulation-methods)
-- [Accumulator Heatmap](#accumulator-heatmap)
-- [Accumulator Visualization](#accumulator-visualization)
-- [Resetting Accumulator](#resetting-accumulator)
-- [Generative Bitmap Sources](#generative-bitmap-sources)
-- [Webcam Sources](#webcam-sources)
-- [Bitmap Alteration](#bitmap-alteration)
-- [Live Visualization](#live-visualization)
-- [Interrupting Processing](#interrupting-processing)
-- [Restart From Checkpoint](#restart-from-checkpoint)
-- [Seek, Duration and Repeat](#seek-duration-and-repeat)
+- [Transflow Reference Guide](#transflow-reference-guide)
+  - [Contents](#contents)
+  - [Basic Flow Transfer](#basic-flow-transfer)
+  - [Detailed Example](#detailed-example)
+  - [GUI](#gui)
+  - [Flow Estimation Methods](#flow-estimation-methods)
+    - [Gunnar Farnebäck](#gunnar-farnebäck)
+    - [Horn-Schunck](#horn-schunck)
+    - [Lukas-Kanade](#lukas-kanade)
+    - [LiteFlowNet](#liteflownet)
+  - [Using Motion Vectors](#using-motion-vectors)
+  - [Flow Direction](#flow-direction)
+  - [Flow Preprocessing](#flow-preprocessing)
+  - [Flow Transformations](#flow-transformations)
+    - [Flow Filters](#flow-filters)
+    - [Flow Locking](#flow-locking)
+    - [Applying A Mask](#applying-a-mask)
+    - [Flow Convolution Kernel](#flow-convolution-kernel)
+  - [Multiple Flow Sources](#multiple-flow-sources)
+  - [Accumulation Methods](#accumulation-methods)
+  - [Accumulator Heatmap](#accumulator-heatmap)
+  - [Accumulator Visualization](#accumulator-visualization)
+  - [Resetting Accumulator](#resetting-accumulator)
+  - [Generative Bitmap Sources](#generative-bitmap-sources)
+  - [Webcam Sources](#webcam-sources)
+  - [Bitmap Alteration](#bitmap-alteration)
+  - [Live Visualization](#live-visualization)
+  - [Interrupting Processing](#interrupting-processing)
+  - [Restart From Checkpoint](#restart-from-checkpoint)
+  - [Seek, Duration and Repeat](#seek-duration-and-repeat)
 
 ## Basic Flow Transfer
 
@@ -101,7 +111,7 @@ By default, Optical flow extraction relies on [OpenCV](https://opencv.org/)'s im
 > [!NOTE]
 > On Linux, you may have to install the `libxcb-cursor0` package for the Qt window to work.
 
-You may find sample config files in the [configs](configs) folder. They follow the following format:
+You may find sample config files in the [assets/configs](assets/configs) folder. They follow the following format:
 
 ```json
 {
@@ -251,7 +261,7 @@ import numpy
 numpy.save("blur.npy", numpy.ones((3, 3)) / 9)
 ```
 
-The script [kernels.py](kernels.py) can be used to generate basic kernels.
+The folder [assets/kernels](assets/kernels) contains a set of basic kernels. The script [kernels.py](assets/kernels/kernels.py) can be used to generate basic kernels.
 
 ## Multiple Flow Sources
 

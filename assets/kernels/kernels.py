@@ -6,7 +6,7 @@ import pathlib
 import numpy
 
 
-def create_kernels(folder: str = "kernels"):
+def create_kernels(folder: str = "."):
     path = pathlib.Path(folder)
     (path / "3x3").mkdir(exist_ok=True, parents=True)
     (path / "5x5").mkdir(exist_ok=True, parents=True)
@@ -90,7 +90,7 @@ def create_kernels(folder: str = "kernels"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("folder", type=str, default="kernels", nargs="?",
+    parser.add_argument("folder", type=str, default=".", nargs="?",
         help="path to kernel folder")
     args = parser.parse_args()
     create_kernels(args.folder)

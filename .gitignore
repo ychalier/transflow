@@ -28,12 +28,7 @@ assets/*
 profiles
 out/*
 
-# CPP
 .vscode
-*.exe
-*.lib
-*.dll
-*.pgm
 
 w2w
 *.bin
@@ -48,17 +43,29 @@ dist
 !assets/Mask.png
 !assets/River.gif
 !assets/River.mp4
-!assets/acc
 !out/ExampleDeer.gif
 !out/ExampleDeer.mp4
 !www/assets/*
 
 draft
 
-configs/*
-!configs/blurred.json
-!configs/default.json
-!configs/fast.json
-!configs/minimal.json
-!configs/horn-schunck.json
-!configs/lukas-kanade.json
+!assets/configs/blurred.json
+!assets/configs/default.json
+!assets/configs/fast.json
+!assets/configs/minimal.json
+!assets/configs/horn-schunck.json
+!assets/configs/lukas-kanade.json
+
+!assets/kernels
+!assets/kernels/3x3/blur-box.npy
+!assets/kernels/3x3/blur-gaussian.npy
+!assets/kernels/3x3/edge-box.npy
+!assets/kernels/3x3/edge-corners.npy
+!assets/kernels/3x3/edge-cross.npy
+!assets/kernels/3x3/gradx.npy
+!assets/kernels/3x3/gradxy.npy
+!assets/kernels/3x3/grady.npy
+!assets/kernels/3x3/identity.npy
+!assets/kernels/3x3/sharpen.npy
+!assets/kernels/5x5/blur-gaussian.npy
+!assets/kernels/5x5/unsharp.npy
