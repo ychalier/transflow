@@ -3,6 +3,8 @@ import unittest
 import numpy
 
 import transflow.bitmap
+import transflow.bitmap.cv
+import transflow.bitmap.still
 
 
 class TestBitmapSource(unittest.TestCase):
@@ -26,13 +28,13 @@ class TestBitmapSource(unittest.TestCase):
 
     def test_color_random(self):
         bs = transflow.bitmap.BitmapSource.from_args("color", (self.WIDTH, self.HEIGHT))
-        self.assertIsInstance(bs, transflow.bitmap.ColorBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.still.ColorBitmapSource)
         with bs:
             self._test_bs(bs)
 
     def test_color_specific(self):
         bs = transflow.bitmap.BitmapSource.from_args("cff010", (self.WIDTH, self.HEIGHT))
-        self.assertIsInstance(bs, transflow.bitmap.ColorBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.still.ColorBitmapSource)
         with bs:
             bitmap = self._test_bs(bs)
             self.assertEqual(bitmap[0,0,0], 207)
@@ -41,47 +43,47 @@ class TestBitmapSource(unittest.TestCase):
 
     def test_noise(self):
         bs = transflow.bitmap.BitmapSource.from_args("noise", (self.WIDTH, self.HEIGHT))
-        self.assertIsInstance(bs, transflow.bitmap.NoiseBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.still.NoiseBitmapSource)
         with bs:
             self._test_bs(bs)
 
     def test_bwnoise(self):
         bs = transflow.bitmap.BitmapSource.from_args("bwnoise", (self.WIDTH, self.HEIGHT))
-        self.assertIsInstance(bs, transflow.bitmap.BwNoiseBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.still.BwNoiseBitmapSource)
         with bs:
             self._test_bs(bs)
 
     def test_cnoise(self):
         bs = transflow.bitmap.BitmapSource.from_args("cnoise", (self.WIDTH, self.HEIGHT))
-        self.assertIsInstance(bs, transflow.bitmap.ColoredNoiseBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.still.ColoredNoiseBitmapSource)
         with bs:
             self._test_bs(bs)
 
     def test_gradient(self):
         bs = transflow.bitmap.BitmapSource.from_args("gradient", (self.WIDTH, self.HEIGHT))
-        self.assertIsInstance(bs, transflow.bitmap.GradientBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.still.GradientBitmapSource)
         with bs:
             self._test_bs(bs)
 
     def test_image(self):
         bs = transflow.bitmap.BitmapSource.from_args("assets/Deer.jpg", (self.WIDTH, self.HEIGHT))
-        self.assertIsInstance(bs, transflow.bitmap.ImageBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.still.ImageBitmapSource)
         with bs:
             self._test_bs(bs)
 
     def test_video_still(self):
         bs = transflow.bitmap.BitmapSource.from_args("first", (self.WIDTH, self.HEIGHT), flow_path="assets/River.mp4")
-        self.assertIsInstance(bs, transflow.bitmap.VideoStillBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.still.VideoStillBitmapSource)
         with bs:
             self._test_bs(bs)
 
     def test_video(self):
         bs = transflow.bitmap.BitmapSource.from_args("assets/River.mp4", (self.WIDTH, self.HEIGHT))
-        self.assertIsInstance(bs, transflow.bitmap.CvBitmapSource)
+        self.assertIsInstance(bs, transflow.bitmap.cv.CvBitmapSource)
         with bs:
             self._test_bs(bs)
             self.assertEqual(bs.length, 1500)
-            if isinstance(bs, transflow.bitmap.CvBitmapSource):
+            if isinstance(bs, transflow.bitmap.cv.CvBitmapSource):
                 bs.rewind()
 
     def test_alteration(self):

@@ -4,6 +4,8 @@ import unittest
 import numpy
 
 import transflow.flow
+import transflow.flow.sources.av
+import transflow.flow.sources.cv
 
 
 class TestFlowSource(unittest.TestCase):
@@ -31,18 +33,18 @@ class TestFlowSource(unittest.TestCase):
     def test_cv_forward(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH,
             direction=transflow.flow.FlowDirection.FORWARD)
-        self.assertIsInstance(fs, transflow.flow.CvFlowSource)
+        self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource)
         self._test_fs(fs)
     
     def test_cv_backward(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH,
             direction=transflow.flow.FlowDirection.BACKWARD)
-        self.assertIsInstance(fs, transflow.flow.CvFlowSource)
+        self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource)
         self._test_fs(fs)
     
     def test_av(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH, use_mvs=True)
-        self.assertIsInstance(fs, transflow.flow.AvFlowSource)
+        self.assertIsInstance(fs, transflow.flow.sources.av.AvFlowSource)
         self._test_fs(fs)
     
     def test_cv_av_timings(self):

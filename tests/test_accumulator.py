@@ -2,7 +2,13 @@ import unittest
 
 import numpy
 
-import transflow.accumulator as ta
+import transflow.accumulator.canvas
+import transflow.accumulator.crumble
+import transflow.accumulator.mapping
+import transflow.accumulator.stack
+import transflow.accumulator.sum
+from transflow.accumulator import Accumulator
+from transflow.flow import FlowDirection
 
 
 class TestAccumulator(unittest.TestCase):
@@ -16,8 +22,8 @@ class TestAccumulator(unittest.TestCase):
     MASK_PATH = "assets/Mask.png"
     
     def _test_acc(self,
-            acc: ta.Accumulator,
-            direction: ta.FlowDirection = ta.FlowDirection.BACKWARD,
+            acc: Accumulator,
+            direction: FlowDirection = FlowDirection.BACKWARD,
             same_output: bool = False,
             blank_output: bool = False):
         self.assertEqual(acc.width, self.WIDTH)
@@ -34,38 +40,38 @@ class TestAccumulator(unittest.TestCase):
             self.assertEqual(numpy.sum(numpy.abs(output - self.BLANK_BITMAP)), 0)
     
     def test_map(self):
-        acc = ta.Accumulator.from_args(self.WIDTH, self.HEIGHT, method="map", reset_mode="off")
-        self.assertIsInstance(acc, ta.MappingAccumulator)
-        self._test_acc(acc, ta.FlowDirection.BACKWARD, same_output=True)
-        self._test_acc(acc, ta.FlowDirection.FORWARD, same_output=True)
+        acc = Accumulator.from_args(self.WIDTH, self.HEIGHT, method="map", reset_mode="off")
+        self.assertIsInstance(acc, transflow.accumulator.mapping.MappingAccumulator)
+        self._test_acc(acc, FlowDirection.BACKWARD, same_output=True)
+        self._test_acc(acc, FlowDirection.FORWARD, same_output=True)
     
     def test_sum(self):
-        acc = ta.Accumulator.from_args(self.WIDTH, self.HEIGHT, method="sum", reset_mode="off")
-        self.assertIsInstance(acc, ta.SumAccumulator)
-        self._test_acc(acc, ta.FlowDirection.BACKWARD, same_output=True)
+        acc = Accumulator.from_args(self.WIDTH, self.HEIGHT, method="sum", reset_mode="off")
+        self.assertIsInstance(acc, transflow.accumulator.sum.SumAccumulator)
+        self._test_acc(acc, FlowDirection.BACKWARD, same_output=True)
         with self.assertWarns(UserWarning):
-            self._test_acc(acc, ta.FlowDirection.FORWARD, same_output=True)
+            self._test_acc(acc, FlowDirection.FORWARD, same_output=True)
     
     def test_stack(self):
-        acc = ta.Accumulator.from_args(self.WIDTH, self.HEIGHT, method="stack",
+        acc = Accumulator.from_args(self.WIDTH, self.HEIGHT, method="stack",
             reset_mode="off", bg_color="000000")
-        self.assertIsInstance(acc, ta.StackAccumulator)
-        self._test_acc(acc, ta.FlowDirection.BACKWARD, blank_output=True)
-        self._test_acc(acc, ta.FlowDirection.FORWARD, blank_output=True)
+        self.assertIsInstance(acc, transflow.accumulator.stack.StackAccumulator)
+        self._test_acc(acc, FlowDirection.BACKWARD, blank_output=True)
+        self._test_acc(acc, FlowDirection.FORWARD, blank_output=True)
     
     def test_canvas(self):
-        acc = ta.Accumulator.from_args(self.WIDTH, self.HEIGHT, method="canvas",
+        acc = Accumulator.from_args(self.WIDTH, self.HEIGHT, method="canvas",
             reset_mode="off", initial_canvas="000000")
-        self.assertIsInstance(acc, ta.CanvasAccumulator)
-        self._test_acc(acc, ta.FlowDirection.BACKWARD, blank_output=True)
-        self._test_acc(acc, ta.FlowDirection.FORWARD, blank_output=True)
+        self.assertIsInstance(acc, transflow.accumulator.canvas.CanvasAccumulator)
+        self._test_acc(acc, FlowDirection.BACKWARD, blank_output=True)
+        self._test_acc(acc, FlowDirection.FORWARD, blank_output=True)
     
     def test_crumble(self):
-        acc = ta.Accumulator.from_args(self.WIDTH, self.HEIGHT, method="crumble",
+        acc = Accumulator.from_args(self.WIDTH, self.HEIGHT, method="crumble",
             reset_mode="off", bg_color="000000")
-        self.assertIsInstance(acc, ta.CrumbleAccumulator)
-        self._test_acc(acc, ta.FlowDirection.BACKWARD, blank_output=True)
-        self._test_acc(acc, ta.FlowDirection.FORWARD, blank_output=True)
+        self.assertIsInstance(acc, transflow.accumulator.crumble.CrumbleAccumulator)
+        self._test_acc(acc, FlowDirection.BACKWARD, blank_output=True)
+        self._test_acc(acc, FlowDirection.FORWARD, blank_output=True)
     
     def test_reset(self):
         for method in ["map", "stack", "sum", "crumble", "canvas"]:
@@ -73,7 +79,7 @@ class TestAccumulator(unittest.TestCase):
                 expect_warning = (method == "crumble" and mode == "linear" or method == "canvas" and mode == "linear")
                 if expect_warning:
                     with self.assertWarns(UserWarning):
-                        acc = ta.Accumulator.from_args(self.WIDTH, self.HEIGHT, method=method, reset_mode=mode, reset_mask_path=self.MASK_PATH)
+                        acc = Accumulator.from_args(self.WIDTH, self.HEIGHT, method=method, reset_mode=mode, reset_mask_path=self.MASK_PATH)
                 else:
-                    acc = ta.Accumulator.from_args(self.WIDTH, self.HEIGHT, method=method, reset_mode=mode, reset_mask_path=self.MASK_PATH)
+                    acc = Accumulator.from_args(self.WIDTH, self.HEIGHT, method=method, reset_mode=mode, reset_mask_path=self.MASK_PATH)
                 self._test_acc(acc)

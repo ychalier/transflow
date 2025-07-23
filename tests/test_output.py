@@ -5,6 +5,9 @@ import unittest
 import numpy
 
 import transflow.output
+import transflow.output.ffmpeg
+import transflow.output.cv
+import transflow.output.mjpeg
 
 
 class TestOutput(unittest.TestCase):
@@ -25,7 +28,7 @@ class TestOutput(unittest.TestCase):
             os.remove(path)
         self.assertFalse(os.path.isfile(path))
         output = transflow.output.VideoOutput.from_args(path, self.WIDTH, self.HEIGHT, self.FPS, replace=True, safe=False)
-        self.assertIsInstance(output, transflow.output.FFmpegVideoOutput)
+        self.assertIsInstance(output, transflow.output.ffmpeg.FFmpegVideoOutput)
         with output:
             self._test_output(output)
         self.assertTrue(os.path.isfile(path))
@@ -33,7 +36,7 @@ class TestOutput(unittest.TestCase):
     
     def test_cv_output(self):
         output = transflow.output.VideoOutput.from_args(None, self.WIDTH, self.HEIGHT, replace=True, safe=False)
-        self.assertIsInstance(output, transflow.output.CvVideoOutput)
+        self.assertIsInstance(output, transflow.output.cv.CvVideoOutput)
         with output:
             self._test_output(output)
     
@@ -41,7 +44,7 @@ class TestOutput(unittest.TestCase):
         host = "localhost"
         port = 8001
         output = transflow.output.VideoOutput.from_args(f"mjpeg:{port}:{host}", self.WIDTH, self.HEIGHT, self.FPS)
-        self.assertIsInstance(output, transflow.output.MjpegOutput)
+        self.assertIsInstance(output, transflow.output.mjpeg.MjpegOutput)
         from aiohttp.web_runner import GracefulExit
         import socket
         try:

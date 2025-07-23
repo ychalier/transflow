@@ -9,9 +9,11 @@ from typing import List, Optional, Tuple, Union
 import aiohttp
 import cv2
 import netifaces
-import numpy as np
+import numpy
 from aiohttp import MultipartWriter, web
 from aiohttp.web_runner import GracefulExit
+
+from .video_output import VideoOutput
 
 
 class MjpegStream:
@@ -26,12 +28,12 @@ class MjpegStream:
         self.size = size
         self.quality = max(1, min(quality, 100))
         self.fps = fps
-        self._frame = np.zeros((320, 240, 1), dtype=np.uint8)
+        self._frame = numpy.zeros((320, 240, 1), dtype=numpy.uint8)
         self._lock = asyncio.Lock()
         self._byte_frame_window = deque(maxlen=30)
         self._bandwidth_last_modified_time = time.time()
 
-    def set_frame(self, frame: np.ndarray) -> None:
+    def set_frame(self, frame: numpy.ndarray) -> None:
         self._frame = frame
 
     def get_bandwidth(self) -> float:
@@ -42,7 +44,7 @@ class MjpegStream:
             deque.clear(self._byte_frame_window)
         return sum(self._byte_frame_window)
 
-    def __process_current_frame(self) -> np.ndarray:
+    def __process_current_frame(self) -> numpy.ndarray:
         frame = cv2.resize(
             self._frame, self.size or (self._frame.shape[1], self._frame.shape[0])
         )
@@ -55,11 +57,11 @@ class MjpegStream:
         self._bandwidth_last_modified_time = time.time()
         return frame
 
-    async def get_frame(self) -> np.ndarray:
+    async def get_frame(self) -> numpy.ndarray:
         async with self._lock:
             return self._frame
 
-    async def get_frame_processed(self) -> np.ndarray:
+    async def get_frame_processed(self) -> numpy.ndarray:
         async with self._lock:
             return self.__process_current_frame()
 
@@ -154,3 +156,36 @@ class MjpegServer:
             return
         self._app.is_running = False
         raise GracefulExit
+
+
+
+class MjpegOutput(VideoOutput):
+
+    def __init__(self, host: str, port: int, width: int, height: int,
+                 framerate: int, quality: int = 50):
+        VideoOutput.__init__(self, width, height)
+        self.host = host
+        self.port = port
+        self.framerate = framerate
+        self.quality = quality
+        self.stream = None
+        self.server = None
+    
+    def __enter__(self):
+        self.stream = MjpegStream("transflow", size=(self.width, self.height), quality=self.quality, fps=self.framerate)
+        self.server = MjpegServer(self.host, self.port)
+        self.server.add_stream(self.stream)
+        self.server.start()
+        return self
+    
+    def feed(self, frame: numpy.ndarray):
+        if self.stream is None:
+            raise ValueError("Stream not initialized")
+        if isinstance(frame, tuple):
+            self.stream.set_frame(cv2.cvtColor(frame[0], cv2.COLOR_RGB2BGR))
+        else:
+            self.stream.set_frame(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+    
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        if self.server is not None:
+            self.server.stop()
