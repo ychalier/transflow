@@ -70,7 +70,7 @@ def append_history():
 
 class SourceProcess(multiprocessing.Process):
 
-    def __init__(self, source: FlowSource | BitmapSource,
+    def __init__(self, source: FlowSource.Builder | BitmapSource,
                  q: multiprocessing.Queue, sq: multiprocessing.Queue):
         multiprocessing.Process.__init__(self)
         self.source = source
@@ -80,16 +80,16 @@ class SourceProcess(multiprocessing.Process):
     def run(self):
         put_none = True
         try:
-            with self.source:
+            with self.source as source:
                 self.shape_queue.put((
-                    self.source.width,
-                    self.source.height,
-                    self.source.framerate,
-                    self.source.length,
-                    self.source.direction if isinstance(self.source, FlowSource) else None
+                    source.width,
+                    source.height,
+                    source.framerate,
+                    source.length,
+                    source.direction if isinstance(source, FlowSource) else None
                 ))
                 try:
-                    for item in self.source:
+                    for item in source:
                         self.queue.put(item)
                 except KeyboardInterrupt:
                     put_none = False
@@ -289,7 +289,7 @@ def transfer(
     if config.extra_flow_paths is None:
         config.extra_flow_paths = []
         config.flows_merging_function = "first"
-    extra_flow_sources: list[FlowSource] = []
+    extra_flow_sources: list[FlowSource.Builder] = []
     extra_flow_queues: list[multiprocessing.Queue] = []
     extra_flow_processes: list[SourceProcess] = []
     merge_flows = flows_merging_functions[config.flows_merging_function]

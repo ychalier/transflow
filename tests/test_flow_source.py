@@ -17,15 +17,15 @@ class TestFlowSource(unittest.TestCase):
     FPS = 50
     LENGTH = 1500
 
-    def _test_fs(self, fs: transflow.flow.FlowSource, length: int | None = None):
+    def _test_fs(self, fs: transflow.flow.FlowSource.Builder, length: int | None = None):
         if length is None:
             length = self.LENGTH - 1
-        with fs:
-            self.assertEqual(fs.width, self.WIDTH)
-            self.assertEqual(fs.height, self.HEIGHT)
-            self.assertEqual(fs.framerate, self.FPS)
-            self.assertEqual(fs.length, length)
-            flow = next(fs)
+        with fs as source:
+            self.assertEqual(source.width, self.WIDTH)
+            self.assertEqual(source.height, self.HEIGHT)
+            self.assertEqual(source.framerate, self.FPS)
+            self.assertEqual(source.length, length)
+            flow = next(source)
             self.assertIsInstance(flow, numpy.ndarray)
             self.assertEqual(flow.shape, (self.HEIGHT, self.WIDTH, 2))
             self.assertEqual(flow.dtype, numpy.float32)
@@ -33,18 +33,18 @@ class TestFlowSource(unittest.TestCase):
     def test_cv_forward(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH,
             direction=transflow.flow.FlowDirection.FORWARD)
-        self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource)
+        self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource.Builder)
         self._test_fs(fs)
     
     def test_cv_backward(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH,
             direction=transflow.flow.FlowDirection.BACKWARD)
-        self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource)
+        self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource.Builder)
         self._test_fs(fs)
     
     def test_av(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH, use_mvs=True)
-        self.assertIsInstance(fs, transflow.flow.sources.av.AvFlowSource)
+        self.assertIsInstance(fs, transflow.flow.sources.av.AvFlowSource.Builder)
         self._test_fs(fs)
     
     def test_cv_av_timings(self):

@@ -12,116 +12,226 @@ from ...utils import load_mask, parse_lambda_expression
 class FlowSource:
 
     @enum.unique
+    class FlowDirection(enum.Enum):
+        FORWARD = 0 # past to present
+        BACKWARD = 1 # present to past
+
+        @classmethod
+        def from_arg(cls, arg: "str | FlowSource.FlowDirection | None"):
+            if arg is None:
+                return FlowSource.FlowDirection.FORWARD # TODO: log
+            if isinstance(arg, FlowSource.FlowDirection):
+                return arg
+            if arg == "forward":
+                return FlowSource.FlowDirection.FORWARD
+            if arg == "backward":
+                return FlowSource.FlowDirection.BACKWARD
+            raise ValueError(f"Invalid Flow Direction: {arg}")
+
+    @enum.unique
     class LockMode(enum.Enum):
         STAY = 0
         SKIP = 1
 
         @classmethod
-        def from_arg(cls, arg):
+        def from_arg(cls, arg: "str | FlowSource.LockMode | None"):
+            if arg is None:
+                return FlowSource.LockMode.STAY
             if isinstance(arg, FlowSource.LockMode):
                 return arg
-            assert isinstance(arg, str)
             if arg == "stay":
                 return FlowSource.LockMode.STAY
             if arg == "skip":
                 return FlowSource.LockMode.SKIP
             raise ValueError(f"Invalid Lock Mode: {arg}")
+
+    class Builder:
+
+        def __init__(self,
+                direction: "str | FlowSource.FlowDirection | None" = "backward",
+                mask_path: str | None = None,
+                kernel_path: str | None = None,
+                flow_filters: str | None = None,
+                seek_ckpt: int | None = None,
+                seek_time: float | None = None,
+                duration_time: float | None = None,
+                repeat: int = 1,
+                lock_expr: str | None = None,
+                lock_mode: "str | FlowSource.LockMode | None" = "stay"):
+            self.direction: FlowSource.FlowDirection = FlowSource.FlowDirection.from_arg(direction)
+            self.width: int | None = None
+            self.height: int | None = None
+            self.framerate: float = 30
+            self.mask_path: str | None = mask_path
+            self.mask: numpy.ndarray | None = None
+            self.kernel_path = kernel_path
+            self.kernel: numpy.ndarray | None = None
+            self.flow_filters: list[FlowFilter] = []
+            self.flow_filters_string: str | None = flow_filters
+            self.seek_ckpt: int | None = seek_ckpt
+            self.seek_time: float | None = seek_time
+            self.duration_time: float | None = duration_time
+            self.is_stream: bool = False
+            self.base_length: int | None = None
+            self.length: int | None = None
+            self.start_frame: int = 0
+            self.ckpt_start_frame: int = 0
+            self.end_frame: int = 0
+            self.repeat: int = repeat
+            self.prev_flow: numpy.ndarray | None = None
+            self.lock_expr_string: str | None = lock_expr
+            self.lock_expr_stay: tuple[tuple[float, float]] | None = None
+            self.lock_expr_stay_index: int = 0
+            self.lock_expr_skip: Callable[[float], bool] | None = None
+            self.lock_mode: FlowSource.LockMode = FlowSource.LockMode.from_arg(lock_mode)
+            self.lock_start: float | None = None
+            self.source: FlowSource | None = None
+
+        @property
+        def cls(self) -> type["FlowSource"]:
+            return FlowSource
         
+        def args(self) -> list:
+            return [
+                self.direction,
+                self.width,
+                self.height,
+                self.framerate,
+                self.length,
+                self.start_frame,
+                self.ckpt_start_frame,
+                self.end_frame
+            ]
     
-    @enum.unique
-    class FlowDirection(enum.Enum):
-        FORWARD = 0 # past to present
-        BACKWARD = 1 # present to past
+        def kwargs(self) -> dict:
+            return {
+                "mask": self.mask,
+                "kernel": self.kernel,
+                "flow_filters": self.flow_filters,
+                "lock_mode": self.lock_mode,
+                "lock_expr_stay": self.lock_expr_stay,
+                "lock_expr_skip": self.lock_expr_skip,
+            }
+
+        def build(self):
+
+            if self.mask_path is not None:
+                self.mask = load_mask(self.mask_path, newaxis=True)
+
+            if self.kernel_path is not None:
+                self.kernel = numpy.load(self.kernel_path)
+
+            if self.lock_expr_string is not None:
+                if self.lock_mode == FlowSource.LockMode.STAY:
+                    if "(" not in self.lock_expr_string:
+                        self.lock_expr_string = f"({self.lock_expr_string})"
+                    self.lock_expr_stay = tuple(eval(f"[{self.lock_expr_string},]"))
+                elif self.lock_mode == FlowSource.LockMode.SKIP:
+                    self.lock_expr_skip = parse_lambda_expression(self.lock_expr_string)
+
+            if self.flow_filters_string is not None:
+                self.flow_filters: list[FlowFilter] = []
+                for filter_string in self.flow_filters_string.strip().split(";"):
+                    if filter_string.split() == "":
+                        continue
+                    i = filter_string.index("=")
+                    self.flow_filters.append(FlowFilter.from_args(
+                        filter_string[:i].strip(),
+                        tuple(filter_string[i+1:].strip().split(":"))))
+
+            if self.base_length is not None and self.base_length <= 0:
+                self.base_length = None
+
+            self.is_stream = self.base_length == None
+            if self.is_stream and self.repeat > 1:
+                warnings.warn("Flow source is a stream, cannot repeat it!")
+                self.repeat = 1
+            if self.is_stream and self.seek_time is not None and self.seek_time > 0:
+                warnings.warn("Flow source is a stream, seek time is ignored!")
+                self.seek_time = None
+
+            if self.seek_time is not None and not self.is_stream:
+                self.start_frame = int(self.seek_time * self.framerate)
+            else:
+                self.start_frame = 0
+
+            if self.duration_time is not None:
+                self.end_frame = self.start_frame + int(self.duration_time * self.framerate)
+                if self.base_length is not None:
+                    self.end_frame = min(self.end_frame, self.base_length)
+            elif self.base_length is not None:
+                self.end_frame = self.base_length
+
+            if self.repeat == 0:
+                self.length = None
+            elif self.is_stream:
+                self.length = self.end_frame
+            else:
+                self.length = self.repeat * (self.end_frame - self.start_frame)
+
+            if self.length is not None and self.lock_mode == FlowSource.LockMode.STAY and self.lock_expr_stay is not None:
+                for _, lock_duration in self.lock_expr_stay:
+                    self.length += int(lock_duration * self.framerate)
+
+            real_start_frame = self.start_frame
+            ckpt_start_frame = real_start_frame
+            if self.seek_ckpt is not None:
+                self.output_frame_index = self.seek_ckpt
+                ckpt_start_frame += self.seek_ckpt % (self.end_frame - self.start_frame)
+            self.ckpt_start_frame = ckpt_start_frame
+            self.start_frame = real_start_frame
+
+        def __enter__(self):
+            self.source = self.build()
+            # TODO check that all fields have been instantiated ?
+            return self.cls(*self.args(), **self.kwargs())
+
+        def __exit__(self, exc_type, exc_value, exc_traceback):
+            if self.source is not None:
+                self.source.close()
 
     def __init__(self,
             direction: FlowDirection,
-            mask_path: str | None = None,
-            kernel_path: str | None = None,
-            flow_filters: str | None = None,
-            seek_ckpt: int | None = None,
-            seek_time: float | None = None,
-            duration_time: float | None = None,
-            repeat: int = 1,
-            lock_expr: str | None = None,
-            lock_mode: str | LockMode = LockMode.STAY):
+            width: int,
+            height: int,
+            framerate: float,
+            length: int | None,
+            start_frame: int,
+            ckpt_start_frame: int,
+            end_frame: int,
+            mask: numpy.ndarray | None = None,
+            kernel: numpy.ndarray | None = None,
+            flow_filters: list[FlowFilter] = [],
+            lock_mode: LockMode = LockMode.STAY,
+            lock_expr_stay: tuple[tuple[float, float]] | None = None,
+            lock_expr_skip: Callable[[float], bool] | None = None,
+            ):
         self.direction = direction
-        self.width: int | None = None
-        self.height: int | None = None
-        self.framerate: float | None = None
-        self.mask: numpy.ndarray | None = None if mask_path is None else load_mask(mask_path, newaxis=True)
-        self.kernel: numpy.ndarray | None = None if kernel_path is None else numpy.load(kernel_path)
-        self.flow_filters: list[FlowFilter] = []
-        self.flow_filters_string: str | None = flow_filters
-        self.seek_ckpt: int | None = seek_ckpt
-        self.seek_time: float | None = seek_time
-        self.duration_time: float | None = duration_time
-        self.input_frame_index: int = 0
-        self.output_frame_index: int = 0
-        self.is_stream: bool = False
-        self.length: int | None = None
-        self.start_frame: int = 0
-        self.end_frame: int = 0
-        self.repeat: int = repeat
-        self.prev_flow: numpy.ndarray | None = None
-        self.lock_expr_string: str | None = lock_expr
-        self.lock_expr_stay: tuple[tuple[float, float]] | None = None
-        self.lock_expr_stay_index: int = 0
-        self.lock_expr_skip: Callable[[float], bool] | None = None
-        self.lock_mode: FlowSource.LockMode = FlowSource.LockMode.from_arg(lock_mode)
-        self.lock_start: float | None = None
-
-    def set_metadata(self, width: int, height: int, framerate: float, length: int | None):
-
         self.width = width
         self.height = height
         self.framerate = framerate
+        self.length = length
+        self.start_frame = start_frame
+        self.end_frame = end_frame
+        self.mask = mask
+        self.kernel = kernel
+        self.flow_filters = flow_filters
+        self.lock_mode = lock_mode
+        self.lock_expr_stay = lock_expr_stay
+        self.lock_expr_skip = lock_expr_skip
+        self.input_frame_index: int = 0
+        self.output_frame_index: int = 0
+        self.prev_flow: numpy.ndarray | None = None
+        self.lock_start: float | None = None
+        self.lock_expr_stay_index: int = 0
 
-        if length is not None and length <= 0:
-            length = None
-
-        self.is_stream = length == None
-        if self.is_stream and self.repeat > 1:
-            warnings.warn("Flow source is a stream, cannot repeat it!")
-            self.repeat = 1
-        if self.is_stream and self.seek_time is not None and self.seek_time > 0:
-            warnings.warn("Flow source is a stream, seek time is ignored!")
-            self.seek_time = None
-
-        if self.seek_time is not None and not self.is_stream:
-            self.start_frame = int(self.seek_time * self.framerate)
-        else:
-            self.start_frame = 0
-
-        if self.duration_time is not None:
-            self.end_frame = self.start_frame + int(self.duration_time * self.framerate)
-            if length is not None:
-                self.end_frame = min(self.end_frame, length)
-        elif length is not None:
-            self.end_frame = length
-
-        if self.repeat == 0:
-            self.length = None
-        elif self.is_stream:
-            self.length = self.end_frame
-        else:
-            self.length = self.repeat * (self.end_frame - self.start_frame)
-
-        if self.length is not None and self.lock_mode == FlowSource.LockMode.STAY and self.lock_expr_stay is not None:
-            for _, lock_duration in self.lock_expr_stay:
-                self.length += int(lock_duration * framerate)
-
-        real_start_frame = self.start_frame
-        ckpt_start_frame = real_start_frame
-        if self.seek_ckpt is not None:
-            self.output_frame_index = self.seek_ckpt
-            ckpt_start_frame += self.seek_ckpt % (self.end_frame - self.start_frame)
         self.start_frame = ckpt_start_frame
         self.rewind()
-        self.start_frame = real_start_frame
+        self.start_frame = start_frame
 
     def __len__(self):
         return self.length
-    
+
     def read_next_flow(self) -> numpy.ndarray:
         if self.input_frame_index == self.end_frame:
             self.rewind()
@@ -172,31 +282,6 @@ class FlowSource:
     def __iter__(self):
         return self
 
-    def __enter__(self):
-        self.setup()
-        return self
-
-    def setup(self):
-        if self.lock_expr_string is not None:
-            if self.lock_mode == FlowSource.LockMode.STAY:
-                if "(" not in self.lock_expr_string:
-                    self.lock_expr_string = f"({self.lock_expr_string})"
-                self.lock_expr_stay = tuple(eval(f"[{self.lock_expr_string},]"))
-            elif self.lock_mode == FlowSource.LockMode.SKIP:
-                self.lock_expr_skip = parse_lambda_expression(self.lock_expr_string)
-        if self.flow_filters_string is not None:
-            self.flow_filters: list[FlowFilter] = []
-            for filter_string in self.flow_filters_string.strip().split(";"):
-                if filter_string.split() == "":
-                    continue
-                i = filter_string.index("=")
-                self.flow_filters.append(FlowFilter.from_args(
-                    filter_string[:i].strip(),
-                    tuple(filter_string[i+1:].strip().split(":"))))
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        pass
-
     def post_process(self, flow: numpy.ndarray) -> numpy.ndarray:
         if self.flow_filters:
             for flow_filter in self.flow_filters:
@@ -234,7 +319,8 @@ class FlowSource:
             avformat, file = flow_path.split("::")
         else:
             avformat, file = None, flow_path
-        args = {
+        kwargs = {
+            "direction": direction,
             "mask_path": mask_path,
             "kernel_path": kernel_path,
             "flow_filters": flow_filters,
@@ -247,10 +333,10 @@ class FlowSource:
         }
         if file.endswith(".flow.zip"):
             from .archive import ArchiveFlowSource
-            return ArchiveFlowSource(file, **args)
+            return ArchiveFlowSource.Builder(file, **kwargs)
         elif use_mvs:
             from .av import AvFlowSource
-            return AvFlowSource(file, avformat, **args)
+            return AvFlowSource.Builder(file, avformat, **kwargs)
         else:
             from .cv import CvFlowConfig, CvFlowSource
             if cv_config == "window":
@@ -259,5 +345,8 @@ class FlowSource:
                 config = CvFlowConfig.from_file(cv_config)
             else:
                 config = CvFlowConfig()
-            return CvFlowSource(file, config, size, direction, **args)
+            return CvFlowSource.Builder(file, config, size, **kwargs)
+
+    def close(self):
+        pass
 

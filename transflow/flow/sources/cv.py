@@ -155,7 +155,7 @@ class CvFlowConfigWindow(threading.Thread):
             hlayout.addWidget(label_element)
             hlayout.addWidget(element)
             layout.addLayout(hlayout)
-        
+
         self.method_input = PySide6.QtWidgets.QComboBox()
         self.method_input.currentIndexChanged.connect(self.callback)
         add_to_layout(layout_main, "method", self.method_input, "method")
@@ -192,14 +192,14 @@ class CvFlowConfigWindow(threading.Thread):
         hlayout = PySide6.QtWidgets.QHBoxLayout()
         hlayout.addWidget(reset_button)
         layout_main.addLayout(hlayout)
-        
+
         import_button = PySide6.QtWidgets.QPushButton("Import")
         import_button.setMinimumWidth(100)
         import_button.clicked.connect(lambda: self.import_config(window))
         hlayout = PySide6.QtWidgets.QHBoxLayout()
         hlayout.addWidget(import_button)
-        layout_main.addLayout(hlayout)            
-        
+        layout_main.addLayout(hlayout)
+
         export_button = PySide6.QtWidgets.QPushButton("Export")
         export_button.setMinimumWidth(100)
         export_button.clicked.connect(lambda: self.export_config(window))
@@ -313,7 +313,7 @@ class CvFlowConfig:
         if attrname == "method" and isinstance(value, str):
             value = CvFlowSource.FlowMethod.from_string(value)
         self.__setattr__(attrname, value)
-    
+
     def reset(self):
         self.method = CvFlowSource.FlowMethod.FARNEBACK
         self.fb_pyr_scale = 0.5
@@ -349,7 +349,7 @@ class CvFlowConfig:
             "lk_max_level": self.lk_max_level,
             "lk_step": self.lk_step
         }
-    
+
     def to_file(self, path: str):
         with open(path, "w", encoding="utf8") as file:
             json.dump(self.to_dict(), file, indent=4)
@@ -359,8 +359,6 @@ class CvFlowConfig:
         with open(path, "r", encoding="utf8") as file:
             data = json.load(file)
         return cls(**data)
-
-
 
 
 class CvFlowSource(FlowSource):
@@ -396,37 +394,48 @@ class CvFlowSource(FlowSource):
                 return "liteflownet"
             raise ValueError(f"Unknown flow method {method}")
 
+    class Builder(FlowSource.Builder):
 
-    def __init__(self, file: str, config: CvFlowConfig,
-        size: tuple[int, int] | None = None,
-        direction: FlowSource.FlowDirection | None = None, **src_args):
-        FlowSource.__init__(self,
-            direction if direction is not None else FlowSource.FlowDirection.FORWARD,
-            **src_args)
-        self.file = file
+        def __init__(self,
+                file: str,
+                config: CvFlowConfig,
+                size: tuple[int, int] | None = None,
+                **kwargs):
+            super().__init__(**kwargs)
+            self.file = file
+            self.config = config
+            self.size = size
+            self.capture: cv2.VideoCapture | None = None
+
+        @property
+        def cls(self):
+            return CvFlowSource
+
+        def build(self):
+            if re.match(r"\d+", self.file):
+                # file argument is probably a webcam index
+                self.capture = cv2.VideoCapture(int(self.file))
+            else:
+                self.capture = cv2.VideoCapture(self.file)
+            if self.size is not None:
+                self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.size[0])
+                self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.size[1])
+            self.width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            self.framerate = float(self.capture.get(cv2.CAP_PROP_FPS))
+            self.base_length = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT)) - 1
+            super().build()
+        
+        def args(self):
+            return [self.capture, self.config, *FlowSource.Builder.args(self)]
+
+    def __init__(self, capture: cv2.VideoCapture, config: CvFlowConfig, *args, **kwargs):
         self.config = config
-        self.size = size
-        self.capture = None
+        self.capture = capture
         self.prev_gray = None
         self.prev_rgb = None
-
-    def setup(self):
-        FlowSource.setup(self)
-        if re.match(r"\d+", self.file):
-            # file argument is probably a webcam index
-            self.capture = cv2.VideoCapture(int(self.file))
-        else:
-            self.capture = cv2.VideoCapture(self.file)
-        if self.size is not None:
-            self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.size[0])
-            self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.size[1])
-        self.set_metadata(
-            int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            float(self.capture.get(cv2.CAP_PROP_FPS)),
-            int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT)) - 1
-        )
         self.config.start()
+        FlowSource.__init__(self, *args, **kwargs)
 
     def rewind(self):
         self.input_frame_index = self.start_frame
@@ -438,7 +447,7 @@ class CvFlowSource(FlowSource):
         for i in range(self.input_frame_index + 1):
             success, frame = self.capture.read()
             if not success or frame is None:
-                raise RuntimeError(f"Could not open video at {self.file}")
+                raise RuntimeError(f"Could not open video at")
             if i == self.input_frame_index:
                 resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
                 self.prev_gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
@@ -446,13 +455,9 @@ class CvFlowSource(FlowSource):
         self.prev_flow = None
 
     def next(self) -> numpy.ndarray:
-        if self.capture is None:
-            raise ValueError("Capture not initialized")
         success, frame = self.capture.read()
         if frame is None or not success:
             raise StopIteration
-        if self.width is None or self.height is None:
-            raise ValueError("Width or height not initialized")
         resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
         gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
@@ -512,6 +517,5 @@ class CvFlowSource(FlowSource):
         self.prev_rgb = rgb
         return flow
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        if self.capture is not None:
-            self.capture.release()
+    def close(self):
+        self.capture.release()
