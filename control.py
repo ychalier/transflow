@@ -28,7 +28,7 @@ import PIL.Image
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame
 
-from transflow.accumulator import MappingAccumulator
+from transflow.accumulator.mapping import MappingAccumulator
 
 
 WHITE = (255, 255, 255)
@@ -46,7 +46,7 @@ def ask_color(base_color: tuple[int, int, int]) -> tuple[int, int, int] | None:
         def __init__(self, base_color):
             threading.Thread.__init__(self)
             self.base_color = base_color
-            self.result = None
+            self.result = None, None
         def run(self):
             self.result = tkinter.colorchooser.askcolor(color=self.base_color)
     thread = ColorThread(base_color)
@@ -79,15 +79,14 @@ def ask_export_format() -> bool:
     tkinter.Button(window, text="All", command=click_all)\
         .grid(column=1, row=1)
     window.mainloop()
-    return vars.get("choice")
+    return bool(vars.get("choice"))
 
 
 def get_opposite_color(color: tuple[int, int, int]) -> tuple[int, int, int]:
     r, g, b = color
-    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
-    return tuple(map(
-        lambda x: int(255 * x),
-        colorsys.hls_to_rgb(h+.5, .5, 1)))
+    hue = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)[0]
+    R, G, B = colorsys.hls_to_rgb(hue + .5, .5, 1)
+    return (int(255 * R), int(255 * G), int(255 * B))
 
 
 class Window:
@@ -110,10 +109,10 @@ class Window:
         self.h = None
         self.mapping = None
         self.bitmap = None
-        self.targets = None
         self.masks = None
-        self.sources = None
-        self.colors = {}
+        self.targets: dict[tuple[int, int], list[tuple[int, int]]] = {}
+        self.sources: list[tuple[int, int]] = []
+        self.colors: dict[tuple[int, int], tuple[int, int, int]] = {}
         self.hovered = None
         self.default_colors = {}
         self.buffer = WHITE
@@ -171,18 +170,20 @@ class Window:
 
         # Loading or generating bitmap
         if self.bitmap_path is not None:
-            self.bitmap = numpy.array(PIL.Image.open(self.bitmap_path))[:,:,:3]
+            self.bitmap = numpy.array(PIL.Image.open(self.bitmap_path))[:,:,:3].astype(numpy.uint8)
         else:
-            self.bitmap = numpy.random.randint(0, 255, (*self.mapping.shape[:2], 3))
+            self.bitmap = numpy.random.randint(0, 255, (*self.mapping.shape[:2], 3), dtype=numpy.uint8)
 
         # Collecting colors
         for source in self.sources:
-            color = tuple(self.bitmap[source[0], source[1]].tolist())
+            color = tuple(self.bitmap[source[0], source[1]])
             self.default_colors[source] = color
             self.colors[source] = color
 
     def __enter__(self):
         self.load()
+        assert self.w is not None
+        assert self.h is not None
 
         self.height_panes =\
             self.h * ((self.width - 3 * self.padding) // 2) / self.w
@@ -204,6 +205,7 @@ class Window:
         pygame.display.set_caption(os.path.basename(self.ckpt_path))
 
     def draw(self):
+        assert self.window is not None, self.window
         self.window.fill(BACKGROUND_COLOR)
 
         # Draw Sources
@@ -227,8 +229,10 @@ class Window:
                 src_y += self.square_size + self.square_padding
 
         # Draw Panes
+        assert self.height_sources is not None, self.height_sources
         paney = self.height_sources + 2 * self.padding
 
+        assert self.bitmap is not None
         # Draw Left Pane
         altered_bitmap = numpy.copy(self.bitmap)
         for source, color in self.colors.items():
@@ -244,6 +248,7 @@ class Window:
         self.window.blit(bitmap_surface, (self.padding, paney))
 
         # Draw Right Pane
+        assert self.mapping is not None
         output = altered_bitmap[self.mapping[:,:,1], self.mapping[:,:,0], :]
         output_surface = pygame.transform.scale(
             pygame.surfarray.make_surface(output.transpose(1, 0, 2)),
@@ -254,6 +259,10 @@ class Window:
             self.surfw + 2 * self.border_width,
             self.surfh + 2 * self.border_width))
         self.window.blit(output_surface, (self.surfw + 2 * self.padding, paney))
+
+        assert self.w is not None, self.w
+        assert self.h is not None, self.h
+        assert self.masks is not None, self.masks
 
         # Draw Over Panes
         if self.hovered is not None:
@@ -298,10 +307,14 @@ class Window:
         pygame.display.flip()
 
     def get_hovered_color(self) -> tuple[int, int, int]:
+        assert self.window is not None, self.window
         mouse_x, mouse_y = pygame.mouse.get_pos()
-        return self.window.get_at((mouse_x, mouse_y))[:3]
+        color = self.window.get_at((mouse_x, mouse_y))
+        return (color.r, color.g, color.b)
 
     def draw_hovered_color(self, flip=False):
+        assert self.window is not None, self.window
+        assert self.height_sources is not None
         self.window.fill(self.get_hovered_color(), (
             self.padding + self.square_padding + self.square_size,
             self.height_sources + self.height_panes + 3 * self.padding,
@@ -311,6 +324,14 @@ class Window:
             pygame.display.flip()
 
     def get_source(self, x: int, y: int) -> tuple[int, int] | None:
+        assert self.height_sources is not None, self.height_sources
+        assert self.sources_per_row is not None, self.sources_per_row
+        assert self.height is not None, self.height
+        assert self.w is not None, self.w
+        assert self.h is not None, self.h
+        assert self.surfw is not None, self.surfw
+        assert self.surfh is not None, self.surfh
+        assert self.mapping is not None
         if x > self.padding and x < self.width - self.padding\
             and y > self.padding and y < self.padding + self.height_sources:
             i = (y - self.padding) // (self.square_size + self.square_padding)
@@ -328,18 +349,20 @@ class Window:
             return None
         x -= 2 * self.padding + self.surfw
         y -= self.height_sources + 2 * self.padding
-        x *= self.w / self.surfw
-        y *= self.h / self.surfh
-        if int(y) >= self.h or int(x) >= self.w:
+        x = int(x * self.w / self.surfw)
+        y = int(y * self.h / self.surfh)
+        if y >= self.h or x >= self.w:
             return None
         source = (
-            self.mapping[int(y), int(x), 1],
-            self.mapping[int(y), int(x), 0])
+            self.mapping[y, x, 1],
+            self.mapping[y, x, 0])
         if source in self.sources:
             return source
         return None
 
     def export(self):
+        assert self.flow_path is not None, self.flow_path
+        assert self.mapping is not None, self.mapping
         path = os.path.join(
             os.path.dirname(self.ckpt_path),
             os.path.splitext(os.path.basename(self.flow_path))[0]
@@ -362,6 +385,7 @@ class Window:
         print(f"Exported to {path}")
 
     def over_buffer(self, x: int, y: int) -> bool:
+        assert self.height is not None, self.height
         return x >= self.padding\
             and x < self.padding + self.square_size\
             and y >= self.height - self.padding - self.square_size\
