@@ -4,7 +4,7 @@ import numpy
 
 from .accumulator import Accumulator
 from .mapping import MappingAccumulator
-from ..flow import FlowDirection
+from ..flow import Direction
 from ..utils import parse_hex_color
 
 
@@ -18,7 +18,7 @@ class CrumbleAccumulator(MappingAccumulator):
         self.bg_color = parse_hex_color(bg_color)
         self.crumble_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8)
 
-    def update(self, flow: numpy.ndarray, direction: FlowDirection):
+    def update(self, flow: numpy.ndarray, direction: Direction):
         self._update_flow(flow)
         if self.reset_mode == Accumulator.ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
@@ -28,7 +28,7 @@ class CrumbleAccumulator(MappingAccumulator):
             self.mapx[where] = self.basex[where]
             self.mapy[where] = self.basey[where]
             self.crumble_mask[where] = 1
-        if direction == FlowDirection.FORWARD:
+        if direction == Direction.FORWARD:
             where_movements = numpy.nonzero(self.flow_flat)
             w1 = numpy.nonzero(self.crumble_mask.flat)
             w3 = numpy.intersect1d(where_movements[0], w1[0])
@@ -42,7 +42,7 @@ class CrumbleAccumulator(MappingAccumulator):
                 self.mapy.flat[w3], mode="clip")
             self.crumble_mask.flat[where_movements] = 0
             self.crumble_mask.flat[self.base_flat[w3] + self.flow_flat[w3]] = 1
-        elif direction == FlowDirection.BACKWARD:
+        elif direction == Direction.BACKWARD:
             shift = (
                 self.basey + self.flow_int[:,:,1],
                 self.basex + self.flow_int[:,:,0])

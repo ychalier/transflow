@@ -3,7 +3,7 @@ import enum
 import numpy
 
 from ..utils import load_mask
-from ..flow import FlowDirection
+from ..flow import Direction
 
 
 class Accumulator:
@@ -104,7 +104,7 @@ class Accumulator:
             self.heatmap = numpy.clip(self.heatmap + numpy.linalg.norm(self.flow_int, axis=2),
                                       self.heatmap_min, self.heatmap_max)
 
-    def update(self, flow: numpy.ndarray, direction: FlowDirection):
+    def update(self, flow: numpy.ndarray, direction: Direction):
         raise NotImplementedError()
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:

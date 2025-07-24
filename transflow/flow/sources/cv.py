@@ -461,10 +461,10 @@ class CvFlowSource(FlowSource):
         resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
         gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        if self.direction == FlowSource.FlowDirection.FORWARD:
+        if self.direction == FlowSource.Direction.FORWARD:
             left_gray, right_gray = self.prev_gray, gray
             left_rgb, right_rgb = self.prev_rgb, rgb
-        elif self.direction == FlowSource.FlowDirection.BACKWARD:
+        elif self.direction == FlowSource.Direction.BACKWARD:
             left_gray, right_gray = gray, self.prev_gray
             left_rgb, right_rgb = rgb, self.prev_rgb
         else:

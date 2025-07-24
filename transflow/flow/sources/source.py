@@ -12,20 +12,20 @@ from ...utils import load_mask, parse_lambda_expression
 class FlowSource:
 
     @enum.unique
-    class FlowDirection(enum.Enum):
+    class Direction(enum.Enum):
         FORWARD = 0 # past to present
         BACKWARD = 1 # present to past
 
         @classmethod
-        def from_arg(cls, arg: "str | FlowSource.FlowDirection | None"):
+        def from_arg(cls, arg: "str | FlowSource.Direction | None"):
             if arg is None:
-                return FlowSource.FlowDirection.FORWARD # TODO: log
-            if isinstance(arg, FlowSource.FlowDirection):
+                return FlowSource.Direction.FORWARD # TODO: log
+            if isinstance(arg, FlowSource.Direction):
                 return arg
             if arg == "forward":
-                return FlowSource.FlowDirection.FORWARD
+                return FlowSource.Direction.FORWARD
             if arg == "backward":
-                return FlowSource.FlowDirection.BACKWARD
+                return FlowSource.Direction.BACKWARD
             raise ValueError(f"Invalid Flow Direction: {arg}")
 
     @enum.unique
@@ -48,7 +48,7 @@ class FlowSource:
     class Builder:
 
         def __init__(self,
-                direction: "str | FlowSource.FlowDirection | None" = "backward",
+                direction: "str | FlowSource.Direction | None" = "backward",
                 mask_path: str | None = None,
                 kernel_path: str | None = None,
                 flow_filters: str | None = None,
@@ -58,7 +58,7 @@ class FlowSource:
                 repeat: int = 1,
                 lock_expr: str | None = None,
                 lock_mode: "str | FlowSource.LockMode | None" = "stay"):
-            self.direction: FlowSource.FlowDirection = FlowSource.FlowDirection.from_arg(direction)
+            self.direction: FlowSource.Direction = FlowSource.Direction.from_arg(direction)
             self.width: int | None = None
             self.height: int | None = None
             self.framerate: float = 30
@@ -191,7 +191,7 @@ class FlowSource:
                 self.source.close()
 
     def __init__(self,
-            direction: FlowDirection,
+            direction: Direction,
             width: int,
             height: int,
             framerate: float,
@@ -308,7 +308,7 @@ class FlowSource:
             cv_config: str | None = None,
             flow_filters: str | None = None,
             size: tuple[int, int] | None = None,
-            direction: FlowDirection | None = None,
+            direction: Direction | None = None,
             seek_ckpt: int | None = None,
             seek_time: float | None = None,
             duration_time: float | None = None,

@@ -24,7 +24,7 @@ class ArchiveFlowSource(FlowSource):
             with self.archive.open("meta.json") as file:
                 data = json.loads(file.read().decode())
             # for backward compatibility, previous flows were only forward
-            self.direction = FlowSource.FlowDirection(data.get("direction", FlowSource.FlowDirection.FORWARD.value))
+            self.direction = FlowSource.Direction(data.get("direction", FlowSource.Direction.FORWARD.value))
             self.width = data["width"]
             self.height = data["height"]
             self.framerate = data["framerate"]

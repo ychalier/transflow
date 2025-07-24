@@ -14,7 +14,7 @@ import warnings
 import numpy
 import tqdm
 
-from .flow import FlowSource, FlowDirection, LockMode
+from .flow import FlowSource, Direction, LockMode
 from .bitmap import BitmapSource
 from .accumulator import Accumulator
 from .output import VideoOutput, ZipOutput, NumpyOutput
@@ -215,7 +215,7 @@ class Config:
     kernel_path: str | None = None
     cv_config: str | None = None
     flow_filters: str | None = None
-    direction: str | FlowDirection = "forward"
+    direction: str | Direction = "forward"
     round_flow: bool = False
     export_flow: bool = False
     seek_time: float | None = None
@@ -339,9 +339,9 @@ def transfer(
             config.seed = random.randint(0, 2**32-1)
 
         if config.direction == "forward":
-            config.direction = FlowDirection.FORWARD
+            config.direction = Direction.FORWARD
         elif config.direction == "backward":
-            config.direction = FlowDirection.BACKWARD
+            config.direction = Direction.BACKWARD
         else:
             raise ValueError(f"Invalid flow direction '{config.direction}'")
 

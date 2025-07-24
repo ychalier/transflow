@@ -1,3 +1,3 @@
 from .sources.source import FlowSource
-FlowDirection = FlowSource.FlowDirection
+Direction = FlowSource.Direction
 LockMode = FlowSource.LockMode

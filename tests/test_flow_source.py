@@ -32,13 +32,13 @@ class TestFlowSource(unittest.TestCase):
 
     def test_cv_forward(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH,
-            direction=transflow.flow.FlowDirection.FORWARD)
+            direction=transflow.flow.Direction.FORWARD)
         self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource.Builder)
         self._test_fs(fs)
     
     def test_cv_backward(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH,
-            direction=transflow.flow.FlowDirection.BACKWARD)
+            direction=transflow.flow.Direction.BACKWARD)
         self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource.Builder)
         self._test_fs(fs)
     
