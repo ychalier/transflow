@@ -379,7 +379,7 @@ You can provide a seed with the `-sd, --seed` parameter. It expects an integer. 
 
 Flow or bitmap sources can use webcams. As they do not have durations, you may have to use the Ctrl+C shortcut to interrupt the program when done. You can specify the width and height of the stream to request from the webcam with the `-sz, --size` argument, with a value of the form `WIDTHxHEIGHT`. By default, the preferred webcam option is selected.
 
-**[OpenCV](https://opencv.org/) stream.** Simplest option is to pass an integer as the source argument. This number should be the webcam index as referenced by OpenCV. You may use the [list_cv2_webcams.py](list_cv2_webcams.py) script to list available webcams.
+**[OpenCV](https://opencv.org/) stream.** Simplest option is to pass an integer as the source argument. This number should be the webcam index as referenced by OpenCV. You may use the [extra/list_cv2_webcams.py](extra/list_cv2_webcams.py) script to list available webcams.
 
 **[PyAV](https://pyav.org/docs/stable/) stream.** If you want to use webcam motion vectors as a flow source, you must specify the webcam using the `avformat:name` format. `avformat` should be a webcam API, often `dshow` on Windows or `v4l2` on Linux. `name` is the webcam name as it appears in the output of the `ffmpeg -list_devices true -f {dshow,v4l2} -i dummy` command. Note that this name may require a prefix depending on the API you use. For instance, on Windows, DirectShow (dshow) requires strings of the form `video=WEBCAM_NAME`. Here is an example for viewing the intensity of the motion vectors that way:
 
@@ -420,13 +420,13 @@ Altering the bitmap is a way to control how the output will look if the flow has
 
 You can specify an alteration image with the `-ba, --bitmap-alteration` argument. It takes a path to a PNG file. This image should be transparent (alpha channel set to 0) for pixels that should not be touched. Non-transparent pixels will be pasted onto the bitmap. For video bitmaps, the same alteration is applied on all frames.
 
-In order to know in advance which pixels to alter, you may use the [control.py](control.py) script:
+In order to know in advance which pixels to alter, you may use the [extra/control.py](extra/control.py) script:
 
 1. First, use Transflow with the `-cd` flag to generate a mapping checkpoint (see [Restart From Checkpoint](#restart-from-checkpoint)).
     ```console
     transflow flow.mp4 -cd
     ```
-2. Then, call the [control.py](control.py) script and pass the checkpoint as argument. If you already know which bitmap image you're using, you might want to pass it as well.
+2. Then, call the [control.py](extra/control.py) script and pass the checkpoint as argument. If you already know which bitmap image you're using, you might want to pass it as well.
     ```console
     python control.py flow_12345.ckpt.zip image.jpg
     ```
@@ -436,7 +436,7 @@ In order to know in advance which pixels to alter, you may use the [control.py](
     transflow flow.mp4 -b image.jpg -ba flow_12345_1730000000000.png
     ```
 
-In the [control.py](control.py) GUI, you see pixel sources in the header, ordered by their target area, decreasing: this means the first (top left) source covers the most area. Hovering on it highlights its target zone. Clicking on it opens a color picker to edit its color. Other bindings:
+In the [control.py](extra/control.py) GUI, you see pixel sources in the header, ordered by their target area, decreasing: this means the first (top left) source covers the most area. Hovering on it highlights its target zone. Clicking on it opens a color picker to edit its color. Other bindings:
 - Left click: change color
 - Right click: reset color (can be held down)
 - Ctrl+R: reset all colors

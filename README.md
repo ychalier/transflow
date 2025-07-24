@@ -74,13 +74,13 @@ The alias `transflow` represents either `python -m transflow` or `python transfl
 
 This repository also contains two other versions of this program:
 
-- in the [cpp](cpp) folder, a C++ version using OpenCV to transfer the flow from one webcam to another,
-- in the [www](www) folder, a WebGL version that emulates the effect in a web browser; a version is hosted on [chalier.fr/transflow](https://chalier.fr/transflow/).
+- in the [extra/cpp](extra/cpp) folder, a C++ version using OpenCV to transfer the flow from one webcam to another,
+- in the [extra/www](extra/www) folder, a WebGL version that emulates the effect in a web browser; a version is hosted on [chalier.fr/transflow](https://chalier.fr/transflow/).
 
-There are also other modules:
+There are also other modules (in the [extra](extra) folder):
 
-- [viewflow](viewflow), for visualizing and inspecting optical flow in a video player setting,
-- [control](control.py), for generating alteration images (see [Bitmap Alteration](USAGE.md#bitmap-alteration)). 
+- [viewflow](extra/viewflow), for visualizing and inspecting optical flow in a video player setting,
+- [control](extra/control.py), for generating alteration images (see [Bitmap Alteration](USAGE.md#bitmap-alteration)). 
 
 ## Contributing
 
