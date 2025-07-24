@@ -4,12 +4,13 @@ import os
 import time
 
 import cv2
+import cv2.typing
 import numpy
 
 cv2.setLogLevel(1)
 
 
-def scan_webcam(device_index: int, thumbnail_size: tuple[int, int]) -> cv2.Mat | None:
+def scan_webcam(device_index: int, thumbnail_size: tuple[int, int]) -> cv2.typing.MatLike | None:
     capture = cv2.VideoCapture(device_index)
     if not capture.isOpened():
         return None
@@ -33,7 +34,7 @@ def scan_webcam(device_index: int, thumbnail_size: tuple[int, int]) -> cv2.Mat |
 
 
 def scan_webcams(max_tries: int, thumbnail_size: tuple[int, int]) -> numpy.ndarray:
-    thumbnails: list[cv2.Mat] = []
+    thumbnails: list[cv2.typing.MatLike] = []
     for device_index in range(max_tries):
         thumbnail = scan_webcam(device_index, thumbnail_size)
         if thumbnail is not None:
