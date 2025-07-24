@@ -28,6 +28,8 @@ import PIL.Image
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame
 
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from transflow.accumulator.mapping import MappingAccumulator
 
 
