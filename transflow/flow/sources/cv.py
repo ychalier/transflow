@@ -258,7 +258,7 @@ class CvFlowConfigWindow(threading.Thread):
 
     def callback(self):
         method_name = self.TEMPLATE[self.method_input.currentIndex()]["name"]
-        method = CvFlowSource.FlowMethod.from_string(method_name)
+        method = CvFlowSource.Method.from_string(method_name)
         self.config.update("method", method)
         for widget_name, widget in self.widgets.items():
             widget.setVisible(method_name == widget_name)
@@ -269,7 +269,7 @@ class CvFlowConfigWindow(threading.Thread):
 class CvFlowConfig:
 
     def __init__(self,
-            method: "str | CvFlowSource.FlowMethod" = "farneback",
+            method: "str | CvFlowSource.Method" = "farneback",
             fb_pyr_scale: float = 0.5,
             fb_levels: int = 3,
             fb_winsize: int = 15,
@@ -285,7 +285,7 @@ class CvFlowConfig:
             lk_max_level: int = 2,
             lk_step: int = 1,
             show_window: bool = False):
-        self.method = CvFlowSource.FlowMethod.from_string(method) if isinstance(method, str) else method
+        self.method = CvFlowSource.Method.from_string(method) if isinstance(method, str) else method
         self.fb_pyr_scale = fb_pyr_scale
         self.fb_levels = fb_levels
         self.fb_winsize = fb_winsize
@@ -311,11 +311,11 @@ class CvFlowConfig:
 
     def update(self, attrname, value):
         if attrname == "method" and isinstance(value, str):
-            value = CvFlowSource.FlowMethod.from_string(value)
+            value = CvFlowSource.Method.from_string(value)
         self.__setattr__(attrname, value)
 
     def reset(self):
-        self.method = CvFlowSource.FlowMethod.FARNEBACK
+        self.method = CvFlowSource.Method.FARNEBACK
         self.fb_pyr_scale = 0.5
         self.fb_levels = 3
         self.fb_winsize = 15
@@ -333,7 +333,7 @@ class CvFlowConfig:
 
     def to_dict(self):
         return {
-            "method": CvFlowSource.FlowMethod.to_string(self.method),
+            "method": CvFlowSource.Method.to_string(self.method),
             "fb_pyr_scale": self.fb_pyr_scale,
             "fb_levels": self.fb_levels,
             "fb_winsize": self.fb_winsize,
@@ -364,7 +364,7 @@ class CvFlowConfig:
 class CvFlowSource(FlowSource):
 
     @enum.unique
-    class FlowMethod(enum.Enum):
+    class Method(enum.Enum):
         FARNEBACK = 0
         HORN_SCHUNCK = 1
         LUKAS_KANADE = 2
@@ -373,24 +373,24 @@ class CvFlowSource(FlowSource):
         @classmethod
         def from_string(cls, string: str):
             if string == "farneback":
-                return CvFlowSource.FlowMethod.FARNEBACK
+                return CvFlowSource.Method.FARNEBACK
             if string == "horn-schunck":
-                return CvFlowSource.FlowMethod.HORN_SCHUNCK
+                return CvFlowSource.Method.HORN_SCHUNCK
             if string == "lukas-kanade":
-                return CvFlowSource.FlowMethod.LUKAS_KANADE
+                return CvFlowSource.Method.LUKAS_KANADE
             if string == "liteflownet":
-                return CvFlowSource.FlowMethod.LITEFLOWNET
+                return CvFlowSource.Method.LITEFLOWNET
             raise ValueError(f"Invalid Flow Method: {string}")
 
         @staticmethod
-        def to_string(method: "CvFlowSource.FlowMethod"):
-            if method == CvFlowSource.FlowMethod.FARNEBACK:
+        def to_string(method: "CvFlowSource.Method"):
+            if method == CvFlowSource.Method.FARNEBACK:
                 return "farneback"
-            if method == CvFlowSource.FlowMethod.HORN_SCHUNCK:
+            if method == CvFlowSource.Method.HORN_SCHUNCK:
                 return "horn-schunck"
-            if method == CvFlowSource.FlowMethod.LUKAS_KANADE:
+            if method == CvFlowSource.Method.LUKAS_KANADE:
                 return "lukas-kanade"
-            if method == CvFlowSource.FlowMethod.LITEFLOWNET:
+            if method == CvFlowSource.Method.LITEFLOWNET:
                 return "liteflownet"
             raise ValueError(f"Unknown flow method {method}")
 
@@ -471,7 +471,7 @@ class CvFlowSource(FlowSource):
             raise ValueError(f"Invalid flow direction '{self.direction}'")
         if left_gray is None or right_gray is None:
             raise ValueError("Missing reference frames")
-        if self.config.method == CvFlowSource.FlowMethod.FARNEBACK:
+        if self.config.method == CvFlowSource.Method.FARNEBACK:
             flow = self.prev_flow.copy() if self.prev_flow is not None else numpy.zeros((self.height, self.width, 2), dtype=numpy.float32)
             flow = cv2.calcOpticalFlowFarneback(
                 prev=left_gray,
@@ -485,7 +485,7 @@ class CvFlowSource(FlowSource):
                 poly_sigma=self.config.fb_poly_sigma,
                 flags=self.config.fb_flags,
             ).astype(numpy.float32)
-        elif self.config.method == CvFlowSource.FlowMethod.HORN_SCHUNCK:
+        elif self.config.method == CvFlowSource.Method.HORN_SCHUNCK:
             flow = calc_optical_flow_horn_schunck(
                 prev_grey=left_gray,
                 next_grey=right_gray,
@@ -495,7 +495,7 @@ class CvFlowSource(FlowSource):
                 decay=self.config.hs_decay,
                 delta=self.config.hs_delta,
             )
-        elif self.config.method == CvFlowSource.FlowMethod.LUKAS_KANADE:
+        elif self.config.method == CvFlowSource.Method.LUKAS_KANADE:
             flow = calc_optical_flow_lukas_kanade(
                 prev_grey=left_gray,
                 next_grey=right_gray,
@@ -503,7 +503,7 @@ class CvFlowSource(FlowSource):
                 max_level=self.config.lk_max_level,
                 step=self.config.lk_step
             )
-        elif self.config.method == CvFlowSource.FlowMethod.LITEFLOWNET:
+        elif self.config.method == CvFlowSource.Method.LITEFLOWNET:
             try:
                 from ..methods.liteflownet import calc_optical_flow_liteflownet
             except Exception as err:
