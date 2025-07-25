@@ -1,7 +1,11 @@
 import dataclasses
+import logging
+import logging.config
+import logging.handlers
 import multiprocessing
 import multiprocessing.queues
 import os
+import pathlib
 import queue
 import random
 import re
@@ -57,7 +61,6 @@ def render2d(arr: numpy.ndarray, scale: float = 1,
     return numpy.clip(frame, 0, 255).astype(numpy.uint8)
 
 
-
 def append_history():
     import datetime, sys
     f = lambda s: os.path.realpath(s) if os.path.isfile(s) else s
@@ -68,16 +71,52 @@ def append_history():
         file.write("\n" + line + "\n")
 
 
+def setup_logging(log_queue):
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    # Remove existing handlers
+    for h in root.handlers[:]:
+        root.removeHandler(h)
+
+    # Add the QueueHandler to send logs to the queue
+    handler = logging.handlers.QueueHandler(log_queue)
+    root.addHandler(handler)
+
+
+def logging_listener_process(log_queue, config):
+    # Configure logger to write to file
+    logging.config.dictConfig(config)
+    listener = logging.handlers.QueueListener(
+        log_queue, *logging.getLogger().handlers
+    )
+    listener.start()
+    try:
+        while True:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        listener.stop()
+
+
 class SourceProcess(multiprocessing.Process):
 
-    def __init__(self, source: FlowSource.Builder | BitmapSource,
-                 q: multiprocessing.Queue, sq: multiprocessing.Queue):
+    def __init__(self,
+            source: FlowSource.Builder | BitmapSource,
+            out_queue: multiprocessing.Queue,
+            metadata_queue: multiprocessing.Queue,
+            log_queue: multiprocessing.Queue):
         multiprocessing.Process.__init__(self)
         self.source = source
-        self.queue = q
-        self.shape_queue = sq
+        self.queue = out_queue
+        self.shape_queue = metadata_queue
+        self.log_queue = log_queue
 
     def run(self):
+        setup_logging(self.log_queue)
+        logger = logging.getLogger(__name__)
+        logger.debug("Starting source process '%s'", self.source.__class__.__name__)
         put_none = True
         try:
             with self.source as source:
@@ -92,25 +131,36 @@ class SourceProcess(multiprocessing.Process):
                     for item in source:
                         self.queue.put(item)
                 except KeyboardInterrupt:
+                    logger.debug("Source process got interrupted")
                     put_none = False
-                except Exception:
+                except Exception as err:
+                    logger.debug("Source process encountered an exception: %s", err)
                     put_none = False
                     traceback.print_exc()
-        except Exception:
+        except Exception as err:
+            logger.debug("Source process encountered an exception: %s", err)
             put_none = False
             traceback.print_exc()
         if put_none:
             self.queue.put(None)
+        logger.debug("End of source process '%s'", self.source.__class__.__name__)
 
 
 class OutputProcess(multiprocessing.Process):
 
-    def __init__(self, output: VideoOutput, q: multiprocessing.Queue):
+    def __init__(self,
+            output: VideoOutput,
+            in_queue: multiprocessing.Queue,
+            log_queue: multiprocessing.Queue):
         multiprocessing.Process.__init__(self)
         self.output = output
-        self.queue = q
+        self.queue = in_queue
+        self.log_queue = log_queue
 
     def run(self):
+        setup_logging(self.log_queue)
+        logger = logging.getLogger(__name__)
+        logger.debug("Starting output process '%s'", self.output.__class__.__name__)
         with self.output:
             while True:
                 try:
@@ -123,6 +173,7 @@ class OutputProcess(multiprocessing.Process):
                 except Exception:
                     traceback.print_exc()
                     break
+        logger.debug("End of output process '%s'", self.output.__class__.__name__)
 
 
 def get_secondary_output_path(
@@ -277,11 +328,51 @@ def transfer(
         config: Config,
         cancel_event: threading.Event | None = None,
         status_queue: multiprocessing.queues.Queue | None = None):
+    
+    # TODO: add arguments for logging level and output
+    log_queue = multiprocessing.Queue()
+    log_path = pathlib.Path("transflow.log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logging_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {
+                "format": "[%(asctime)s] %(levelname)s %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+        },
+        "handlers": {
+            "file": {
+                "level": "DEBUG",
+                "class": "logging.FileHandler",
+                "filename": log_path.as_posix(),
+                "formatter": "standard",                
+            },
+        },
+        "loggers": {
+            "transflow": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+        },
+        "root": {
+            "handlers": ["file"],
+            "level": "DEBUG",
+        }
+    }
+
+    log_listener = multiprocessing.Process(target=logging_listener_process, args=(log_queue, logging_config))
+    log_listener.start()
+
+    logger = logging.getLogger(__name__)   
+    logger.info("Entering transfer function")
 
     if config.safe:
         append_history()
 
-    shape_queue = flow_queue = bitmap_queue = flow_process = bitmap_process\
+    metadata_queue = flow_queue = bitmap_queue = flow_process = bitmap_process\
         = flow_output = bs_framerate = bs_length = accumulator = None
     output_queues: list[multiprocessing.Queue] = []
     output_processes: list[OutputProcess] = []
@@ -297,8 +388,8 @@ def transfer(
     def close():
         if flow_output is not None:
             flow_output.close()
-        if shape_queue is not None:
-            shape_queue.close()
+        if metadata_queue is not None:
+            metadata_queue.close()
         if flow_queue is not None:
             flow_queue.close()
         for q in extra_flow_queues:
@@ -321,6 +412,7 @@ def transfer(
             bitmap_process.join()
         for p in output_processes:
             p.join()
+        log_listener.terminate()
 
     try:
 
@@ -376,17 +468,17 @@ def transfer(
 
         flow_source = FlowSource.from_args(config.flow_path, **fs_args)
 
-        shape_queue = multiprocessing.Queue()
+        metadata_queue = multiprocessing.Queue()
 
         flow_queue = multiprocessing.Queue(maxsize=1)
-        flow_process = SourceProcess(flow_source, flow_queue, shape_queue)
+        flow_process = SourceProcess(flow_source, flow_queue, metadata_queue, log_queue)
         flow_process.start()
 
         for extra_flow_path in config.extra_flow_paths:
             extra_flow_sources.append(FlowSource.from_args(extra_flow_path, **fs_args))
             extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
             extra_flow_processes.append(SourceProcess(
-                extra_flow_sources[-1], extra_flow_queues[-1], shape_queue))
+                extra_flow_sources[-1], extra_flow_queues[-1], metadata_queue, log_queue))
             extra_flow_processes[-1].start()
 
         flow_sources_to_load = 1 + len(extra_flow_processes)
@@ -396,7 +488,7 @@ def transfer(
 
         while True:
             try:
-                shape_info = shape_queue.get(timeout=1)
+                shape_info = metadata_queue.get(timeout=1)
                 if flow_sources_loaded == 0:
                     (fs_width, fs_height, fs_framerate, fs_length, fs_direction) = shape_info
                 flow_sources_loaded += 1
@@ -441,12 +533,12 @@ def transfer(
                 repeat=config.bitmap_repeat,
                 flow_path=config.flow_path)
             bitmap_queue = multiprocessing.Queue(maxsize=1)
-            bitmap_process = SourceProcess(bitmap_source, bitmap_queue, shape_queue)
+            bitmap_process = SourceProcess(bitmap_source, bitmap_queue, metadata_queue, log_queue)
             bitmap_process.start()
 
             while True:
                 try:
-                    bs_width, bs_height, bs_framerate, bs_length, *_ = shape_queue.get(timeout=1)
+                    bs_width, bs_height, bs_framerate, bs_length, *_ = metadata_queue.get(timeout=1)
                     break
                 except queue.Empty as exc:
                     if bitmap_process.is_alive():
@@ -474,7 +566,7 @@ def transfer(
             warnings.warn(
                 "An alteration path was passed but no bitmap was provided")
 
-        shape_queue.close()
+        metadata_queue.close()
 
         if accumulator is None:
             accumulator = Accumulator.from_args(
@@ -518,7 +610,7 @@ def transfer(
                 oq = multiprocessing.Queue()
                 oq.cancel_join_thread()
                 output_queues.append(oq)
-                op = OutputProcess(output, oq)
+                op = OutputProcess(output, oq, log_queue)
                 op.start()
                 output_processes.append(op)
 

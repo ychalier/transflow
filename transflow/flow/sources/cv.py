@@ -439,15 +439,11 @@ class CvFlowSource(FlowSource):
 
     def rewind(self):
         self.input_frame_index = self.start_frame
-        if self.capture is None:
-            raise ValueError("Capture not initialized")
-        if self.width is None or self.height is None:
-            raise ValueError("Width or height not initialized")
         self.capture.set(cv2.CAP_PROP_POS_MSEC, 0)
         for i in range(self.input_frame_index + 1):
             success, frame = self.capture.read()
             if not success or frame is None:
-                raise RuntimeError(f"Could not open video at")
+                raise RuntimeError(f"Could not open video at") # TODO
             if i == self.input_frame_index:
                 resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
                 self.prev_gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
