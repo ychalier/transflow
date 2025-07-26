@@ -438,7 +438,7 @@ class CvFlowSource(FlowSource):
         FlowSource.__init__(self, *args, **kwargs)
 
     def rewind(self):
-        self.input_frame_index = self.start_frame
+        FlowSource.rewind(self)
         self.capture.set(cv2.CAP_PROP_POS_MSEC, 0)
         for i in range(self.input_frame_index + 1):
             success, frame = self.capture.read()

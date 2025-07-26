@@ -36,10 +36,7 @@ class ArchiveFlowSource(FlowSource):
 
     def __init__(self, archive: zipfile.ZipFile, *args, **kwargs):
         self.archive = archive
-        FlowSource.__init__(self, *args, **kwargs)
-
-    def rewind(self):
-        self.input_frame_index = self.start_frame
+        FlowSource.__init__(self, *args, **kwargs)       
 
     def next(self) -> numpy.ndarray:
         with self.archive.open(f"{self.input_frame_index:09d}.npy") as file:

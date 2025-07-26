@@ -46,7 +46,7 @@ class AvFlowSource(FlowSource):
         FlowSource.__init__(self, *args, **kwargs)
 
     def rewind(self):
-        self.input_frame_index = self.start_frame
+        FlowSource.rewind(self)
         self.container.seek(0)
         for _ in range(self.input_frame_index + 1):
             next(self.iterator)

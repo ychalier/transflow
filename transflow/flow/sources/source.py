@@ -1,4 +1,5 @@
 import enum
+import logging
 import os
 import warnings
 from typing import Callable
@@ -7,6 +8,9 @@ import numpy
 
 from ..filters import FlowFilter
 from ...utils import load_mask, parse_lambda_expression
+
+
+logger = logging.getLogger(__name__)
 
 
 class FlowSource:
@@ -182,12 +186,14 @@ class FlowSource:
             self.start_frame = real_start_frame
 
         def __enter__(self):
+            logger.debug("Building %s", self.__class__)
             self.source = self.build()
             # TODO check that all fields have been instantiated ?
             return self.cls(*self.args(), **self.kwargs())
 
         def __exit__(self, exc_type, exc_value, exc_traceback):
             if self.source is not None:
+                logger.debug("Closing flow source '%s'", self.source.__class__.__name__)
                 self.source.close()
 
     def __init__(self,
@@ -277,7 +283,8 @@ class FlowSource:
         raise NotImplementedError()
 
     def rewind(self):
-        raise NotImplementedError()
+        logger.debug("Rewinding flow source to frame %d (currently %d)", self.start_frame, self.input_frame_index)
+        self.input_frame_index = self.start_frame
 
     def __iter__(self):
         return self
