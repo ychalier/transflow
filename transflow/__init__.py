@@ -190,6 +190,7 @@ def main():
         from .gui import start_gui
         start_gui()
         return
+    # TODO: this should be taken care of by the transfer function
     from .utils import parse_timestamp
     seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
     duration_time = parse_timestamp(args.duration)

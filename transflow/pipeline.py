@@ -87,17 +87,20 @@ def setup_logging(log_queue):
 def logging_listener_process(log_queue, config):
     # Configure logger to write to file
     logging.config.dictConfig(config)
+    logger = logging.getLogger()
     listener = logging.handlers.QueueListener(
         log_queue, *logging.getLogger().handlers
     )
     listener.start()
-    try:
-        while True:
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        listener.stop()
+    while True:
+        try:
+            record = log_queue.get()
+            if record is None:
+                break
+            logger.handle(record)
+        except KeyboardInterrupt:
+            pass
+    listener.stop()
 
 
 class SourceProcess(multiprocessing.Process):
@@ -114,9 +117,10 @@ class SourceProcess(multiprocessing.Process):
         self.log_queue = log_queue
 
     def run(self):
+        name = self.source.__class__.__name__
         setup_logging(self.log_queue)
         logger = logging.getLogger(__name__)
-        logger.debug("Starting source process '%s'", self.source.__class__.__name__)
+        logger.debug("Starting source process '%s'", name)
         put_none = True
         try:
             with self.source as source:
@@ -131,19 +135,20 @@ class SourceProcess(multiprocessing.Process):
                     for item in source:
                         self.queue.put(item)
                 except KeyboardInterrupt:
-                    logger.debug("Source process got interrupted")
+                    logger.debug("Source process '%s' got interrupted", name)
                     put_none = False
                 except Exception as err:
-                    logger.debug("Source process encountered an exception: %s", err)
+                    logger.error("Source process '%s' encountered an error: %s", name, err)
                     put_none = False
                     traceback.print_exc()
         except Exception as err:
-            logger.debug("Source process encountered an exception: %s", err)
+            logger.error("Source process '%s', encountered an error: %s", name, err)
             put_none = False
             traceback.print_exc()
         if put_none:
             self.queue.put(None)
-        logger.debug("End of source process '%s'", self.source.__class__.__name__)
+        logger.debug("End of source process '%s'", name)
+        logging.shutdown()
 
 
 class OutputProcess(multiprocessing.Process):
@@ -169,11 +174,14 @@ class OutputProcess(multiprocessing.Process):
                         break
                     self.output.feed(frame)
                 except KeyboardInterrupt:
+                    logger.debug("Output process got interrupted")
                     break # was 'continue' before, but why?
-                except Exception:
+                except Exception as err:
+                    logger.error("Output process encountered an exception: %s", err)
                     traceback.print_exc()
                     break
         logger.debug("End of output process '%s'", self.output.__class__.__name__)
+        logging.shutdown()
 
 
 def get_secondary_output_path(
@@ -198,6 +206,7 @@ def get_secondary_output_path(
     return path + suffix
 
 
+# TODO: add config to export?
 def export_checkpoint(
         flow_path: str,
         bitmap_path: str | None,
@@ -366,8 +375,9 @@ def transfer(
     log_listener = multiprocessing.Process(target=logging_listener_process, args=(log_queue, logging_config))
     log_listener.start()
 
+    setup_logging(log_queue)
     logger = logging.getLogger(__name__)   
-    logger.info("Entering transfer function")
+    logger.debug("Entering transfer function")
 
     if config.safe:
         append_history()
@@ -383,41 +393,52 @@ def transfer(
     extra_flow_sources: list[FlowSource.Builder] = []
     extra_flow_queues: list[multiprocessing.Queue] = []
     extra_flow_processes: list[SourceProcess] = []
-    merge_flows = flows_merging_functions[config.flows_merging_function]
+    merge_flows = flows_merging_functions[config.flows_merging_function]       
 
     def close():
+        logger.debug("Closing pipeline")
         if flow_output is not None:
             flow_output.close()
+            logger.debug("Closed flow output")
         if metadata_queue is not None:
             metadata_queue.close()
+            logger.debug("Closed metadata queue")
         if flow_queue is not None:
             flow_queue.close()
-        for q in extra_flow_queues:
+            logger.debug("Closed flow queue")
+        for i, q in enumerate(extra_flow_queues):
             q.close()
+            logger.debug("Closed extra flow queue no. %d", i)
         if bitmap_queue is not None:
             bitmap_queue.close()
+            logger.debug("Closed bitmap queue")
         for q in output_queues:
             q.put(None)
         if flow_process is not None:
             flow_process.kill()
-        for p in extra_flow_processes:
+            logger.debug("Killed flow process")
+        for i, p in enumerate(extra_flow_processes):
             p.kill()
+            logger.debug("Killed extra flow process no. %d", i)
         if bitmap_process is not None:
             bitmap_process.kill()
+            logger.debug("Killed bitmap process")
         if flow_process is not None:
             flow_process.join()
+            logger.debug("Killed flow process")
         for p in extra_flow_processes:
             p.join()
         if bitmap_process is not None:
             bitmap_process.join()
         for p in output_processes:
             p.join()
-        log_listener.terminate()
+        logger.debug("Done closing pipeline")
 
     try:
 
         ckpt_meta = {}
         if config.flow_path.endswith(".ckpt.zip"):
+            logger.debug("Flow path is a checkpoint, loading it")
             import json, pickle, zipfile
             with zipfile.ZipFile(config.flow_path) as archive:
                 with archive.open("meta.json") as file:
@@ -429,6 +450,7 @@ def transfer(
 
         if config.seed is None:
             config.seed = random.randint(0, 2**32-1)
+            logger.debug("Setting seed to %d", config.seed)
 
         if config.direction == "forward":
             config.direction = Direction.FORWARD
@@ -473,13 +495,15 @@ def transfer(
         flow_queue = multiprocessing.Queue(maxsize=1)
         flow_process = SourceProcess(flow_source, flow_queue, metadata_queue, log_queue)
         flow_process.start()
+        logger.debug("Started flow process")
 
-        for extra_flow_path in config.extra_flow_paths:
+        for i, extra_flow_path in enumerate(config.extra_flow_paths):
             extra_flow_sources.append(FlowSource.from_args(extra_flow_path, **fs_args))
             extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
             extra_flow_processes.append(SourceProcess(
                 extra_flow_sources[-1], extra_flow_queues[-1], metadata_queue, log_queue))
             extra_flow_processes[-1].start()
+            logger.debug("Started extra flow process no. %d", i)
 
         flow_sources_to_load = 1 + len(extra_flow_processes)
         flow_sources_loaded = 0
@@ -492,6 +516,7 @@ def transfer(
                 if flow_sources_loaded == 0:
                     (fs_width, fs_height, fs_framerate, fs_length, fs_direction) = shape_info
                 flow_sources_loaded += 1
+                logger.debug("Received metadata message from a flow process [%d/%d]", flow_sources_loaded, flow_sources_to_load)
                 if flow_sources_loaded >= flow_sources_to_load:
                     break
             except queue.Empty as exc:
@@ -507,6 +532,7 @@ def transfer(
 
         if config.export_flow:
             archive_path = get_secondary_output_path(config.flow_path, config.output_path, ".flow.zip")
+            logger.debug("Setting up flow output to %s", archive_path)
             flow_output = NumpyOutput(archive_path, config.replace)
             flow_output.write_meta({
                 "path": config.flow_path,
@@ -519,6 +545,7 @@ def transfer(
 
         if config.size is None:
             config.size = fs_width, fs_height
+            logger.debug("Setting size to %dx%d", *config.size)
 
         fs_width_factor = fs_height_factor = 1
 
@@ -535,10 +562,12 @@ def transfer(
             bitmap_queue = multiprocessing.Queue(maxsize=1)
             bitmap_process = SourceProcess(bitmap_source, bitmap_queue, metadata_queue, log_queue)
             bitmap_process.start()
+            logger.debug("Started bitmap process")
 
             while True:
                 try:
                     bs_width, bs_height, bs_framerate, bs_length, *_ = metadata_queue.get(timeout=1)
+                    logger.debug("Received metadata message from bitmap process")
                     break
                 except queue.Empty as exc:
                     if bitmap_process.is_alive():
@@ -561,12 +590,15 @@ def transfer(
                         f"while bitmap is {bs_width}x{bs_height}.")
                 fs_width_factor = bs_width // fs_width
                 fs_height_factor = bs_height // fs_height
+                logger.debug("Flow and bitmap dimension do not match. Setting scaling factors to %dx%d", fs_width_factor, fs_height_factor)
 
         elif config.bitmap_alteration_path is not None:
             warnings.warn(
                 "An alteration path was passed but no bitmap was provided")
+            logger.warning("An alteration path was passed but no bitmap was provided")
 
         metadata_queue.close()
+        logger.debug("Closed metadata queue")
 
         if accumulator is None:
             accumulator = Accumulator.from_args(
@@ -612,16 +644,21 @@ def transfer(
                 output_queues.append(oq)
                 op = OutputProcess(output, oq, log_queue)
                 op.start()
+                logger.debug("Started output process to %s", path)
                 output_processes.append(op)
 
         exception = False
-        cursor = ckpt_meta.get("cursor", 0)
+        cursor: int = ckpt_meta.get("cursor", 0)
+        if not isinstance(cursor, int):
+            raise ValueError("Cursor is not an integer. Is the checkpoint valid?")
         expected_length = get_expected_length(fs_length, bs_length, cursor)
+        logger.debug("Expected length: %s", expected_length)
 
         start_t = time.time()
         pbar = tqdm.tqdm(total=expected_length, unit="frame", disable=status_queue is not None)
         while True:
             if cancel_event is not None and cancel_event.is_set():
+                logger.debug("Received cancel event, breaking main loop")
                 break
             try:
                 flows = []
@@ -658,8 +695,15 @@ def transfer(
                         oq.put(out_frame, timeout=1)
                 cursor += 1
                 if config.checkpoint_every is not None and cursor % config.checkpoint_every == 0:
-                    export_checkpoint(config.flow_path, config.bitmap_path, config.output_path,
-                                      config.replace, cursor, accumulator, config.seed)
+                    export_checkpoint(
+                        config.flow_path,
+                        config.bitmap_path,
+                        config.output_path,
+                        config.replace,
+                        cursor,
+                        accumulator,
+                        config.seed)
+                    logger.debug("Exported checkpoint at cursor %d", cursor)
                 pbar.update(1)
                 if status_queue is not None:
                     status_queue.put(Status(cursor, expected_length, time.time() - start_t, None))
@@ -667,9 +711,11 @@ def transfer(
                 pass
             except KeyboardInterrupt:
                 exception = True
+                logger.debug("Main loop got interrupted")
                 break
             except Exception as err:
                 exception = True
+                logger.error("Main loop received an exception: %s", err)
                 traceback.print_exc()
                 if status_queue is not None:
                     status_queue.put(Status(cursor, expected_length, time.time() - start_t, str(err)))
@@ -683,10 +729,24 @@ def transfer(
                     break
         pbar.close()
         if (exception and config.safe) or config.checkpoint_end:
-            export_checkpoint(config.flow_path, config.bitmap_path, config.output_path, config.replace,
-                              cursor, accumulator, config.seed)
+            export_checkpoint(
+                config.flow_path,
+                config.bitmap_path,
+                config.output_path,
+                config.replace,
+                cursor,
+                accumulator,
+                config.seed)
+            logger.debug("Exported end checkpoint")
         close()
 
     except Exception as err:
+        logger.debug("Pipeline encountered an error: %s", err)
         close()
         raise err
+
+    logger.debug("End of main loop")
+    while log_listener.is_alive():
+        log_queue.put(None)
+        log_listener.join(timeout=.01)
+    logging.shutdown()
