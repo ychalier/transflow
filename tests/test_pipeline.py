@@ -2,10 +2,14 @@ import multiprocessing
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+
+import numpy
+import PIL.Image
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from transflow.pipeline import Pipeline, Config
@@ -21,27 +25,37 @@ def get_video_duration(path: pathlib.Path) -> float:
     return float(data["format"]["duration"])
 
 
+class TestEnvironment:
+    
+    def __init__(self):
+        self.folder = pathlib.Path(tempfile.gettempdir()) / "transflow-tests"
+    
+    def __enter__(self):
+        if self.folder.is_dir():
+            shutil.rmtree(self.folder)
+        self.folder.mkdir(parents=True, exist_ok=False)
+        return self
+    
+    def run(self, config: Config, **kwargs):
+        status_queue = multiprocessing.Queue()
+        Pipeline(config, status_queue=status_queue, **kwargs).run()
+        statuses: list[Pipeline.Status] = []
+        while not status_queue.empty():
+            statuses.append(status_queue.get())
+        return statuses
+    
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        shutil.rmtree(self.folder)
+
+
 class TestPipeline(unittest.TestCase):
 
     def _test_config(self, flow_path, bitmap_path, **kwargs):
-        output_path = os.path.join(tempfile.gettempdir(), "test.mp4")
-        if os.path.isfile(output_path):
-            os.remove(output_path)
-        self.assertFalse(os.path.isfile(output_path))
-        status_queue = multiprocessing.Queue()
-        Pipeline(Config(
-            flow_path,
-            bitmap_path,
-            output_path,
-            None,
-            **kwargs,
-        ), status_queue=status_queue).run()
-        while not status_queue.empty():
-            status: Pipeline.Status = status_queue.get()
-            self.assertIsNone(status.error)
-        status_queue.close()
-        self.assertTrue(os.path.isfile(output_path))
-        os.remove(output_path)
+        with TestEnvironment() as env:
+            output_path = env.folder / "test.mp4"
+            for status in env.run(Config(flow_path, bitmap_path, output_path.as_posix(), **kwargs)):
+                self.assertIsNone(status.error)
+            self.assertTrue(output_path.is_file())
 
     def test_basic(self):
         self._test_config(
@@ -135,6 +149,34 @@ class TestPipeline(unittest.TestCase):
             "render_binary", "seed"]
         for attr in attrs:
             self.assertEqual(getattr(config, attr), getattr(doppelganger, attr))
+
+
+class TestTimings(unittest.TestCase):
+                
+    def test_duration(self):
+        with TestEnvironment() as env:
+            env.run(Config("assets/River.mp4", "assets/Deer.jpg", (env.folder / "test.mp4").as_posix(), duration_time=0.1))
+            self.assertTrue(get_video_duration(env.folder / "test.mp4"), 0.1)
+    
+    def test_seek(self):
+        with TestEnvironment() as env:
+            env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "1-%d.png").as_posix(), duration_time=0.1))
+            self.assertEqual(len(list(env.folder.glob("1-*.png"))), 5)
+            env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "2-%d.png").as_posix(), seek_time=2, duration_time=0.1))
+            self.assertEqual(len(list(env.folder.glob("2-*.png"))), 5)
+            img_one = numpy.array(PIL.Image.open(env.folder / "1-0.png"))
+            img_two = numpy.array(PIL.Image.open(env.folder / "2-0.png"))
+            diff = float(numpy.average(numpy.abs(img_one - img_two)))
+            self.assertNotEqual(diff, 0)
+    
+    def test_seek_duration(self):
+        framerate = 50
+        for n in [1, 5, 10]:
+            with TestEnvironment() as env:
+                env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "3-%d.png").as_posix(), seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate))
+                self.assertEqual(len(list(env.folder.glob("3-*.png"))), n - 1)
+            
+        
 
 
 if __name__ == "__main__":
