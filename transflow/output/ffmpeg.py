@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 
@@ -7,7 +8,10 @@ from .video_output import VideoOutput
 from ..utils import find_unique_path, startfile
 
 
-def append_history(output_path):
+logger = logging.getLogger(__name__)
+
+
+def append_history(output_path): # TODO: remove this?
     with open("history.log", "a", encoding="utf8") as file:
         file.write(f"└► {os.path.realpath(output_path)}\n")
 
@@ -31,6 +35,7 @@ class FFmpegVideoOutput(VideoOutput):
             os.makedirs(dirname)
         if self.safe:
             append_history(self.path)
+        logger.debug("Started FFmpeg output to %s", self.path)
         self.process = subprocess.Popen([
             "ffmpeg",
             "-hide_banner",
@@ -56,6 +61,7 @@ class FFmpegVideoOutput(VideoOutput):
         self.process.stdin.write(frame.astype(numpy.uint8).tobytes())
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        logger.debug("Interrupting FFmpeg process")
         if self.process is not None and self.process.stdin is not None:
             self.process.stdin.close()
         if self.process is not None:

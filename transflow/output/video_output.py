@@ -1,11 +1,16 @@
+import logging
 import re
 
 import numpy
 
 
+logger = logging.getLogger(__name__)
+
+
 class VideoOutput:
 
     def __init__(self, width: int, height: int):
+        logger.debug("Initializing output '%s'", self.__class__.__name__)
         self.width = width
         self.height = height
 
@@ -28,6 +33,7 @@ class VideoOutput:
             return CvVideoOutput(width, height)
         if framerate is None:
             framerate = 30
+            logger.debug("Using default framerate: %f", framerate)
         mjpeg_pattern = re.compile(r"^mjpeg(:[:a-z0-9A-Z\-]+)?$", re.IGNORECASE)
         m = mjpeg_pattern.match(path)
         if m:

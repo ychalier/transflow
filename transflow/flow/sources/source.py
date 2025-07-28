@@ -186,8 +186,8 @@ class FlowSource:
             self.start_frame = real_start_frame
 
         def __enter__(self):
-            logger.debug("Building %s", self.__class__)
             self.source = self.build()
+            logger.debug("Built '%s'", self.source.__class__.__name__)
             # TODO check that all fields have been instantiated ?
             return self.cls(*self.args(), **self.kwargs())
 

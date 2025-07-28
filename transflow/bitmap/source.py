@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import typing
@@ -6,11 +7,15 @@ from typing import cast
 import numpy
 
 
+logger = logging.getLogger(__name__)
+
+
 class BitmapSource:
 
     IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".ico", ".tiff"}
 
     def __init__(self, alteration_path: str | None, length: int | None = None):
+        logger.debug("Initializing '%s'", self.__class__.__name__)
         self.alteration_path: str | None = alteration_path
         self.width: int | None = None
         self.height: int | None = None
@@ -34,6 +39,7 @@ class BitmapSource:
         if self.alteration_path is None:
             return
         import PIL.Image
+        logger.debug("Loading alteration at %s", self.alteration_path)
         image = numpy.array(PIL.Image.open(self.alteration_path))
         while image.shape[2] < 4:
             appendee = numpy.ones((*image.shape[:2],1), dtype=numpy.uint8)

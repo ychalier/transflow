@@ -1,9 +1,13 @@
 import enum
+import logging
 
 import numpy
 
 from ..utils import load_mask
 from ..flow import Direction
+
+
+logger = logging.getLogger(__name__)
 
 
 class Accumulator:
@@ -51,6 +55,7 @@ class Accumulator:
             reset_mode: ResetMode | str = "off",
             reset_alpha: float = .9,
             reset_mask_path: str | None = None):
+        logger.debug("Initializing accumulator '%s'", self.__class__.__name__)
         self.width = width
         self.height = height
         self.flow_int: numpy.ndarray = numpy.zeros((height, width, 2))

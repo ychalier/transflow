@@ -1,12 +1,12 @@
 """Adapated from mjpeg-streamer by Ege Akman (https://github.com/egeakman/mjpeg-streamer).
 """
 import asyncio
+import logging
 import threading
 import time
 from collections import deque
 from typing import List, Optional, Tuple, Union
 
-import aiohttp
 import cv2
 import netifaces
 import numpy
@@ -14,6 +14,9 @@ from aiohttp import MultipartWriter, web
 from aiohttp.web_runner import GracefulExit
 
 from .video_output import VideoOutput
+
+
+logger = logging.getLogger(__name__)
 
 
 class MjpegStream:
@@ -95,35 +98,26 @@ class _StreamHandler:
 class MjpegServer:
     def __init__(self, host: Union[str, int] = "localhost", port: int = 8080) -> None:
         if isinstance(host, str) and host != "0.0.0.0":
-            self._host = [host]
-        elif isinstance(host, list):
-            if "0.0.0.0" in host:
-                host.remove("0.0.0.0")
-                host = host + [
-                    netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
-                    for iface in netifaces.interfaces()
-                    if netifaces.AF_INET in netifaces.ifaddresses(iface)
-                ]
-            self._host = list(dict.fromkeys(host))
+            self._host = host
         else:
             self._host = [
                 netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
                 for iface in netifaces.interfaces()
                 if netifaces.AF_INET in netifaces.ifaddresses(iface)
-            ]
+            ][0]
         self._port = port
         self._app = web.Application()
         self._app.is_running = False
         self._cap_routes: List[str,] = []
 
     def is_running(self) -> bool:
-        return self._app.is_running
+        return self._app.is_running # type: ignore
 
     async def __root_handler(self, _) -> web.Response:
         text = "<h2>Available streams:</h2>"
         for route in self._cap_routes:
-            text += f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n<br>\n"
-        return aiohttp.web.Response(text=text, content_type="text/html")
+            text += f"<a href='http://{self._host}:{self._port}{route}'>{route}</a>\n<br>\n"
+        return web.Response(text=text, content_type="text/html")
 
     def add_stream(self, stream: MjpegStream) -> None:
         if self.is_running():
@@ -142,6 +136,7 @@ class MjpegServer:
         loop.run_until_complete(runner.setup())
         site = web.TCPSite(runner, self._host, self._port)
         loop.run_until_complete(site.start())
+        logger.debug("Started MJPEG server at %s:%s", self._host, self._port)
         loop.run_forever()
 
     def start(self) -> None:
@@ -156,7 +151,6 @@ class MjpegServer:
             return
         self._app.is_running = False
         raise GracefulExit
-
 
 
 class MjpegOutput(VideoOutput):

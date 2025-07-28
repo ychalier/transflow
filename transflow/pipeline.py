@@ -61,7 +61,7 @@ def render2d(arr: numpy.ndarray, scale: float = 1,
     return numpy.clip(frame, 0, 255).astype(numpy.uint8)
 
 
-def append_history():
+def append_history(): # TODO: remove this?
     import datetime, sys
     f = lambda s: os.path.realpath(s) if os.path.isfile(s) else s
     line = " ".join([
@@ -117,13 +117,12 @@ class SourceProcess(multiprocessing.Process):
         self.log_queue = log_queue
 
     def run(self):
-        name = self.source.__class__.__name__
         setup_logging(self.log_queue)
         logger = logging.getLogger(__name__)
-        logger.debug("Starting source process '%s'", name)
         put_none = True
         try:
             with self.source as source:
+                logger.debug("Entered source %s", source.__class__.__name__)
                 self.shape_queue.put((
                     source.width,
                     source.height,
@@ -135,19 +134,19 @@ class SourceProcess(multiprocessing.Process):
                     for item in source:
                         self.queue.put(item)
                 except KeyboardInterrupt:
-                    logger.debug("Source process '%s' got interrupted", name)
+                    logger.debug("Source process '%s' got interrupted", source.__class__.__name__)
                     put_none = False
                 except Exception as err:
-                    logger.error("Source process '%s' encountered an error: %s", name, err)
+                    logger.error("Source process '%s' encountered an error: %s", source.__class__.__name__, err)
                     put_none = False
                     traceback.print_exc()
         except Exception as err:
-            logger.error("Source process '%s', encountered an error: %s", name, err)
+            logger.error("Source process '%s', encountered an error: %s", self.source, err)
             put_none = False
             traceback.print_exc()
         if put_none:
             self.queue.put(None)
-        logger.debug("End of source process '%s'", name)
+        logger.debug("End of source process '%s'", self.source)
         logging.shutdown()
 
 
