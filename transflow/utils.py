@@ -117,9 +117,9 @@ def startfile(path: str):
         subprocess.call([opener, os.path.realpath(path)])
 
 
-def parse_timestamp(timestamp: str | None) -> float | None:
-    if timestamp is None:
-        return None
+def parse_timestamp(timestamp: str | float | int | None) -> float | None:
+    if timestamp is None or isinstance(timestamp, float) or isinstance(timestamp, int):
+        return timestamp
     a = re.match(r"(\d\d):(\d\d):(\d\d)(?:\.(\d\d\d))?", timestamp)
     if a is None:
         warnings.warn(f"Could not parse timestamp {timestamp}")

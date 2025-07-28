@@ -194,16 +194,6 @@ def main():
         from .gui import start_gui
         start_gui()
         return
-    # TODO: this should be taken care of by the transfer function
-    from .utils import parse_timestamp
-    seek_time = parse_timestamp(args.seek) if args.seek is not None else 0
-    duration_time = parse_timestamp(args.duration)
-    if duration_time is None and (args.to is not None):
-        to_ts = parse_timestamp(args.to)
-        if to_ts is not None and seek_time is not None:
-            duration_time = to_ts - seek_time
-    if duration_time is not None and duration_time < 0:
-        raise ValueError(f"Duration must be positive (got {duration_time:f})")
     from .pipeline import transfer, Config
     transfer(Config(
         args.flow,
@@ -235,9 +225,10 @@ def main():
         render_colors=args.render_colors,
         render_binary=args.render_binary,
         seed=args.seed,
-        seek_time=seek_time,
-        bitmap_seek_time=parse_timestamp(args.bitmap_seek),
-        duration_time=duration_time,
+        seek_time=args.seek,
+        bitmap_seek_time=args.bitmap_seek,
+        duration_time=args.duration,
+        to_time=args.to,
         bitmap_alteration_path=args.bitmap_alteration,
         repeat=args.repeat,
         bitmap_repeat=args.bitmap_repeat,

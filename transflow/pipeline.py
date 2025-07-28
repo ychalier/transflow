@@ -8,8 +8,6 @@ import multiprocessing.queues
 import pathlib
 import pickle
 import queue
-import random
-import re
 import threading
 import time
 import traceback
@@ -175,27 +173,6 @@ class Pipeline:
             preview_output: bool = False,
             cancel_event: threading.Event | None = None,
             status_queue: multiprocessing.queues.Queue | None = None):
-
-        # TODO: move this to config preprocessing
-        if config.extra_flow_paths is None:
-            config.extra_flow_paths = []
-            config.flows_merging_function = "first"
-        if config.seed is None:
-            config.seed = random.randint(0, 2**32-1)
-        if config.direction == "forward":
-            config.direction = Direction.FORWARD
-        elif config.direction == "backward":
-            config.direction = Direction.BACKWARD
-        else:
-            raise ValueError(f"Invalid flow direction '{config.direction}'")
-        if isinstance(config.render_colors, str):
-            config.render_colors = tuple(config.render_colors.split(","))
-        if isinstance(config.size, str):
-            width, height = tuple(map(int, re.split(r"[^\d]", config.size)))
-            config.size = width, height
-        if isinstance(config.output_path, list) and not config.output_path:
-            config.output_path = None
-
         self.config = config
         self.log_level = log_level
         self.log_handler = log_handler
@@ -340,7 +317,6 @@ class Pipeline:
         self.flow_process = SourceProcess(self.flow_source, self.flow_queue, self.metadata_queue, self.log_queue, self.log_level)
         self.flow_process.start()
         self.logger.debug("Started flow process")
-        assert self.config.extra_flow_paths is not None # TODO: remove this with config preprocessing
         for i, extra_flow_path in enumerate(self.config.extra_flow_paths):
             self.extra_flow_sources.append(FlowSource.from_args(extra_flow_path, **fs_args))
             self.extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
@@ -517,13 +493,10 @@ class Pipeline:
         out_frame = None
         if self.config.output_intensity:
             flow_intensity = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
-            assert isinstance(self.config.render_colors, tuple) # TODO: remove this with config preprocessing
             out_frame = render1d(flow_intensity, self.config.render_scale, self.config.render_colors, self.config.render_binary)
         elif self.config.output_heatmap:
-            assert isinstance(self.config.render_colors, tuple) # TODO: remove this with config preprocessing
             out_frame = render1d(self.accumulator.get_heatmap_array(), self.config.render_scale, self.config.render_colors, self.config.render_binary)
         elif self.config.output_accumulator:
-            assert isinstance(self.config.render_colors, tuple) # TODO: remove this with config preprocessing
             out_frame = render2d(self.accumulator.get_accumulator_array(), self.config.render_scale, self.config.render_colors),
         elif self.bitmap_queue is not None:
             bitmap = self.bitmap_queue.get(timeout=1)
