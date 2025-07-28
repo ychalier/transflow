@@ -214,6 +214,7 @@ class Pipeline:
         self.bs_length: int | None = None
         self.fs_width_factor: int = 1
         self.fs_height_factor: int = 1
+        self.cursor: int = 0
 
     @property
     def has_output(self) -> bool:
@@ -222,17 +223,17 @@ class Pipeline:
             or self.config.output_heatmap\
             or self.config.output_accumulator
 
-    def export_checkpoint(self, cursor: int):
-        output = ZipOutput(self.config.get_secondary_output_path(f"_{cursor:05d}.ckpt.zip"), self.replace)
+    def export_checkpoint(self):
+        output = ZipOutput(self.config.get_secondary_output_path(f"_{self.cursor:05d}.ckpt.zip"), self.replace)
         output.write_meta({
             "config": self.config.todict(),
-            "cursor": cursor,
+            "cursor": self.cursor,
             "framerate": self.fs_framerate,
             "timestamp": time.time(),
         })
         output.write_object("accumulator.bin", self.accumulator)
         output.close()
-        self.logger.debug("Exported checkpoint at cursor %d", cursor)
+        self.logger.debug("Exported checkpoint at cursor %d", self.cursor)
 
     @property
     def expected_length(self) -> int | None:
@@ -521,8 +522,8 @@ class Pipeline:
         assert self.fs_direction is not None
 
         exception = False
-        cursor: int = self.ckpt_meta.get("cursor", 0)
-        if not isinstance(cursor, int):
+        self.cursor: int = self.ckpt_meta.get("cursor", 0)
+        if not isinstance(self.cursor, int):
             raise ValueError("Cursor is not an integer. Is the checkpoint valid?")
         self.logger.debug("Expected length: %s", self.expected_length)
 
@@ -539,12 +540,12 @@ class Pipeline:
                 self.accumulator.update(flow, self.fs_direction)
                 if not self._update_output(flow):
                     break
-                cursor += 1
-                if self.checkpoint_every is not None and cursor % self.checkpoint_every == 0:
-                    self.export_checkpoint(cursor)
+                self.cursor += 1
+                if self.checkpoint_every is not None and self.cursor % self.checkpoint_every == 0:
+                    self.export_checkpoint()
                 pbar.update(1)
                 if self.status_queue is not None:
-                    self.status_queue.put(Pipeline.Status(cursor, self.expected_length, time.time() - start_t, None))
+                    self.status_queue.put(Pipeline.Status(self.cursor, self.expected_length, time.time() - start_t, None))
             except (queue.Empty, queue.Full):
                 pass
             except KeyboardInterrupt:
@@ -556,7 +557,7 @@ class Pipeline:
                 self.logger.error("Main loop received an exception: %s", err)
                 traceback.print_exc()
                 if self.status_queue is not None:
-                    self.status_queue.put(Pipeline.Status(cursor, self.expected_length, time.time() - start_t, str(err)))
+                    self.status_queue.put(Pipeline.Status(self.cursor, self.expected_length, time.time() - start_t, str(err)))
                 break
             finally:
                 if (not self.flow_process.is_alive())\
@@ -567,7 +568,7 @@ class Pipeline:
                     break
         pbar.close()
         if (exception and self.safe) or self.checkpoint_end:
-            self.export_checkpoint(cursor)
+            self.export_checkpoint()
 
     def _close(self):
         self.logger.debug("Closing pipeline")

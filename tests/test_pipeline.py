@@ -38,11 +38,12 @@ class TestEnvironment:
     
     def run(self, config: Config, **kwargs):
         status_queue = multiprocessing.Queue()
-        Pipeline(config, status_queue=status_queue, **kwargs).run()
+        pipeline = Pipeline(config, status_queue=status_queue, **kwargs)
+        pipeline.run()
         statuses: list[Pipeline.Status] = []
         while not status_queue.empty():
             statuses.append(status_queue.get())
-        return statuses
+        return pipeline, statuses
     
     def __exit__(self, exc_type, exc_value, exc_traceback):
         shutil.rmtree(self.folder)
@@ -53,7 +54,7 @@ class TestPipeline(unittest.TestCase):
     def _test_config(self, flow_path, bitmap_path, **kwargs):
         with TestEnvironment() as env:
             output_path = env.folder / "test.mp4"
-            for status in env.run(Config(flow_path, bitmap_path, output_path.as_posix(), **kwargs)):
+            for status in env.run(Config(flow_path, bitmap_path, output_path.as_posix(), **kwargs))[1]:
                 self.assertIsNone(status.error)
             self.assertTrue(output_path.is_file())
 
@@ -149,6 +150,22 @@ class TestPipeline(unittest.TestCase):
             "render_binary", "seed"]
         for attr in attrs:
             self.assertEqual(getattr(config, attr), getattr(doppelganger, attr))
+    
+    def test_cursor(self):
+        with TestEnvironment() as env:
+            n = 5
+            framerate = 50
+            pipeline, _ = env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "%d.png").as_posix(), duration_time=n/framerate))
+            self.assertEqual(pipeline.cursor, n)
+            self.assertEqual(pipeline.expected_length, n)
+
+    def test_cursor_backward(self):
+        with TestEnvironment() as env:
+            n = 5
+            framerate = 50
+            pipeline, _ = env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "%d.png").as_posix(), seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate))
+            self.assertEqual(pipeline.cursor, n - 1)
+            self.assertEqual(pipeline.expected_length, n - 1)
 
 
 class TestTimings(unittest.TestCase):
