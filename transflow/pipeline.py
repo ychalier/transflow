@@ -71,9 +71,9 @@ def append_history(): # TODO: remove this?
         file.write("\n" + line + "\n")
 
 
-def setup_logging(log_queue):
+def setup_logging(log_queue: multiprocessing.Queue, level: str):
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
+    root.setLevel(level)
 
     # Remove existing handlers
     for h in root.handlers[:]:
@@ -84,7 +84,7 @@ def setup_logging(log_queue):
     root.addHandler(handler)
 
 
-def logging_listener_process(log_queue, config):
+def logging_listener_process(log_queue: multiprocessing.Queue, config: dict):
     # Configure logger to write to file
     logging.config.dictConfig(config)
     logger = logging.getLogger()
@@ -109,15 +109,17 @@ class SourceProcess(multiprocessing.Process):
             source: FlowSource.Builder | BitmapSource,
             out_queue: multiprocessing.Queue,
             metadata_queue: multiprocessing.Queue,
-            log_queue: multiprocessing.Queue):
+            log_queue: multiprocessing.Queue,
+            log_level: str):
         multiprocessing.Process.__init__(self)
         self.source = source
         self.queue = out_queue
         self.shape_queue = metadata_queue
         self.log_queue = log_queue
+        self.log_level = log_level
 
     def run(self):
-        setup_logging(self.log_queue)
+        setup_logging(self.log_queue, self.log_level)
         logger = logging.getLogger(__name__)
         put_none = True
         try:
@@ -155,14 +157,16 @@ class OutputProcess(multiprocessing.Process):
     def __init__(self,
             output: VideoOutput,
             in_queue: multiprocessing.Queue,
-            log_queue: multiprocessing.Queue):
+            log_queue: multiprocessing.Queue,
+            log_level: str):
         multiprocessing.Process.__init__(self)
         self.output = output
         self.queue = in_queue
         self.log_queue = log_queue
+        self.log_level = log_level
 
     def run(self):
-        setup_logging(self.log_queue)
+        setup_logging(self.log_queue, self.log_level)
         logger = logging.getLogger(__name__)
         logger.debug("Starting output process '%s'", self.output.__class__.__name__)
         with self.output:
@@ -334,47 +338,42 @@ class Status:
 
 def transfer(
         config: Config,
+        log_level: str = "INFO",
+        log_handler: str = "file",
+        log_path: pathlib.Path = pathlib.Path("transflow.log"),
         cancel_event: threading.Event | None = None,
         status_queue: multiprocessing.queues.Queue | None = None):
     
-    # TODO: add arguments for logging level and output
     log_queue = multiprocessing.Queue()
-    log_path = pathlib.Path("transflow.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logging_config = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
             "standard": {
-                "format": "[%(asctime)s] %(levelname)s %(message)s",
+                "format": "[%(asctime)s] %(levelname)s %(name)s %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
         },
         "handlers": {
             "file": {
-                "level": "DEBUG",
                 "class": "logging.FileHandler",
                 "filename": log_path.as_posix(),
                 "formatter": "standard",                
             },
-        },
-        "loggers": {
-            "transflow": {
-                "handlers": ["file"],
-                "level": "DEBUG",
-                "propagate": False,
-            },
+            "stream": {
+                "class": "logging.StreamHandler",
+                "formatter": "standard"
+            }
         },
         "root": {
-            "handlers": ["file"],
-            "level": "DEBUG",
+            "handlers": [h.strip() for h in log_handler.split(",")],
         }
     }
-
     log_listener = multiprocessing.Process(target=logging_listener_process, args=(log_queue, logging_config))
     log_listener.start()
 
-    setup_logging(log_queue)
+    setup_logging(log_queue, log_level)
     logger = logging.getLogger(__name__)   
     logger.debug("Entering transfer function")
 
@@ -492,15 +491,14 @@ def transfer(
         metadata_queue = multiprocessing.Queue()
 
         flow_queue = multiprocessing.Queue(maxsize=1)
-        flow_process = SourceProcess(flow_source, flow_queue, metadata_queue, log_queue)
+        flow_process = SourceProcess(flow_source, flow_queue, metadata_queue, log_queue, log_level)
         flow_process.start()
         logger.debug("Started flow process")
 
         for i, extra_flow_path in enumerate(config.extra_flow_paths):
             extra_flow_sources.append(FlowSource.from_args(extra_flow_path, **fs_args))
             extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
-            extra_flow_processes.append(SourceProcess(
-                extra_flow_sources[-1], extra_flow_queues[-1], metadata_queue, log_queue))
+            extra_flow_processes.append(SourceProcess(extra_flow_sources[-1], extra_flow_queues[-1], metadata_queue, log_queue, log_level))
             extra_flow_processes[-1].start()
             logger.debug("Started extra flow process no. %d", i)
 
@@ -559,7 +557,7 @@ def transfer(
                 repeat=config.bitmap_repeat,
                 flow_path=config.flow_path)
             bitmap_queue = multiprocessing.Queue(maxsize=1)
-            bitmap_process = SourceProcess(bitmap_source, bitmap_queue, metadata_queue, log_queue)
+            bitmap_process = SourceProcess(bitmap_source, bitmap_queue, metadata_queue, log_queue, log_level)
             bitmap_process.start()
             logger.debug("Started bitmap process")
 
@@ -641,7 +639,7 @@ def transfer(
                 oq = multiprocessing.Queue()
                 oq.cancel_join_thread()
                 output_queues.append(oq)
-                op = OutputProcess(output, oq, log_queue)
+                op = OutputProcess(output, oq, log_queue, log_level)
                 op.start()
                 logger.debug("Started output process to %s", path)
                 output_processes.append(op)
