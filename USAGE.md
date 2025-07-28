@@ -24,6 +24,7 @@ This document provides details on how to use the `transflow` module for performi
 - [Interrupting Processing](#interrupting-processing)
 - [Restart From Checkpoint](#restart-from-checkpoint)
 - [Seek, Duration and Repeat](#seek-duration-and-repeat)
+- [Logging](#logging)
 
 ## Basic Flow Transfer
 
@@ -469,3 +470,19 @@ Flow source can be seeked with the `-ss, --seek` argument. Value must be of the 
 A slice of the flow source can be selected with the `-t, --duration` argument, as the duration go from the starting point, with the same format as seeking timestamps. You can also specify an end timestamp instead with the `-to, --to` argument and a value of the same format. Intent is similar to FFmpeg expression of [seeking](https://trac.ffmpeg.org/wiki/Seeking).
 
 If you want to use the same flow input multiple times in a loop, you may specify the `-r, --repeat` argument with an integer value for how many times you want to use the flow. Default value is 1 (ie. no repetition). If this value is 0, the flow sources loops forever until either the bitmap source is exhausted or the user interrupts the execution. The same feature is available for the bitmap source (if a video), with the `-br, --bitmap-repeat` argument. It has the same behavior, default value is 1, 0 means infinite loop.
+
+## Logging
+
+Transflow does not log its activity by default. You can change this behavior with the following arguments:
+
+Argument | Description 
+-------- | -----------
+`-ll, --log-level` | Log level, one of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Default is `DEBUG`.
+`-lh, --log-handler` | Log handler, one of `file`, `stream`, or `null`. Default is `null`. Multiple handlers can be specified, separated by commas.
+`-lp, --log-path` | Path to a log file. The default is `transflow.log`. If the log handler `file` is not set, this argument is ignored.
+
+For example, to enable logging to a file and see debugging information, you can use the following command:
+
+```console
+transflow flow.mp4 -b image.jpg -o output.mp4 -lh file
+```

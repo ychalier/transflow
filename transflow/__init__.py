@@ -186,8 +186,8 @@ def main():
     parser.add_argument("--gui-host", type=str, default="localhost", help="GUI host address")
     parser.add_argument("--gui-port", type=int, default=8000, help="GUI port")
     parser.add_argument("--gui-mjpeg-port", type=int, default=8001, help="GUI MJPEG port")
-    parser.add_argument("-ll", "--log-level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Logging level", default="INFO")
-    parser.add_argument("-lh", "--log-handler", type=str, help="Comma-separated list of log handlers (possible values are 'file' (default) or 'stream')", default="file")
+    parser.add_argument("-ll", "--log-level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Logging level", default="DEBUG")
+    parser.add_argument("-lh", "--log-handler", type=str, help="Comma-separated list of log handlers (possible values are 'file', 'stream' or 'null' (default))", default="null")
     parser.add_argument("-lp", "--log-path", type=pathlib.Path, help="Path to log file (if 'file' log handler is used, see --log-handler)", default=pathlib.Path("transflow.log"))
     args = parser.parse_args()
     if args.flow == "gui":

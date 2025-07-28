@@ -321,7 +321,7 @@ class Config:
 
     # General Args
     seed: int | None = None
-    
+
     def todict(self) -> dict:
         now = time.time()
         d = dataclasses.asdict(self)
@@ -348,14 +348,15 @@ class Status:
 
 def transfer(
         config: Config,
-        log_level: str = "INFO",
-        log_handler: str = "file", # TODO: add null handler
+        log_level: str = "DEBUG",
+        log_handler: str = "null",
         log_path: pathlib.Path = pathlib.Path("transflow.log"),
         cancel_event: threading.Event | None = None,
         status_queue: multiprocessing.queues.Queue | None = None):
-    
+
     log_queue = multiprocessing.Queue()
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_handlers = [h.strip() for h in log_handler.split(",")]
     logging_config = {
         "version": 1,
         "disable_existing_loggers": False,
@@ -365,27 +366,32 @@ def transfer(
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
         },
-        "handlers": {
-            "file": {
-                "class": "logging.FileHandler",
-                "filename": log_path.as_posix(),
-                "formatter": "standard",                
-            },
-            "stream": {
-                "class": "logging.StreamHandler",
-                "formatter": "standard"
-            }
-        },
+        "handlers": {},
         "root": {
-            "handlers": [h.strip() for h in log_handler.split(",")],
+            "handlers": log_handlers,
         }
     }
+    if "file" in log_handlers:
+        logging_config["handlers"]["file"] = {
+            "class": "logging.FileHandler",
+            "filename": log_path.as_posix(),
+            "formatter": "standard",
+        }
+    if "stream" in log_handlers:
+        logging_config["handlers"]["stream"] = {
+            "class": "logging.StreamHandler",
+            "formatter": "standard"
+        }
+    if "null" in log_handlers:
+        logging_config["handlers"]["null"] = {
+            "class": "logging.NullHandler"
+        }
     log_listener = multiprocessing.Process(target=logging_listener_process, args=(log_queue, logging_config))
     log_listener.start()
     # TODO: close log process nicely if an error occurs while initializing the pipeline process
 
     setup_logging(log_queue, log_level)
-    logger = logging.getLogger(__name__)   
+    logger = logging.getLogger(__name__)
     logger.debug("Entering transfer function")
 
     if config.safe:
