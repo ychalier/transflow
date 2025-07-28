@@ -5,84 +5,43 @@ import logging.config
 import logging.handlers
 import multiprocessing
 import multiprocessing.queues
-import os
 import pathlib
+import pickle
 import queue
 import random
 import re
-import sys
 import threading
 import time
 import traceback
 import typing
 import warnings
+import zipfile
 
 import numpy
 import tqdm
 
-from .flow import FlowSource, Direction, LockMode
+from .config import Config
+from .flow import FlowSource, Direction
 from .bitmap import BitmapSource
 from .accumulator import Accumulator
 from .output import VideoOutput, ZipOutput, NumpyOutput
-from .utils import multiply_arrays, binarize_arrays, absmax, parse_hex_color
-
-
-def render1d(arr: numpy.ndarray, scale: float = 1,
-             colors: tuple[str, ...] | None = None, binary: bool = False
-             ) -> numpy.ndarray:
-    if colors is None:
-        colors = ("#000000", "#ffffff")
-    color_arrs = [numpy.array(parse_hex_color(c), dtype=numpy.float32) for c in colors]
-    out_shape = (*arr.shape[:2], 1)
-    if binary:
-        coeff = numpy.clip(numpy.round(scale * arr), 0, 1).reshape(out_shape)
-        coeff_a = 1 - coeff
-        coeff_b = coeff
-    else:
-        coeff_a = numpy.clip(1 - scale * arr, 0, 1).reshape(out_shape)
-        coeff_b = numpy.clip(scale * arr, 0, 1).reshape(out_shape)
-    frame = numpy.multiply(coeff_a, color_arrs[0]) + numpy.multiply(coeff_b, color_arrs[1])
-    return numpy.clip(frame, 0, 255).astype(numpy.uint8)
-
-
-def render2d(arr: numpy.ndarray, scale: float = 1,
-              colors: tuple[str, ...] | None = None)-> numpy.ndarray:
-    if colors is None:
-        colors = ("#ffff00", "#0000ff", "#ff00ff", "#00ff00")
-    color_arrs = [numpy.array(parse_hex_color(c), dtype=numpy.float32) for c in colors]
-    out_shape = (*arr.shape[:2], 1)
-    coeff_y = numpy.clip(1 + scale * arr[:,:,0], 0, 1).reshape(out_shape)
-    coeff_b = numpy.clip(1 - scale * arr[:,:,0], 0, 1).reshape(out_shape)
-    coeff_m = numpy.clip(1 + scale * arr[:,:,1], 0, 1).reshape(out_shape)
-    coeff_g = numpy.clip(1 - scale * arr[:,:,1], 0, 1).reshape(out_shape)
-    frame = .5 * (
-        numpy.multiply(coeff_y, color_arrs[0])
-        + numpy.multiply(coeff_b, color_arrs[1])
-        + numpy.multiply(coeff_m, color_arrs[2])
-        + numpy.multiply(coeff_g, color_arrs[3]))
-    return numpy.clip(frame, 0, 255).astype(numpy.uint8)
+from .output.render import render1d, render2d
+from .utils import multiply_arrays, binarize_arrays, absmax, upscale_array
 
 
 def setup_logging(log_queue: multiprocessing.Queue, level: str):
     root = logging.getLogger()
     root.setLevel(level)
-
-    # Remove existing handlers
     for h in root.handlers[:]:
         root.removeHandler(h)
-
-    # Add the QueueHandler to send logs to the queue
     handler = logging.handlers.QueueHandler(log_queue)
     root.addHandler(handler)
 
 
 def logging_listener_process(log_queue: multiprocessing.Queue, config: dict):
-    # Configure logger to write to file
     logging.config.dictConfig(config)
     logger = logging.getLogger()
-    listener = logging.handlers.QueueListener(
-        log_queue, *logging.getLogger().handlers
-    )
+    listener = logging.handlers.QueueListener(log_queue, *logging.getLogger().handlers)
     listener.start()
     while True:
         try:
@@ -179,571 +138,529 @@ class OutputProcess(multiprocessing.Process):
         logging.shutdown()
 
 
-def get_secondary_output_path(
-        flow_path: str,
-        output_path: str | list[str] | None,
-        suffix: str) -> str:
-    base_output_path = None
-    if isinstance(output_path, list):
-        mjpeg_pattern = re.compile(r"^mjpeg(:[:a-z0-9A-Z\-]+)?$", re.IGNORECASE)
-        for path in output_path:
-            if mjpeg_pattern.match(path):
-                continue
-            base_output_path = path
-            break
-    else:
-        base_output_path = output_path
-    path = os.path.splitext(flow_path if base_output_path is None else base_output_path)[0]
-    if path.endswith(".flow") or path.endswith(".ckpt"):
-        path = path[:-5]
-    if re.match(r".*\.(\d{3})$", path):
-        path = path[:-4]
-    return path + suffix
+class Pipeline:
+    
+    @dataclasses.dataclass
+    class Status:
 
+        cursor: int
+        total: int | None
+        elapsed: float
+        error: str | None
 
-def export_checkpoint(
-        config: 'Config',
-        cursor: int,
-        accumulator: Accumulator,
-        replace: bool):
-    output = ZipOutput(
-        get_secondary_output_path(
-            config.flow_path,
-            config.output_path,
-            f"_{cursor:05d}.ckpt.zip"),
-            replace)
-    output.write_meta({
-        "config": config.todict(),
-        "cursor": cursor,
-        "timestamp": time.time(),
-    })
-    output.write_object("accumulator.bin", accumulator)
-    output.close()
-
-
-flows_merging_functions: dict[str, typing.Callable[[list[numpy.ndarray]], numpy.ndarray]] = {
-    "first": lambda flows: flows[0],
-    "sum": lambda flows: numpy.sum(flows, axis=0),
-    "average": lambda flows: numpy.sum(flows, axis=0) / len(flows),
-    "difference": lambda flows: flows[0] - sum(flows[1:]),
-    "product": multiply_arrays,
-    "maskbin": lambda flows: multiply_arrays([flows[0]] + binarize_arrays(flows[1:])),
-    "masklin": lambda flows: multiply_arrays([flows[0]] + [numpy.abs(f) for f in flows[1:]]),
-    "absmax": absmax,
-}
-
-
-def upscale_flow(flow: numpy.ndarray, wf: int, hf: int) -> numpy.ndarray:
-    return numpy.kron(flow * (wf, hf), numpy.ones((hf, wf, 1))).astype(flow.dtype)
-
-
-def get_expected_length(fs_length: int | None, bs_length: int | None, cursor: int) -> int | None:
-    expected_length = None
-    if fs_length is not None and bs_length is not None:
-        expected_length = min(fs_length, bs_length)
-    elif fs_length is not None:
-        expected_length = fs_length
-    elif bs_length is not None:
-        expected_length = bs_length
-    if expected_length is not None:
-        expected_length -= cursor
-    return expected_length
-
-
-@dataclasses.dataclass
-class Config:
-
-    # Positional Args
-    flow_path: str
-    bitmap_path: str | None
-    output_path: str | list[str] | None
-    extra_flow_paths: list[str] | None
-
-    # Flow Args
-    flows_merging_function: str = "first"
-    use_mvs: bool = False
-    mask_path: str | None = None
-    kernel_path: str | None = None
-    cv_config: str | None = None
-    flow_filters: str | None = None
-    direction: str | Direction = "forward"
-    seek_time: float | None = None
-    duration_time: float | None = None
-    repeat: int = 1
-    lock_expr: str | None = None
-    lock_mode: str | LockMode = LockMode.STAY
-
-    # Bitmap Args
-    bitmap_seek_time: float | None = None
-    bitmap_alteration_path: str | None = None
-    bitmap_repeat: int = 1
-
-    # Accumulator Args
-    reset_mode: str = "off"
-    reset_alpha: float = .9
-    reset_mask_path: str | None = None
-    heatmap_mode: str = "discrete"
-    heatmap_args: str = "0:4:2:1"
-    heatmap_reset_threshold: float | None = None
-    acc_method: str = "map"
-    accumulator_background: str = "ffffff"
-    stack_composer: str = "top"
-    initial_canvas: str | None = None
-    bitmap_mask_path: str | None = None
-    crumble: bool = False
-    bitmap_introduction_flags: int = 1
-
-    # Output Args
-    vcodec: str = "h264"
-    size: str | tuple[int, int] | None = None
-    output_intensity: bool = False
-    output_heatmap: bool = False
-    output_accumulator: bool = False
-    render_scale: float = 1
-    render_colors: str | tuple[str, ...] | None = None
-    render_binary: bool = False
-
-    # General Args
-    seed: int | None = None
-
-    def todict(self) -> dict:
-        now = time.time()
-        d = dataclasses.asdict(self)
-        d["timestamp"] = now
-        if isinstance(self.direction, Direction):
-            d["direction"] = self.direction.value
-        if isinstance(self.lock_mode, LockMode):
-            d["lock_mode"] = self.lock_mode.value
-        d["command"] = {
-            "executable": sys.executable,
-            "argv": sys.argv
-        }
-        return d
-
-
-@dataclasses.dataclass
-class Status:
-
-    cursor: int
-    total: int | None
-    elapsed: float
-    error: str | None
-
-
-def transfer(
-        config: Config,
-        log_level: str = "DEBUG",
-        log_handler: str = "null",
-        log_path: pathlib.Path = pathlib.Path("transflow.log"),
-        round_flow: bool = False,
-        export_flow: bool = False,
-        execute: bool = False,
-        replace: bool = False,
-        checkpoint_every: int | None = None,
-        checkpoint_end: bool = False,
-        export_config: bool = True,
-        safe: bool = True,
-        preview_output: bool = False,
-        cancel_event: threading.Event | None = None,
-        status_queue: multiprocessing.queues.Queue | None = None):
-
-    log_queue = multiprocessing.Queue()
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_handlers = [h.strip() for h in log_handler.split(",")]
-    logging_config = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "standard": {
-                "format": "[%(asctime)s] %(levelname)s %(name)s %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-        },
-        "handlers": {},
-        "root": {
-            "handlers": log_handlers,
-        }
+    FLOW_MERGING_FUNCTIONS: dict[str, typing.Callable[[list[numpy.ndarray]], numpy.ndarray]] = {
+        "first": lambda flows: flows[0],
+        "sum": lambda flows: numpy.sum(flows, axis=0),
+        "average": lambda flows: numpy.sum(flows, axis=0) / len(flows),
+        "difference": lambda flows: flows[0] - sum(flows[1:]),
+        "product": multiply_arrays,
+        "maskbin": lambda flows: multiply_arrays([flows[0]] + binarize_arrays(flows[1:])),
+        "masklin": lambda flows: multiply_arrays([flows[0]] + [numpy.abs(f) for f in flows[1:]]),
+        "absmax": absmax,
     }
-    if "file" in log_handlers:
-        logging_config["handlers"]["file"] = {
-            "class": "logging.FileHandler",
-            "filename": log_path.as_posix(),
-            "formatter": "standard",
-        }
-    if "stream" in log_handlers:
-        logging_config["handlers"]["stream"] = {
-            "class": "logging.StreamHandler",
-            "formatter": "standard"
-        }
-    if "null" in log_handlers:
-        logging_config["handlers"]["null"] = {
-            "class": "logging.NullHandler"
-        }
-    log_listener = multiprocessing.Process(target=logging_listener_process, args=(log_queue, logging_config))
-    log_listener.start()
-    # TODO: close log process nicely if an error occurs while initializing the pipeline process
 
-    setup_logging(log_queue, log_level)
-    logger = logging.getLogger(__name__)
-    logger.debug("Entering transfer function")
+    def __init__(self,
+            config: Config,
+            log_level: str = "DEBUG",
+            log_handler: str = "null",
+            log_path: pathlib.Path = pathlib.Path("transflow.log"),
+            round_flow: bool = False,
+            export_flow: bool = False,
+            execute: bool = False,
+            replace: bool = False,
+            checkpoint_every: int | None = None,
+            checkpoint_end: bool = False,
+            export_config: bool = True,
+            safe: bool = True,
+            preview_output: bool = False,
+            cancel_event: threading.Event | None = None,
+            status_queue: multiprocessing.queues.Queue | None = None):
 
-    metadata_queue = flow_queue = bitmap_queue = flow_process = bitmap_process\
-        = flow_output = bs_framerate = bs_length = accumulator = None
-    output_queues: list[multiprocessing.Queue] = []
-    output_processes: list[OutputProcess] = []
-
-    if config.extra_flow_paths is None:
-        config.extra_flow_paths = []
-        config.flows_merging_function = "first"
-    extra_flow_sources: list[FlowSource.Builder] = []
-    extra_flow_queues: list[multiprocessing.Queue] = []
-    extra_flow_processes: list[SourceProcess] = []
-    merge_flows = flows_merging_functions[config.flows_merging_function]
-
-    def close():
-        logger.debug("Closing pipeline")
-        if flow_output is not None:
-            flow_output.close()
-            logger.debug("Closed flow output")
-        if metadata_queue is not None:
-            metadata_queue.close()
-            logger.debug("Closed metadata queue")
-        if flow_queue is not None:
-            flow_queue.close()
-            logger.debug("Closed flow queue")
-        for i, q in enumerate(extra_flow_queues):
-            q.close()
-            logger.debug("Closed extra flow queue no. %d", i)
-        if bitmap_queue is not None:
-            bitmap_queue.close()
-            logger.debug("Closed bitmap queue")
-        for q in output_queues:
-            q.put(None)
-        if flow_process is not None:
-            flow_process.kill()
-            logger.debug("Killed flow process")
-        for i, p in enumerate(extra_flow_processes):
-            p.kill()
-            logger.debug("Killed extra flow process no. %d", i)
-        if bitmap_process is not None:
-            bitmap_process.kill()
-            logger.debug("Killed bitmap process")
-        if flow_process is not None:
-            flow_process.join()
-            logger.debug("Killed flow process")
-        for p in extra_flow_processes:
-            p.join()
-        if bitmap_process is not None:
-            bitmap_process.join()
-        for p in output_processes:
-            p.join()
-        logger.debug("Done closing pipeline")
-
-    try:
-
-        ckpt_meta = {}
-        if config.flow_path.endswith(".ckpt.zip"):
-            logger.debug("Flow path is a checkpoint, loading it")
-            import pickle, zipfile
-            with zipfile.ZipFile(config.flow_path) as archive:
-                with archive.open("meta.json") as file:
-                    ckpt_meta = json.loads(file.read().decode())
-                with archive.open("accumulator.bin") as file:
-                    accumulator = pickle.load(file)
-            config.flow_path = ckpt_meta["config"]["flow_path"]
-            config.seed = ckpt_meta["config"]["seed"]
-
+        # TODO: move this to config preprocessing
+        if config.extra_flow_paths is None:
+            config.extra_flow_paths = []
+            config.flows_merging_function = "first"
         if config.seed is None:
             config.seed = random.randint(0, 2**32-1)
-            logger.debug("Setting seed to %d", config.seed)
-
         if config.direction == "forward":
             config.direction = Direction.FORWARD
         elif config.direction == "backward":
             config.direction = Direction.BACKWARD
         else:
             raise ValueError(f"Invalid flow direction '{config.direction}'")
-
         if isinstance(config.render_colors, str):
             config.render_colors = tuple(config.render_colors.split(","))
-
-        has_output = config.bitmap_path is not None or config.output_intensity or config.output_heatmap\
-            or config.output_accumulator
-
-        if not (has_output or export_flow or checkpoint_end):
-            warnings.warn("No output or exportation selected")
-
         if isinstance(config.size, str):
             width, height = tuple(map(int, re.split(r"[^\d]", config.size)))
             config.size = width, height
+        if isinstance(config.output_path, list) and not config.output_path:
+            config.output_path = None
 
-        fs_args = {
-            "use_mvs": config.use_mvs,
-            "mask_path": config.mask_path,
-            "kernel_path": config.kernel_path,
-            "cv_config": config.cv_config,
-            "flow_filters": config.flow_filters,
-            "size": config.size,
-            "direction": config.direction,
-            "seek_ckpt": ckpt_meta.get("cursor"),
-            "seek_time": config.seek_time,
-            "duration_time": config.duration_time,
-            "repeat": config.repeat,
-            "lock_expr": config.lock_expr,
-            "lock_mode": config.lock_mode
+        self.config = config
+        self.log_level = log_level
+        self.log_handler = log_handler
+        self.log_path = log_path
+        self.round_flow = round_flow
+        self.export_flow = export_flow
+        self.execute = execute
+        self.replace = replace
+        self.checkpoint_every = checkpoint_every
+        self.checkpoint_end = checkpoint_end or safe
+        self.export_config = export_config or safe
+        self.safe = safe
+        self.preview_output = preview_output
+        self.cancel_event = cancel_event
+        self.status_queue = status_queue
+        self.log_queue = multiprocessing.Queue()
+        self.metadata_queue: multiprocessing.Queue | None = None
+        self.flow_queue: multiprocessing.Queue | None = None
+        self.bitmap_queue: multiprocessing.Queue | None = None
+        self.output_queues: list[multiprocessing.Queue] = []
+        self.log_listener: multiprocessing.Process | None = None
+        self.flow_process: SourceProcess | None = None
+        self.flow_source: FlowSource.Builder | None = None
+        self.bitmap_process: SourceProcess | None = None
+        self.output_processes: list[OutputProcess] = []
+        self.extra_flow_sources: list[FlowSource.Builder] = []
+        self.extra_flow_queues: list[multiprocessing.Queue] = []
+        self.extra_flow_processes: list[SourceProcess] = []
+        self.merge_flows = self.FLOW_MERGING_FUNCTIONS[config.flows_merging_function]
+        self.flow_output: NumpyOutput | None = None
+        self.accumulator: Accumulator | None = None
+        self.ckpt_meta: dict = {}
+        self.fs_width: int | None = None
+        self.fs_height: int | None = None
+        self.fs_framerate: float | None = None
+        self.fs_length: int | None = None
+        self.fs_direction: Direction | None = None
+        self.bs_framerate: float | None = None
+        self.bs_length: int | None = None
+        self.fs_width_factor: int = 1
+        self.fs_height_factor: int = 1
+
+    @property
+    def has_output(self) -> bool:
+        return self.config.bitmap_path is not None\
+            or self.config.output_intensity\
+            or self.config.output_heatmap\
+            or self.config.output_accumulator
+    
+    def export_checkpoint(self, cursor: int):
+        output = ZipOutput(self.config.get_secondary_output_path(f"_{cursor:05d}.ckpt.zip"), self.replace)
+        output.write_meta({
+            "config": self.config.todict(),
+            "cursor": cursor,
+            "timestamp": time.time(),
+        })
+        output.write_object("accumulator.bin", self.accumulator)
+        output.close()
+        self.logger.debug("Exported checkpoint at cursor %d", cursor)
+        
+    def get_expected_length(self, start_cursor: int) -> int | None:
+        expected_length = None
+        if self.fs_length is not None and self.bs_length is not None:
+            expected_length = min(self.fs_length, self.bs_length)
+        elif self.fs_length is not None:
+            expected_length = self.fs_length
+        elif self.bs_length is not None:
+            expected_length = self.bs_length
+        if expected_length is not None:
+            expected_length -= start_cursor
+        return expected_length
+
+    def _setup_logging(self):
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_handlers = [h.strip() for h in self.log_handler.split(",")]
+        logging_config = {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "standard": {
+                    "format": "[%(asctime)s] %(levelname)s %(name)s %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+            },
+            "handlers": {},
+            "root": {
+                "handlers": log_handlers,
+            }
         }
+        if "file" in log_handlers:
+            logging_config["handlers"]["file"] = {
+                "class": "logging.FileHandler",
+                "filename": self.log_path.as_posix(),
+                "formatter": "standard",
+            }
+        if "stream" in log_handlers:
+            logging_config["handlers"]["stream"] = {
+                "class": "logging.StreamHandler",
+                "formatter": "standard"
+            }
+        if "null" in log_handlers:
+            logging_config["handlers"]["null"] = {
+                "class": "logging.NullHandler"
+            }
+        self.log_listener = multiprocessing.Process(target=logging_listener_process, args=(self.log_queue, logging_config))
+        self.log_listener.start()
+        setup_logging(self.log_queue, self.log_level)
+        # TODO: close log process nicely if an error occurs while initializing the pipeline process
 
-        flow_source = FlowSource.from_args(config.flow_path, **fs_args)
+    def _setup_checkpoint(self):
+        self.ckpt_meta = {}
+        if not self.config.flow_path.endswith(".ckpt.zip"):
+            return
+        self.logger.debug("Flow path is a checkpoint, loading it")
+        with zipfile.ZipFile(self.config.flow_path) as archive:
+            with archive.open("meta.json") as file:
+                self.ckpt_meta = json.loads(file.read().decode())
+            with archive.open("accumulator.bin") as file:
+                self.accumulator = pickle.load(file)
+        self.config.flow_path = self.ckpt_meta["config"]["flow_path"]
+        self.config.seed = self.ckpt_meta["config"]["seed"]
 
-        metadata_queue = multiprocessing.Queue()
+    def _setup_flow_sources(self):
+        assert self.metadata_queue is not None
+        fs_args = {
+            "use_mvs": self.config.use_mvs,
+            "mask_path": self.config.mask_path,
+            "kernel_path": self.config.kernel_path,
+            "cv_config": self.config.cv_config,
+            "flow_filters": self.config.flow_filters,
+            "size": self.config.size,
+            "direction": self.config.direction,
+            "seek_ckpt": self.ckpt_meta.get("cursor"),
+            "seek_time": self.config.seek_time,
+            "duration_time": self.config.duration_time,
+            "repeat": self.config.repeat,
+            "lock_expr": self.config.lock_expr,
+            "lock_mode": self.config.lock_mode
+        }
+        self.flow_source = FlowSource.from_args(self.config.flow_path, **fs_args)
+        self.flow_queue = multiprocessing.Queue(maxsize=1)
+        self.flow_process = SourceProcess(self.flow_source, self.flow_queue, self.metadata_queue, self.log_queue, self.log_level)
+        self.flow_process.start()
+        self.logger.debug("Started flow process")
+        assert self.config.extra_flow_paths is not None # TODO: remove this with config preprocessing
+        for i, extra_flow_path in enumerate(self.config.extra_flow_paths):
+            self.extra_flow_sources.append(FlowSource.from_args(extra_flow_path, **fs_args))
+            self.extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
+            self.extra_flow_processes.append(SourceProcess(self.extra_flow_sources[-1], self.extra_flow_queues[-1], self.metadata_queue, self.log_queue, self.log_level))
+            self.extra_flow_processes[-1].start()
+            self.logger.debug("Started extra flow process no. %d", i)
 
-        flow_queue = multiprocessing.Queue(maxsize=1)
-        flow_process = SourceProcess(flow_source, flow_queue, metadata_queue, log_queue, log_level)
-        flow_process.start()
-        logger.debug("Started flow process")
-
-        for i, extra_flow_path in enumerate(config.extra_flow_paths):
-            extra_flow_sources.append(FlowSource.from_args(extra_flow_path, **fs_args))
-            extra_flow_queues.append(multiprocessing.Queue(maxsize=1))
-            extra_flow_processes.append(SourceProcess(extra_flow_sources[-1], extra_flow_queues[-1], metadata_queue, log_queue, log_level))
-            extra_flow_processes[-1].start()
-            logger.debug("Started extra flow process no. %d", i)
-
-        flow_sources_to_load = 1 + len(extra_flow_processes)
+    def _wait_for_flow_sources(self):
+        assert self.metadata_queue is not None and self.flow_process is not None
+        flow_sources_to_load = 1 + len(self.extra_flow_processes)
         flow_sources_loaded = 0
-
-        fs_width = fs_height = fs_framerate = fs_length = fs_direction = None
-
         while True:
             try:
-                shape_info = metadata_queue.get(timeout=1)
+                shape_info = self.metadata_queue.get(timeout=1)
                 if flow_sources_loaded == 0:
-                    (fs_width, fs_height, fs_framerate, fs_length, fs_direction) = shape_info
+                    (self.fs_width, self.fs_height, self.fs_framerate, self.fs_length, self.fs_direction) = shape_info
                 flow_sources_loaded += 1
-                logger.debug("Received metadata message from a flow process [%d/%d]", flow_sources_loaded, flow_sources_to_load)
+                self.logger.debug("Received metadata message from a flow process [%d/%d]", flow_sources_loaded, flow_sources_to_load)
                 if flow_sources_loaded >= flow_sources_to_load:
                     break
             except queue.Empty as exc:
-                if flow_process.is_alive() and all(p.is_alive() for p in extra_flow_processes):
+                if self.flow_process.is_alive() and all(p.is_alive() for p in self.extra_flow_processes):
                     continue
                 raise RuntimeError("Flow process died during initialization.") from exc
             except KeyboardInterrupt:
-                close()
+                self._close()
                 return
-
-        if fs_width is None or fs_height is None or fs_framerate is None or fs_direction is None:
+        if self.fs_width is None or self.fs_height is None or self.fs_framerate is None or self.fs_direction is None:
             raise ValueError("Could not initialize FlowSource metadata")
+        if self.config.size is None:
+            self.config.size = self.fs_width, self.fs_height
+            self.logger.debug("Setting size to %dx%d", *self.config.size)
 
-        if export_flow:
-            archive_path = get_secondary_output_path(config.flow_path, config.output_path, ".flow.zip")
-            logger.debug("Setting up flow output to %s", archive_path)
-            flow_output = NumpyOutput(archive_path, replace)
-            flow_output.write_meta({
-                "path": config.flow_path,
-                "width": fs_width,
-                "height": fs_height,
-                "framerate": fs_framerate,
-                "direction": flow_source.direction.value,
-                "seek_time": config.seek_time,
-            })
+    def _setup_flow_export(self):
+        if not self.export_flow:
+            return
+        assert self.flow_source is not None
+        archive_path = self.config.get_secondary_output_path(".flow.zip")
+        self.logger.debug("Setting up flow output to %s", archive_path)
+        self.flow_output = NumpyOutput(archive_path, self.replace)
+        self.flow_output.write_meta({
+            "path": self.config.flow_path,
+            "width": self.fs_width,
+            "height": self.fs_height,
+            "framerate": self.fs_framerate,
+            "direction": self.flow_source.direction.value,
+            "seek_time": self.config.seek_time,
+        })
 
-        if config.size is None:
-            config.size = fs_width, fs_height
-            logger.debug("Setting size to %dx%d", *config.size)
+    def _setup_bitmap_source(self):
+        if self.config.bitmap_path is None:
+            if self.config.bitmap_alteration_path is not None:
+                warnings.warn(
+                    "An alteration path was passed but no bitmap was provided")
+                self.logger.warning("An alteration path was passed but no bitmap was provided")
+            return
+        assert isinstance(self.config.size, tuple) and self.metadata_queue is not None
+        self.bitmap_source = BitmapSource.from_args(
+            self.config.bitmap_path,
+            self.config.size,
+            seek=self.ckpt_meta.get("cursor"),
+            seed=self.config.seed,
+            seek_time=self.config.bitmap_seek_time,
+            alteration_path=self.config.bitmap_alteration_path,
+            repeat=self.config.bitmap_repeat,
+            flow_path=self.config.flow_path)
+        self.bitmap_queue = multiprocessing.Queue(maxsize=1)
+        self.bitmap_process = SourceProcess(self.bitmap_source, self.bitmap_queue, self.metadata_queue, self.log_queue, self.log_level)
+        self.bitmap_process.start()
+        self.logger.debug("Started bitmap process")
 
-        fs_width_factor = fs_height_factor = 1
-
-        if config.bitmap_path is not None:
-            bitmap_source = BitmapSource.from_args(
-                config.bitmap_path,
-                config.size,
-                seek=ckpt_meta.get("cursor"),
-                seed=config.seed,
-                seek_time=config.bitmap_seek_time,
-                alteration_path=config.bitmap_alteration_path,
-                repeat=config.bitmap_repeat,
-                flow_path=config.flow_path)
-            bitmap_queue = multiprocessing.Queue(maxsize=1)
-            bitmap_process = SourceProcess(bitmap_source, bitmap_queue, metadata_queue, log_queue, log_level)
-            bitmap_process.start()
-            logger.debug("Started bitmap process")
-
-            while True:
-                try:
-                    bs_width, bs_height, bs_framerate, bs_length, *_ = metadata_queue.get(timeout=1)
-                    logger.debug("Received metadata message from bitmap process")
-                    break
-                except queue.Empty as exc:
-                    if bitmap_process.is_alive():
-                        continue
-                    raise RuntimeError("Bitmap process died during initialization.") from exc
-                except KeyboardInterrupt:
-                    close()
-                    return
-
-            if bs_width == 0 or bs_height == 0:
+    def _wait_for_bitmap_source(self):
+        if self.config.bitmap_path is None:
+            return
+        assert self.metadata_queue is not None and self.bitmap_process is not None
+        while True:
+            try:
+                bs_width, bs_height, self.bs_framerate, self.bs_length, *_ = self.metadata_queue.get(timeout=1)
+                self.logger.debug("Received metadata message from bitmap process")
+                break
+            except queue.Empty as exc:
+                if self.bitmap_process.is_alive():
+                    continue
+                raise RuntimeError("Bitmap process died during initialization.") from exc
+            except KeyboardInterrupt:
+                self._close()
+                return
+        if bs_width == 0 or bs_height == 0:
+            raise ValueError(
+                f"Encountered an error opening bitmap '{self.config.bitmap_path}', "\
+                f"shape is ({bs_height}, {bs_width})")
+        if self.fs_width != bs_width or self.fs_height != bs_height:
+            if bs_width % self.fs_width != 0 or bs_height % self.fs_height != 0:
                 raise ValueError(
-                    f"Encountered an error opening bitmap '{config.bitmap_path}', "\
-                    f"shape is ({bs_height}, {bs_width})")
+                    f"Resolutions do not match: "\
+                    f"flow is {self.fs_width}x{self.fs_height} "\
+                    f"while bitmap is {bs_width}x{bs_height}.")
+            self.fs_width_factor = bs_width // self.fs_width
+            self.fs_height_factor = bs_height // self.fs_height
+            self.logger.debug("Flow and bitmap dimension do not match. Setting scaling factors to %dx%d", self.fs_width_factor, self.fs_height_factor)
 
-            if fs_width != bs_width or fs_height != bs_height:
-                if bs_width % fs_width != 0 or bs_height % fs_height != 0:
-                    raise ValueError(
-                        f"Resolutions do not match: "\
-                        f"flow is {fs_width}x{fs_height} "\
-                        f"while bitmap is {bs_width}x{bs_height}.")
-                fs_width_factor = bs_width // fs_width
-                fs_height_factor = bs_height // fs_height
-                logger.debug("Flow and bitmap dimension do not match. Setting scaling factors to %dx%d", fs_width_factor, fs_height_factor)
+    def _setup_accumulator(self):
+        if self.accumulator is not None: # already loaded from checkpoint
+            return
+        assert self.fs_width is not None and self.fs_height is not None
+        self.accumulator = Accumulator.from_args(
+            int(self.fs_width * self.fs_width_factor),
+            int(self.fs_height * self.fs_height_factor),
+            method=self.config.acc_method,
+            reset_mode=self.config.reset_mode,
+            reset_alpha=self.config.reset_alpha,
+            reset_mask_path=self.config.reset_mask_path,
+            heatmap_mode=self.config.heatmap_mode,
+            heatmap_args=self.config.heatmap_args,
+            heatmap_reset_threshold=self.config.heatmap_reset_threshold,
+            bg_color=self.config.accumulator_background,
+            stack_composer=self.config.stack_composer,
+            initial_canvas=self.config.initial_canvas,
+            bitmap_mask_path=self.config.bitmap_mask_path,
+            crumble=self.config.crumble,
+            bitmap_introduction_flags=self.config.bitmap_introduction_flags)
 
-        elif config.bitmap_alteration_path is not None:
-            warnings.warn(
-                "An alteration path was passed but no bitmap was provided")
-            logger.warning("An alteration path was passed but no bitmap was provided")
+    def _setup_output(self):
+        if not self.has_output:
+            return
+        assert self.fs_width is not None and self.fs_height is not None
+        vout_args = (
+            int(self.fs_width * self.fs_width_factor),
+            int(self.fs_height * self.fs_height_factor),
+            self.bs_framerate if self.bs_framerate is not None else self.fs_framerate,
+            self.config.vcodec,
+            self.execute,
+            self.replace,
+        )
+        output_paths: list[str | None] = []
+        if isinstance(self.config.output_path, list):
+            output_paths += self.config.output_path
+        else:
+            output_paths.append(self.config.output_path)
+        if self.config.output_path is not None and self.preview_output:
+            output_paths.append(None)
+        for path in output_paths:
+            self.output = VideoOutput.from_args(path, *vout_args)
+            if self.export_config and self.output.output_path is not None:
+                with pathlib.Path(self.output.output_path).with_suffix(".config.json").open("w") as file:
+                    json.dump(self.config.todict(), file)
+            oq = multiprocessing.Queue()
+            oq.cancel_join_thread()
+            self.output_queues.append(oq)
+            op = OutputProcess(self.output, oq, self.log_queue, self.log_level)
+            op.start()
+            self.logger.debug("Started output process to %s", path)
+            self.output_processes.append(op)
 
-        metadata_queue.close()
-        logger.debug("Closed metadata queue")
+    def _update_flow(self) -> numpy.ndarray | None:
+        assert self.flow_queue is not None
+        flows = []
+        for q in [self.flow_queue] + self.extra_flow_queues:
+            flow = q.get(timeout=1)
+            if flow is None:
+                break
+            flows.append(flow)
+        if not flows:
+            return None
+        flow = self.merge_flows(flows)
+        if self.fs_width_factor != 1 or self.fs_height_factor != 1:
+            flow = upscale_array(flow, self.fs_width_factor, self.fs_height_factor)
+        if self.flow_output is not None:
+            self.flow_output.write_array(numpy.round(flow).astype(int) if self.round_flow else flow)
+        return flow
+    
+    def _update_output(self, flow: numpy.ndarray) -> bool:
+        assert self.accumulator is not None
+        out_frame = None
+        if self.config.output_intensity:
+            flow_intensity = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
+            assert isinstance(self.config.render_colors, tuple) # TODO: remove this with config preprocessing
+            out_frame = render1d(flow_intensity, self.config.render_scale, self.config.render_colors, self.config.render_binary)
+        elif self.config.output_heatmap:
+            assert isinstance(self.config.render_colors, tuple) # TODO: remove this with config preprocessing
+            out_frame = render1d(self.accumulator.get_heatmap_array(), self.config.render_scale, self.config.render_colors, self.config.render_binary)
+        elif self.config.output_accumulator:
+            assert isinstance(self.config.render_colors, tuple) # TODO: remove this with config preprocessing
+            out_frame = render2d(self.accumulator.get_accumulator_array(), self.config.render_scale, self.config.render_colors),
+        elif self.bitmap_queue is not None:
+            bitmap = self.bitmap_queue.get(timeout=1)
+            if bitmap is None:
+                return False
+            out_frame = self.accumulator.apply(bitmap)
+        if out_frame is not None:
+            for oq in self.output_queues:
+                oq.put(out_frame, timeout=1)
+        return True
 
-        if accumulator is None:
-            accumulator = Accumulator.from_args(
-                fs_width * fs_width_factor,
-                fs_height * fs_height_factor,
-                method=config.acc_method,
-                reset_mode=config.reset_mode,
-                reset_alpha=config.reset_alpha,
-                reset_mask_path=config.reset_mask_path,
-                heatmap_mode=config.heatmap_mode,
-                heatmap_args=config.heatmap_args,
-                heatmap_reset_threshold=config.heatmap_reset_threshold,
-                bg_color=config.accumulator_background,
-                stack_composer=config.stack_composer,
-                initial_canvas=config.initial_canvas,
-                bitmap_mask_path=config.bitmap_mask_path,
-                crumble=config.crumble,
-                bitmap_introduction_flags=config.bitmap_introduction_flags)
-
-        export_config = export_config or safe
-        if has_output:
-            vout_args = (
-                fs_width * fs_width_factor,
-                fs_height * fs_height_factor,
-                bs_framerate if bs_framerate is not None else fs_framerate,
-                config.vcodec,
-                execute,
-                replace,
-            )
-            if isinstance(config.output_path, list) and not config.output_path:
-                config.output_path = None
-            output_paths: list[str | None] = []
-            if isinstance(config.output_path, list):
-                output_paths += config.output_path
-            else:
-                output_paths.append(config.output_path)
-            if config.output_path is not None and preview_output:
-                output_paths.append(None)
-            for path in output_paths:
-                output = VideoOutput.from_args(path, *vout_args)
-                if export_config and output.output_path is not None:
-                    with pathlib.Path(output.output_path).with_suffix(".config.json").open("w") as file:
-                        json.dump(config.todict(), file)
-                oq = multiprocessing.Queue()
-                oq.cancel_join_thread()
-                output_queues.append(oq)
-                op = OutputProcess(output, oq, log_queue, log_level)
-                op.start()
-                logger.debug("Started output process to %s", path)
-                output_processes.append(op)
-
+    def _mainloop(self):
+        assert self.flow_process is not None
+        assert self.accumulator is not None
+        assert self.fs_direction is not None
+        
         exception = False
-        cursor: int = ckpt_meta.get("cursor", 0)
+        cursor: int = self.ckpt_meta.get("cursor", 0)
         if not isinstance(cursor, int):
             raise ValueError("Cursor is not an integer. Is the checkpoint valid?")
-        expected_length = get_expected_length(fs_length, bs_length, cursor)
-        logger.debug("Expected length: %s", expected_length)
-        
-        if safe:
-            with open("last-config.json", "w") as file:
-                json.dump(config.todict(), file)
+        expected_length = self.get_expected_length(cursor)
+        self.logger.debug("Expected length: %s", expected_length)       
 
         start_t = time.time()
-        pbar = tqdm.tqdm(total=expected_length, unit="frame", disable=status_queue is not None)
+        pbar = tqdm.tqdm(total=expected_length, unit="frame", disable=self.status_queue is not None)
         while True:
-            if cancel_event is not None and cancel_event.is_set():
-                logger.debug("Received cancel event, breaking main loop")
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                self.logger.debug("Received cancel event, breaking main loop")
                 break
             try:
-                flows = []
-                break_now = False
-                for q in [flow_queue] + extra_flow_queues:
-                    flow = q.get(timeout=1)
-                    if flow is None:
-                        break_now = True
-                        break
-                    flows.append(flow)
-                if break_now:
+                flow = self._update_flow()
+                if flow is None:
                     break
-                flow = merge_flows(flows)
-                if fs_width_factor != 1 or fs_height_factor != 1:
-                    flow = upscale_flow(flow, fs_width_factor, fs_height_factor)
-                if flow_output is not None:
-                    flow_output.write_array(numpy.round(flow).astype(int) if round_flow else flow)
-                accumulator.update(flow, fs_direction)
-                out_frame = None
-                if config.output_intensity:
-                    flow_intensity = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
-                    out_frame = render1d(flow_intensity, config.render_scale, config.render_colors, config.render_binary)
-                elif config.output_heatmap:
-                    out_frame = render1d(accumulator.get_heatmap_array(), config.render_scale, config.render_colors, config.render_binary)
-                elif config.output_accumulator:
-                    out_frame = render2d(accumulator.get_accumulator_array(), config.render_scale, config.render_colors),
-                elif bitmap_queue is not None:
-                    bitmap = bitmap_queue.get(timeout=1)
-                    if bitmap is None:
-                        break
-                    out_frame = accumulator.apply(bitmap)
-                if out_frame is not None:
-                    for oq in output_queues:
-                        oq.put(out_frame, timeout=1)
+                self.accumulator.update(flow, self.fs_direction)
+                if not self._update_output(flow):
+                    break
                 cursor += 1
-                if checkpoint_every is not None and cursor % checkpoint_every == 0:
-                    export_checkpoint(config, cursor, accumulator, replace)
-                    logger.debug("Exported checkpoint at cursor %d", cursor)
+                if self.checkpoint_every is not None and cursor % self.checkpoint_every == 0:
+                    self.export_checkpoint(cursor)
                 pbar.update(1)
-                if status_queue is not None:
-                    status_queue.put(Status(cursor, expected_length, time.time() - start_t, None))
+                if self.status_queue is not None:
+                    self.status_queue.put(Pipeline.Status(cursor, expected_length, time.time() - start_t, None))
             except (queue.Empty, queue.Full):
                 pass
             except KeyboardInterrupt:
                 exception = True
-                logger.debug("Main loop got interrupted")
+                self.logger.debug("Main loop got interrupted")
                 break
             except Exception as err:
                 exception = True
-                logger.error("Main loop received an exception: %s", err)
+                self.logger.error("Main loop received an exception: %s", err)
                 traceback.print_exc()
-                if status_queue is not None:
-                    status_queue.put(Status(cursor, expected_length, time.time() - start_t, str(err)))
+                if self.status_queue is not None:
+                    self.status_queue.put(Pipeline.Status(cursor, expected_length, time.time() - start_t, str(err)))
                 break
             finally:
-                if (not flow_process.is_alive())\
-                    or any(not p.is_alive() for p in extra_flow_processes)\
-                    or (bitmap_process is not None and not bitmap_process.is_alive())\
-                    or any(not p.is_alive() for p in output_processes):
-                    logger.debug("A child process has died, exiting main loop")
+                if (not self.flow_process.is_alive())\
+                    or any(not p.is_alive() for p in self.extra_flow_processes)\
+                    or (self.bitmap_process is not None and not self.bitmap_process.is_alive())\
+                    or any(not p.is_alive() for p in self.output_processes):
+                    self.logger.debug("A child process has died, exiting main loop")
                     break
         pbar.close()
-        if (exception and safe) or checkpoint_end:
-            export_checkpoint(config, cursor, accumulator, replace)
-            logger.debug("Exported end checkpoint")
-        close()
+        if (exception and self.safe) or self.checkpoint_end:
+            self.export_checkpoint(cursor)
 
-    except Exception as err:
-        logger.debug("Pipeline encountered an error: %s", err)
-        close()
-        raise err
+    def _close(self):
+        self.logger.debug("Closing pipeline")
+        if self.flow_output is not None:
+            self.flow_output.close()
+            self.logger.debug("Closed flow output")
+        if self.metadata_queue is not None:
+            self.metadata_queue.close()
+            self.logger.debug("Closed metadata queue")
+        if self.flow_queue is not None:
+            self.flow_queue.close()
+            self.logger.debug("Closed flow queue")
+        for i, q in enumerate(self.extra_flow_queues):
+            q.close()
+            self.logger.debug("Closed extra flow queue no. %d", i)
+        if self.bitmap_queue is not None:
+            self.bitmap_queue.close()
+            self.logger.debug("Closed bitmap queue")
+        for q in self.output_queues:
+            q.put(None)
+        if self.flow_process is not None:
+            self.flow_process.kill()
+            self.logger.debug("Killed flow process")
+        for i, p in enumerate(self.extra_flow_processes):
+            p.kill()
+            self.logger.debug("Killed extra flow process no. %d", i)
+        if self.bitmap_process is not None:
+            self.bitmap_process.kill()
+            self.logger.debug("Killed bitmap process")
+        if self.flow_process is not None:
+            self.flow_process.join()
+            self.logger.debug("Killed flow process")
+        for p in self.extra_flow_processes:
+            p.join()
+        if self.bitmap_process is not None:
+            self.bitmap_process.join()
+        for p in self.output_processes:
+            p.join()
+        self.logger.debug("Done closing pipeline")
+        while self.log_listener is not None and self.log_listener.is_alive():
+            self.log_queue.put(None)
+            self.log_listener.join(timeout=.01)
+        logging.shutdown()
 
-    logger.debug("End of main loop")
-    while log_listener.is_alive():
-        log_queue.put(None)
-        log_listener.join(timeout=.01)
-    logging.shutdown()
+    def run(self):
+        try:
+            self._setup_logging()
+            self.logger = logging.getLogger(__name__)
+            self.logger.debug("Entering transfer function")
+            self._setup_checkpoint()
+            if not (self.has_output or self.export_flow or self.checkpoint_end):
+                warnings.warn("No output or exportation selected")
+            self.metadata_queue = multiprocessing.Queue()
+            self._setup_flow_sources()
+            self._wait_for_flow_sources()
+            self._setup_flow_export()
+            self._setup_bitmap_source()
+            self._wait_for_bitmap_source()
+            self.metadata_queue.close()
+            self.logger.debug("Closed metadata queue")
+            self._setup_accumulator()
+            self._setup_output()
+            if self.safe:
+                with open("last-config.json", "w") as file:
+                    json.dump(self.config.todict(), file)
+            self._mainloop()
+        except Exception as err:
+            self.logger.error("Pipeline encountered an error: %s", err)
+            traceback.print_exc()
+        finally:
+            self._close()
+
+
+def transfer(*args, **kwargs):
+    Pipeline(*args, **kwargs).run()

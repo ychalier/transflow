@@ -25,7 +25,7 @@ class MjpegStream:
         name: str,
         size: Optional[Tuple[int, int]] = None,
         quality: int = 50,
-        fps: int = 30,
+        fps: float = 30,
     ) -> None:
         self.name = name.lower().casefold().replace(" ", "_")
         self.size = size
@@ -156,7 +156,7 @@ class MjpegServer:
 class MjpegOutput(VideoOutput):
 
     def __init__(self, host: str, port: int, width: int, height: int,
-                 framerate: int, quality: int = 50):
+                 framerate: float, quality: int = 50):
         VideoOutput.__init__(self, width, height)
         self.host = host
         self.port = port

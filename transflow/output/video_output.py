@@ -25,7 +25,7 @@ class VideoOutput:
 
     @classmethod
     def from_args(cls, path: str | None, width: int, height: int,
-                  framerate: int | None = None, vcodec: str = "h264",
+                  framerate: float | None = None, vcodec: str = "h264",
                   execute: bool = False, replace: bool = False):
         if path is None:
             from .cv import CvVideoOutput

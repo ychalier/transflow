@@ -139,3 +139,7 @@ def parse_lambda_expression(expr_string: str, vars: tuple[str, ...] = ("t", )) -
     else:
         vars_str = ",".join(vars)
     return eval(f"lambda {vars_str}: " + expr_string)
+
+
+def upscale_array(arr: numpy.ndarray, wf: int, hf: int) -> numpy.ndarray:
+    return numpy.kron(arr * (wf, hf), numpy.ones((hf, wf, 1))).astype(arr.dtype)

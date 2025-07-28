@@ -28,7 +28,7 @@ class TestOutput(unittest.TestCase):
         if os.path.isfile(path):
             os.remove(path)
         self.assertFalse(os.path.isfile(path))
-        output = VideoOutput.from_args(path, self.WIDTH, self.HEIGHT, self.FPS, replace=True, safe=False)
+        output = VideoOutput.from_args(path, self.WIDTH, self.HEIGHT, self.FPS, replace=True)
         import transflow.output.ffmpeg
         self.assertIsInstance(output, transflow.output.ffmpeg.FFmpegVideoOutput)
         with output:
@@ -37,7 +37,7 @@ class TestOutput(unittest.TestCase):
         os.remove(path)
     
     def test_cv_output(self):
-        output = VideoOutput.from_args(None, self.WIDTH, self.HEIGHT, replace=True, safe=False)
+        output = VideoOutput.from_args(None, self.WIDTH, self.HEIGHT, replace=True)
         import transflow.output.cv
         self.assertIsInstance(output, transflow.output.cv.CvVideoOutput)
         with output:
@@ -67,7 +67,7 @@ class TestOutput(unittest.TestCase):
             shutil.rmtree(directory)
         self.assertFalse(directory.is_dir())
         path = os.path.join(directory, "%03d.png")
-        output = VideoOutput.from_args(path, self.WIDTH, self.HEIGHT, self.FPS, replace=True, safe=False)
+        output = VideoOutput.from_args(path, self.WIDTH, self.HEIGHT, self.FPS, replace=True)
         import transflow.output.frames
         self.assertIsInstance(output, transflow.output.frames.FramesVideoOutput)
         with output:

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class FFmpegVideoOutput(VideoOutput):
 
-    def __init__(self, path: str, width: int, height: int, framerate: int,
+    def __init__(self, path: str, width: int, height: int, framerate: float,
                  vcodec: str = "h264", execute: bool = False,
                  replace: bool = False):
         VideoOutput.__init__(self, width, height)

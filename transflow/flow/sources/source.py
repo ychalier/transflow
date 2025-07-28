@@ -23,7 +23,7 @@ class FlowSource:
         @classmethod
         def from_arg(cls, arg: "str | FlowSource.Direction | None"):
             if arg is None:
-                logger.warning("Setting flow direction to default (FORWARD)")
+                logger.debug("Setting flow direction to default (FORWARD)")
                 return FlowSource.Direction.FORWARD
             if isinstance(arg, FlowSource.Direction):
                 return arg
