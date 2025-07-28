@@ -52,6 +52,10 @@ class VideoOutput:
                 raise ValueError(f"Invalid number of MJPEG arguments: {n_mjpeg_args}")
             from .mjpeg import MjpegOutput
             return MjpegOutput(host, port, width, height, framerate)
+        m = re.search(r"%(\d+)?d", path)
+        if m:
+            from .frames import FramesVideoOutput
+            return FramesVideoOutput(path, width, height, execute)
         from .ffmpeg import FFmpegVideoOutput
         return FFmpegVideoOutput(path, width, height, framerate, vcodec,
                                  execute, replace, safe)

@@ -1,13 +1,12 @@
 import os
+import pathlib
+import shutil
 import tempfile
 import unittest
 
 import numpy
 
-import transflow.output
-import transflow.output.ffmpeg
-import transflow.output.cv
-import transflow.output.mjpeg
+from transflow.output import VideoOutput
 
 
 class TestOutput(unittest.TestCase):
@@ -16,7 +15,7 @@ class TestOutput(unittest.TestCase):
     HEIGHT = 480
     FPS = 50
 
-    def _test_output(self, output: transflow.output.VideoOutput):
+    def _test_output(self, output: VideoOutput):
         self.assertEqual(output.width, self.WIDTH)
         self.assertEqual(output.height, self.HEIGHT)
         frame = numpy.zeros((self.HEIGHT, self.WIDTH, 3), dtype=numpy.uint8)
@@ -27,7 +26,8 @@ class TestOutput(unittest.TestCase):
         if os.path.isfile(path):
             os.remove(path)
         self.assertFalse(os.path.isfile(path))
-        output = transflow.output.VideoOutput.from_args(path, self.WIDTH, self.HEIGHT, self.FPS, replace=True, safe=False)
+        output = VideoOutput.from_args(path, self.WIDTH, self.HEIGHT, self.FPS, replace=True, safe=False)
+        import transflow.output.ffmpeg
         self.assertIsInstance(output, transflow.output.ffmpeg.FFmpegVideoOutput)
         with output:
             self._test_output(output)
@@ -35,7 +35,8 @@ class TestOutput(unittest.TestCase):
         os.remove(path)
     
     def test_cv_output(self):
-        output = transflow.output.VideoOutput.from_args(None, self.WIDTH, self.HEIGHT, replace=True, safe=False)
+        output = VideoOutput.from_args(None, self.WIDTH, self.HEIGHT, replace=True, safe=False)
+        import transflow.output.cv
         self.assertIsInstance(output, transflow.output.cv.CvVideoOutput)
         with output:
             self._test_output(output)
@@ -43,7 +44,8 @@ class TestOutput(unittest.TestCase):
     def test_mjpeg_output(self):
         host = "localhost"
         port = 8001
-        output = transflow.output.VideoOutput.from_args(f"mjpeg:{port}:{host}", self.WIDTH, self.HEIGHT, self.FPS)
+        output = VideoOutput.from_args(f"mjpeg:{port}:{host}", self.WIDTH, self.HEIGHT, self.FPS)
+        import transflow.output.mjpeg
         self.assertIsInstance(output, transflow.output.mjpeg.MjpegOutput)
         from aiohttp.web_runner import GracefulExit
         import socket
@@ -56,3 +58,17 @@ class TestOutput(unittest.TestCase):
                 sock.close()
         except GracefulExit:
             pass
+
+    def test_frames_output(self):
+        directory = pathlib.Path(tempfile.gettempdir()) / "test-frames"
+        if directory.is_dir():
+            shutil.rmtree(directory)
+        self.assertFalse(directory.is_dir())
+        path = os.path.join(directory, "%03d.png")
+        output = VideoOutput.from_args(path, self.WIDTH, self.HEIGHT, self.FPS, replace=True, safe=False)
+        import transflow.output.frames
+        self.assertIsInstance(output, transflow.output.frames.FramesVideoOutput)
+        with output:
+            self._test_output(output)
+        self.assertTrue(directory.is_dir())
+        self.assertEqual(len(list(directory.glob("*.png"))), 1)

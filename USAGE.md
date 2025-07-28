@@ -4,36 +4,26 @@ This document provides details on how to use the `transflow` module for performi
 
 ## Contents
 
-- [Transflow Reference Guide](#transflow-reference-guide)
-  - [Contents](#contents)
-  - [Basic Flow Transfer](#basic-flow-transfer)
-  - [Detailed Example](#detailed-example)
-  - [GUI](#gui)
-  - [Flow Estimation Methods](#flow-estimation-methods)
-    - [Gunnar Farnebäck](#gunnar-farnebäck)
-    - [Horn-Schunck](#horn-schunck)
-    - [Lukas-Kanade](#lukas-kanade)
-    - [LiteFlowNet](#liteflownet)
-  - [Using Motion Vectors](#using-motion-vectors)
-  - [Flow Direction](#flow-direction)
-  - [Flow Preprocessing](#flow-preprocessing)
-  - [Flow Transformations](#flow-transformations)
-    - [Flow Filters](#flow-filters)
-    - [Flow Locking](#flow-locking)
-    - [Applying A Mask](#applying-a-mask)
-    - [Flow Convolution Kernel](#flow-convolution-kernel)
-  - [Multiple Flow Sources](#multiple-flow-sources)
-  - [Accumulation Methods](#accumulation-methods)
-  - [Accumulator Heatmap](#accumulator-heatmap)
-  - [Accumulator Visualization](#accumulator-visualization)
-  - [Resetting Accumulator](#resetting-accumulator)
-  - [Generative Bitmap Sources](#generative-bitmap-sources)
-  - [Webcam Sources](#webcam-sources)
-  - [Bitmap Alteration](#bitmap-alteration)
-  - [Live Visualization](#live-visualization)
-  - [Interrupting Processing](#interrupting-processing)
-  - [Restart From Checkpoint](#restart-from-checkpoint)
-  - [Seek, Duration and Repeat](#seek-duration-and-repeat)
+- [Basic Flow Transfer](#basic-flow-transfer)
+- [Detailed Example](#detailed-example)
+- [GUI](#gui)
+- [Flow Estimation Methods](#flow-estimation-methods)
+- [Using Motion Vectors](#using-motion-vectors)
+- [Flow Direction](#flow-direction)
+- [Flow Preprocessing](#flow-preprocessing)
+- [Flow Transformations](#flow-transformations)
+- [Multiple Flow Sources](#multiple-flow-sources)
+- [Accumulation Methods](#accumulation-methods)
+- [Accumulator Heatmap](#accumulator-heatmap)
+- [Accumulator Visualization](#accumulator-visualization)
+- [Resetting Accumulator](#resetting-accumulator)
+- [Generative Bitmap Sources](#generative-bitmap-sources)
+- [Webcam Sources](#webcam-sources)
+- [Bitmap Alteration](#bitmap-alteration)
+- [Live Visualization](#live-visualization)
+- [Interrupting Processing](#interrupting-processing)
+- [Restart From Checkpoint](#restart-from-checkpoint)
+- [Seek, Duration and Repeat](#seek-duration-and-repeat)
 
 ## Basic Flow Transfer
 
@@ -49,7 +39,7 @@ The first argument `flow.mp4` is the video to extract the optical flow from. The
 
 **Dimensions.** Flow and bitmap sources should have the same dimensions. Again, FFmpeg's [scale filter](https://trac.ffmpeg.org/wiki/Scaling) will help you with that. If the flow source is smaller than the bitmap source by an integer factor, it is scaled accordingly. Thus, a 320x180 video can be used as a flow source for a 1920x1080 bitmap. Non-integer scaling is not supported. The bitmap can not be smaller than the flow.
 
-**Output Filename.** Unless the `-re, --replace` flag is passed, the program automatically generates unique filenames to output files to avoid naming conflicts, by adding a numerical suffix.
+**Output Filename.** Unless the `-re, --replace` flag is passed, the program automatically generates unique filenames to output files to avoid naming conflicts, by adding a numerical suffix. Output templates such as `frames/%05d.png` can be used to directly output frames as images.
 
 **Output Format.** Output codec can be specified with the `-vc, --vcodec` argument. Default value is `h264`. Possible values can be listed with the `ffmpeg -codecs` command.
 
