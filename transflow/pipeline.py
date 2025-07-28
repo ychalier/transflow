@@ -9,6 +9,7 @@ import pathlib
 import queue
 import random
 import re
+import sys
 import threading
 import time
 import traceback
@@ -209,25 +210,20 @@ def get_secondary_output_path(
     return path + suffix
 
 
-# TODO: add config to export?
 def export_checkpoint(
-        flow_path: str,
-        bitmap_path: str | None,
-        output_path: str | list[str] | None,
-        replace: bool,
+        config: 'Config',
         cursor: int,
-        accumulator: Accumulator,
-        seed: int):
+        accumulator: Accumulator):
     output = ZipOutput(
-        get_secondary_output_path(flow_path, output_path, f"_{cursor:05d}.ckpt.zip"),
-        replace)
+        get_secondary_output_path(
+            config.flow_path,
+            config.output_path,
+            f"_{cursor:05d}.ckpt.zip"),
+            config.replace)
     output.write_meta({
-        "flow_path": flow_path,
-        "bitmap_path": bitmap_path,
-        "output_path": output_path,
+        "config": config.todict(),
         "cursor": cursor,
         "timestamp": time.time(),
-        "seed": seed
     })
     output.write_object("accumulator.bin", accumulator)
     output.close()
@@ -325,6 +321,20 @@ class Config:
 
     # General Args
     seed: int | None = None
+    
+    def todict(self) -> dict:
+        now = time.time()
+        d = dataclasses.asdict(self)
+        d["timestamp"] = now
+        if isinstance(self.direction, Direction):
+            d["direction"] = self.direction.value
+        if isinstance(self.lock_mode, LockMode):
+            d["lock_mode"] = self.lock_mode.value
+        d["command"] = {
+            "executable": sys.executable,
+            "argv": sys.argv
+        }
+        return d
 
 
 @dataclasses.dataclass
@@ -339,7 +349,7 @@ class Status:
 def transfer(
         config: Config,
         log_level: str = "INFO",
-        log_handler: str = "file",
+        log_handler: str = "file", # TODO: add null handler
         log_path: pathlib.Path = pathlib.Path("transflow.log"),
         cancel_event: threading.Event | None = None,
         status_queue: multiprocessing.queues.Queue | None = None):
@@ -372,6 +382,7 @@ def transfer(
     }
     log_listener = multiprocessing.Process(target=logging_listener_process, args=(log_queue, logging_config))
     log_listener.start()
+    # TODO: close log process nicely if an error occurs while initializing the pipeline process
 
     setup_logging(log_queue, log_level)
     logger = logging.getLogger(__name__)   
@@ -391,7 +402,7 @@ def transfer(
     extra_flow_sources: list[FlowSource.Builder] = []
     extra_flow_queues: list[multiprocessing.Queue] = []
     extra_flow_processes: list[SourceProcess] = []
-    merge_flows = flows_merging_functions[config.flows_merging_function]       
+    merge_flows = flows_merging_functions[config.flows_merging_function]
 
     def close():
         logger.debug("Closing pipeline")
@@ -443,8 +454,8 @@ def transfer(
                     ckpt_meta = json.loads(file.read().decode())
                 with archive.open("accumulator.bin") as file:
                     accumulator = pickle.load(file)
-            config.flow_path = ckpt_meta["flow_path"]
-            config.seed = ckpt_meta["seed"]
+            config.flow_path = ckpt_meta["config"]["flow_path"]
+            config.seed = ckpt_meta["config"]["seed"]
 
         if config.seed is None:
             config.seed = random.randint(0, 2**32-1)
@@ -692,14 +703,7 @@ def transfer(
                         oq.put(out_frame, timeout=1)
                 cursor += 1
                 if config.checkpoint_every is not None and cursor % config.checkpoint_every == 0:
-                    export_checkpoint(
-                        config.flow_path,
-                        config.bitmap_path,
-                        config.output_path,
-                        config.replace,
-                        cursor,
-                        accumulator,
-                        config.seed)
+                    export_checkpoint(config, cursor, accumulator)
                     logger.debug("Exported checkpoint at cursor %d", cursor)
                 pbar.update(1)
                 if status_queue is not None:
@@ -722,18 +726,11 @@ def transfer(
                     or any(not p.is_alive() for p in extra_flow_processes)\
                     or (bitmap_process is not None and not bitmap_process.is_alive())\
                     or any(not p.is_alive() for p in output_processes):
-                    exception = True
+                    logger.debug("A child process has died, exiting main loop")
                     break
         pbar.close()
         if (exception and config.safe) or config.checkpoint_end:
-            export_checkpoint(
-                config.flow_path,
-                config.bitmap_path,
-                config.output_path,
-                config.replace,
-                cursor,
-                accumulator,
-                config.seed)
+            export_checkpoint(config, cursor, accumulator)
             logger.debug("Exported end checkpoint")
         close()
 
