@@ -69,3 +69,5 @@ draft
 !assets/kernels/3x3/sharpen.npy
 !assets/kernels/5x5/blur-gaussian.npy
 !assets/kernels/5x5/unsharp.npy
+
+last-config.json

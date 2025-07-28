@@ -660,6 +660,10 @@ def transfer(
             raise ValueError("Cursor is not an integer. Is the checkpoint valid?")
         expected_length = get_expected_length(fs_length, bs_length, cursor)
         logger.debug("Expected length: %s", expected_length)
+        
+        if safe:
+            with open("last-config.json", "w") as file:
+                json.dump(config.todict(), file)
 
         start_t = time.time()
         pbar = tqdm.tqdm(total=expected_length, unit="frame", disable=status_queue is not None)
