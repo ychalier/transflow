@@ -1,7 +1,10 @@
+import os
+import sys
 import unittest
 
 import numpy
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import transflow.accumulator.canvas
 import transflow.accumulator.crumble
 import transflow.accumulator.mapping
@@ -83,3 +86,7 @@ class TestAccumulator(unittest.TestCase):
                 else:
                     acc = Accumulator.from_args(self.WIDTH, self.HEIGHT, method=method, reset_mode=mode, reset_mask_path=self.MASK_PATH)
                 self._test_acc(acc)
+
+
+if __name__ == "__main__":   
+    unittest.main()

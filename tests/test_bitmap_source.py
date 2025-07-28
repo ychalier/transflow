@@ -1,7 +1,10 @@
+import os
+import sys
 import unittest
 
 import numpy
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import transflow.bitmap
 import transflow.bitmap.cv
 import transflow.bitmap.still
@@ -94,3 +97,7 @@ class TestBitmapSource(unittest.TestCase):
         with bs:
             bitmap = self._test_bs(bs)
         self.assertEqual(numpy.sum(array - bitmap), 0)
+
+
+if __name__ == "__main__":   
+    unittest.main()

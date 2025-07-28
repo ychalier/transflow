@@ -1,8 +1,10 @@
 import os
+import sys
 import unittest
 
 import numpy
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import transflow.flow
 import transflow.flow.sources.av
 import transflow.flow.sources.cv
@@ -104,3 +106,7 @@ class TestFlowSource(unittest.TestCase):
         with fs:
             self.assertEqual(len(fs.flow_filters), 4)
         self._test_fs(fs)
+
+
+if __name__ == "__main__":   
+    unittest.main()

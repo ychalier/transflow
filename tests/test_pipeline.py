@@ -3,9 +3,11 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 import tempfile
 import unittest
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import transflow.pipeline
 
 
@@ -112,4 +114,5 @@ class TestPipeline(unittest.TestCase):
         shutil.rmtree(output_dir)
 
 
-# TODO: add main function to run file manually
+if __name__ == "__main__":   
+    unittest.main()

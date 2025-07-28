@@ -1,11 +1,13 @@
 import os
 import pathlib
 import shutil
+import sys
 import tempfile
 import unittest
 
 import numpy
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from transflow.output import VideoOutput
 
 
@@ -73,3 +75,7 @@ class TestOutput(unittest.TestCase):
         self.assertTrue(directory.is_dir())
         self.assertEqual(len(list(directory.glob("*.png"))), 1)
         shutil.rmtree(directory)
+
+
+if __name__ == "__main__":   
+    unittest.main()
