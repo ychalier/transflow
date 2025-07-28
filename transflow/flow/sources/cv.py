@@ -443,7 +443,7 @@ class CvFlowSource(FlowSource):
         for i in range(self.input_frame_index + 1):
             success, frame = self.capture.read()
             if not success or frame is None:
-                raise RuntimeError(f"Could not open video at") # TODO
+                raise RuntimeError(f"An error occurred while reading frame at index {i}")
             if i == self.input_frame_index:
                 resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
                 self.prev_gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)

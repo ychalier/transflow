@@ -26,8 +26,7 @@ class VideoOutput:
     @classmethod
     def from_args(cls, path: str | None, width: int, height: int,
                   framerate: int | None = None, vcodec: str = "h264",
-                  execute: bool = False, replace: bool = False,
-                  safe: bool = False):
+                  execute: bool = False, replace: bool = False):
         if path is None:
             from .cv import CvVideoOutput
             return CvVideoOutput(width, height)
@@ -37,7 +36,7 @@ class VideoOutput:
         mjpeg_pattern = re.compile(r"^mjpeg(:[:a-z0-9A-Z\-]+)?$", re.IGNORECASE)
         m = mjpeg_pattern.match(path)
         if m:
-            mjpeg_query = m.group(1) 
+            mjpeg_query = m.group(1)
             mjpeg_args = []
             if mjpeg_query is not None:
                 mjpeg_args = mjpeg_query[1:].split(":")
@@ -57,5 +56,8 @@ class VideoOutput:
             from .frames import FramesVideoOutput
             return FramesVideoOutput(path, width, height, execute)
         from .ffmpeg import FFmpegVideoOutput
-        return FFmpegVideoOutput(path, width, height, framerate, vcodec,
-                                 execute, replace, safe)
+        return FFmpegVideoOutput(path, width, height, framerate, vcodec, execute, replace)
+
+    @property
+    def output_path(self) -> str | None:
+        return None

@@ -11,30 +11,22 @@ from ..utils import find_unique_path, startfile
 logger = logging.getLogger(__name__)
 
 
-def append_history(output_path): # TODO: remove this?
-    with open("history.log", "a", encoding="utf8") as file:
-        file.write(f"└► {os.path.realpath(output_path)}\n")
-
-
 class FFmpegVideoOutput(VideoOutput):
 
     def __init__(self, path: str, width: int, height: int, framerate: int,
                  vcodec: str = "h264", execute: bool = False,
-                 replace: bool = False, safe: bool = False):
+                 replace: bool = False):
         VideoOutput.__init__(self, width, height)
         self.path = path if replace else find_unique_path(path)
         self.framerate = framerate
         self.vcodec = vcodec
         self.execute = execute
-        self.safe = safe
         self.process = None
 
     def __enter__(self):
         dirname = os.path.dirname(self.path)
         if not os.path.isdir(dirname) and dirname != "":
             os.makedirs(dirname)
-        if self.safe:
-            append_history(self.path)
         logger.debug("Started FFmpeg output to %s", self.path)
         self.process = subprocess.Popen([
             "ffmpeg",
@@ -68,3 +60,7 @@ class FFmpegVideoOutput(VideoOutput):
             self.process.wait()
         if self.execute:
             startfile(self.path)
+
+    @property
+    def output_path(self):
+        return self.path

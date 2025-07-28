@@ -458,7 +458,7 @@ If you set the `-s, --safe` flag, interrupting the processing will create a chec
 Checkpoints allows for resuming computation at a given frame. It contains the accumulator data at the frame it was exported at. This helps for lengthy processings or for handling errors. There are three ways of creating checkpoints: 
 
 - You can specify a frame interval with the `-ce, --checkpoint-every` argument at which exporting a checkpoint file (with `.ckpt.zip` extension).
-- You can export a checkpoint for the last frame by setting the `-cd, --checkpoint-end` argument. This can be used with the control script (TODO: add reference!)
+- You can export a checkpoint for the last frame by setting the `-cd, --checkpoint-end` argument. This can be used with the [control script](extra/control.py) to generate a bitmap alteration image (see [Bitmap Alteration](#bitmap-alteration) section).
 - They can be automatically created with an interruption or error occurs if the `-s, --safe` flag is set (see [Interrupint Processing](#interrupting-processing) section).
 
 Checkpoints files be passed as flow sources, as they contain data about which flow source was used and where to restart computation. Arguments must be passed again to resume computation in the exact same settings.

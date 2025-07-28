@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import logging
 import logging.config
 import logging.handlers
@@ -60,16 +61,6 @@ def render2d(arr: numpy.ndarray, scale: float = 1,
         + numpy.multiply(coeff_m, color_arrs[2])
         + numpy.multiply(coeff_g, color_arrs[3]))
     return numpy.clip(frame, 0, 255).astype(numpy.uint8)
-
-
-def append_history(): # TODO: remove this?
-    import datetime, sys
-    f = lambda s: os.path.realpath(s) if os.path.isfile(s) else s
-    line = " ".join([
-        datetime.datetime.now().isoformat(),
-        *list(map(f, sys.argv))])
-    with open("history.log", "a", encoding="utf8") as file:
-        file.write("\n" + line + "\n")
 
 
 def setup_logging(log_queue: multiprocessing.Queue, level: str):
@@ -213,13 +204,14 @@ def get_secondary_output_path(
 def export_checkpoint(
         config: 'Config',
         cursor: int,
-        accumulator: Accumulator):
+        accumulator: Accumulator,
+        replace: bool):
     output = ZipOutput(
         get_secondary_output_path(
             config.flow_path,
             config.output_path,
             f"_{cursor:05d}.ckpt.zip"),
-            config.replace)
+            replace)
     output.write_meta({
         "config": config.todict(),
         "cursor": cursor,
@@ -275,8 +267,6 @@ class Config:
     cv_config: str | None = None
     flow_filters: str | None = None
     direction: str | Direction = "forward"
-    round_flow: bool = False
-    export_flow: bool = False
     seek_time: float | None = None
     duration_time: float | None = None
     repeat: int = 1
@@ -305,8 +295,6 @@ class Config:
 
     # Output Args
     vcodec: str = "h264"
-    execute: bool = False
-    replace: bool = False
     size: str | tuple[int, int] | None = None
     output_intensity: bool = False
     output_heatmap: bool = False
@@ -314,10 +302,6 @@ class Config:
     render_scale: float = 1
     render_colors: str | tuple[str, ...] | None = None
     render_binary: bool = False
-    checkpoint_every: int | None = None
-    checkpoint_end: bool = False
-    safe: bool = True
-    preview_output: bool = False
 
     # General Args
     seed: int | None = None
@@ -351,6 +335,15 @@ def transfer(
         log_level: str = "DEBUG",
         log_handler: str = "null",
         log_path: pathlib.Path = pathlib.Path("transflow.log"),
+        round_flow: bool = False,
+        export_flow: bool = False,
+        execute: bool = False,
+        replace: bool = False,
+        checkpoint_every: int | None = None,
+        checkpoint_end: bool = False,
+        export_config: bool = True,
+        safe: bool = True,
+        preview_output: bool = False,
         cancel_event: threading.Event | None = None,
         status_queue: multiprocessing.queues.Queue | None = None):
 
@@ -393,9 +386,6 @@ def transfer(
     setup_logging(log_queue, log_level)
     logger = logging.getLogger(__name__)
     logger.debug("Entering transfer function")
-
-    if config.safe:
-        append_history()
 
     metadata_queue = flow_queue = bitmap_queue = flow_process = bitmap_process\
         = flow_output = bs_framerate = bs_length = accumulator = None
@@ -454,7 +444,7 @@ def transfer(
         ckpt_meta = {}
         if config.flow_path.endswith(".ckpt.zip"):
             logger.debug("Flow path is a checkpoint, loading it")
-            import json, pickle, zipfile
+            import pickle, zipfile
             with zipfile.ZipFile(config.flow_path) as archive:
                 with archive.open("meta.json") as file:
                     ckpt_meta = json.loads(file.read().decode())
@@ -480,7 +470,7 @@ def transfer(
         has_output = config.bitmap_path is not None or config.output_intensity or config.output_heatmap\
             or config.output_accumulator
 
-        if not (has_output or config.export_flow or config.checkpoint_end):
+        if not (has_output or export_flow or checkpoint_end):
             warnings.warn("No output or exportation selected")
 
         if isinstance(config.size, str):
@@ -544,10 +534,10 @@ def transfer(
         if fs_width is None or fs_height is None or fs_framerate is None or fs_direction is None:
             raise ValueError("Could not initialize FlowSource metadata")
 
-        if config.export_flow:
+        if export_flow:
             archive_path = get_secondary_output_path(config.flow_path, config.output_path, ".flow.zip")
             logger.debug("Setting up flow output to %s", archive_path)
-            flow_output = NumpyOutput(archive_path, config.replace)
+            flow_output = NumpyOutput(archive_path, replace)
             flow_output.write_meta({
                 "path": config.flow_path,
                 "width": fs_width,
@@ -632,15 +622,15 @@ def transfer(
                 crumble=config.crumble,
                 bitmap_introduction_flags=config.bitmap_introduction_flags)
 
+        export_config = export_config or safe
         if has_output:
             vout_args = (
                 fs_width * fs_width_factor,
                 fs_height * fs_height_factor,
                 bs_framerate if bs_framerate is not None else fs_framerate,
                 config.vcodec,
-                config.execute,
-                config.replace,
-                config.safe
+                execute,
+                replace,
             )
             if isinstance(config.output_path, list) and not config.output_path:
                 config.output_path = None
@@ -649,10 +639,13 @@ def transfer(
                 output_paths += config.output_path
             else:
                 output_paths.append(config.output_path)
-            if config.output_path is not None and config.preview_output:
+            if config.output_path is not None and preview_output:
                 output_paths.append(None)
             for path in output_paths:
                 output = VideoOutput.from_args(path, *vout_args)
+                if export_config and output.output_path is not None:
+                    with pathlib.Path(output.output_path).with_suffix(".config.json").open("w") as file:
+                        json.dump(config.todict(), file)
                 oq = multiprocessing.Queue()
                 oq.cancel_join_thread()
                 output_queues.append(oq)
@@ -689,7 +682,7 @@ def transfer(
                 if fs_width_factor != 1 or fs_height_factor != 1:
                     flow = upscale_flow(flow, fs_width_factor, fs_height_factor)
                 if flow_output is not None:
-                    flow_output.write_array(numpy.round(flow).astype(int) if config.round_flow else flow)
+                    flow_output.write_array(numpy.round(flow).astype(int) if round_flow else flow)
                 accumulator.update(flow, fs_direction)
                 out_frame = None
                 if config.output_intensity:
@@ -708,8 +701,8 @@ def transfer(
                     for oq in output_queues:
                         oq.put(out_frame, timeout=1)
                 cursor += 1
-                if config.checkpoint_every is not None and cursor % config.checkpoint_every == 0:
-                    export_checkpoint(config, cursor, accumulator)
+                if checkpoint_every is not None and cursor % checkpoint_every == 0:
+                    export_checkpoint(config, cursor, accumulator, replace)
                     logger.debug("Exported checkpoint at cursor %d", cursor)
                 pbar.update(1)
                 if status_queue is not None:
@@ -735,8 +728,8 @@ def transfer(
                     logger.debug("A child process has died, exiting main loop")
                     break
         pbar.close()
-        if (exception and config.safe) or config.checkpoint_end:
-            export_checkpoint(config, cursor, accumulator)
+        if (exception and safe) or checkpoint_end:
+            export_checkpoint(config, cursor, accumulator, replace)
             logger.debug("Exported end checkpoint")
         close()
 
