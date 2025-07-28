@@ -12,22 +12,22 @@ class Config:
 
     def __init__(self,
             flow_path: str,
-            bitmap_path: str | None,
-            output_path: str | list[str] | None,
-            extra_flow_paths: list[str] | None,
+            bitmap_path: str | None = None,
+            output_path: str | list[str] | None = None,
+            extra_flow_paths: list[str] | None = None,
             flows_merging_function: str = "first",
             use_mvs: bool = False,
             mask_path: str | None = None,
             kernel_path: str | None = None,
             cv_config: str | None = None,
             flow_filters: str | None = None,
-            direction: str | Direction = "forward",
+            direction: str | int | Direction = "forward",
             seek_time: float | str | None = None,
             duration_time: float | str | None = None,
             to_time: float | str | None = None,
             repeat: int = 1,
             lock_expr: str | None = None,
-            lock_mode: str | LockMode = LockMode.STAY,
+            lock_mode: str | int | LockMode = LockMode.STAY,
             bitmap_seek_time: float | str | None = None,
             bitmap_alteration_path: str | None = None,
             bitmap_repeat: int = 1,
@@ -45,12 +45,12 @@ class Config:
             crumble: bool = False,
             bitmap_introduction_flags: int = 1,
             vcodec: str = "h264",
-            size: str | tuple[int, int] | None = None,
+            size: str | tuple[int, int] | list[int] | None = None,
             output_intensity: bool = False,
             output_heatmap: bool = False,
             output_accumulator: bool = False,
             render_scale: float = 1,
-            render_colors: str | tuple[str, ...] | None = None,
+            render_colors: str | tuple[str, ...] | list[str] | None = None,
             render_binary: bool = False,
             seed: int | None = None,
             ):
@@ -111,17 +111,70 @@ class Config:
         if isinstance(size, str):
             size_split = re.split(r"[^\d]", size)[0]
             size = (int(size_split[0]), int(size_split[1]))
+        if isinstance(size, list):
+            size = (size[0], size[1])
         self.size: tuple[int, int] | None = size
         self.output_intensity: bool = output_intensity
         self.output_heatmap: bool = output_heatmap
         self.output_accumulator: bool = output_accumulator
         self.render_scale: float = render_scale
-        self.render_colors: tuple[str, ...] | None = tuple(render_colors.split(",")) if isinstance(render_colors, str) else render_colors
+        if isinstance(render_colors, str):
+            render_colors = tuple(render_colors.split(","))
+        elif isinstance(render_colors, list):
+            render_colors = tuple(render_colors)
+        self.render_colors: tuple[str, ...] | None = render_colors
         self.render_binary: bool = render_binary
         
         # General Args
         self.seed: int = random.randint(0, 2**32-1) if seed is None else seed
 
+    @classmethod
+    def fromdict(cls, d: dict):
+        return cls(
+            d["flow_path"],
+            bitmap_path=d.get("bitmap_path", None),
+            output_path=d.get("output_path", None),
+            extra_flow_paths=d.get("extra_flow_paths", None),
+            flows_merging_function=d.get("flows_merging_function", "first"),
+            use_mvs=d.get("use_mvs", False),
+            mask_path=d.get("mask_path", None),
+            kernel_path=d.get("kernel_path", None),
+            cv_config=d.get("cv_config", None),
+            flow_filters=d.get("flow_filters", None),
+            direction=d.get("direction", "forward"),
+            seek_time=d.get("seek_time", None),
+            duration_time=d.get("duration_time", None),
+            to_time=d.get("to_time", None),
+            repeat=d.get("repeat", 1),
+            lock_expr=d.get("lock_expr", None),
+            lock_mode=d.get("lock_mode", LockMode.STAY),
+            bitmap_seek_time=d.get("bitmap_seek_time", None),
+            bitmap_alteration_path=d.get("bitmap_alteration_path", None),
+            bitmap_repeat=d.get("bitmap_repeat", 1),
+            reset_mode=d.get("reset_mode", "off"),
+            reset_alpha=d.get("reset_alpha", .9),
+            reset_mask_path=d.get("reset_mask_path", None),
+            heatmap_mode=d.get("heatmap_mode", "discrete"),
+            heatmap_args=d.get("heatmap_args", "0:4:2:1"),
+            heatmap_reset_threshold=d.get("heatmap_reset_threshold", None),
+            acc_method=d.get("acc_method", "map"),
+            accumulator_background=d.get("accumulator_background", "ffffff"),
+            stack_composer=d.get("stack_composer", "top"),
+            initial_canvas=d.get("initial_canvas", None),
+            bitmap_mask_path=d.get("bitmap_mask_path", None),
+            crumble=d.get("crumble",False),
+            bitmap_introduction_flags=d.get("bitmap_introduction_flags", 1),
+            vcodec=d.get("vcodec", "h264"),
+            size=d.get("size", None),
+            output_intensity=d.get("output_intensity", False),
+            output_heatmap=d.get("output_heatmap", False),
+            output_accumulator=d.get("output_accumulator", False),
+            render_scale=d.get("render_scale", 1),
+            render_colors=d.get("render_colors", None),
+            render_binary=d.get("render_binary", False),
+            seed=d.get("seed", None),
+        )
+    
     def todict(self) -> dict:
         return {
             "timestamp": time.time(),

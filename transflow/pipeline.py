@@ -137,7 +137,7 @@ class OutputProcess(multiprocessing.Process):
 
 
 class Pipeline:
-    
+
     @dataclasses.dataclass
     class Status:
 
@@ -158,7 +158,7 @@ class Pipeline:
     }
 
     def __init__(self,
-            config: Config,
+            cfg: Config,
             log_level: str = "DEBUG",
             log_handler: str = "null",
             log_path: pathlib.Path = pathlib.Path("transflow.log"),
@@ -173,7 +173,7 @@ class Pipeline:
             preview_output: bool = False,
             cancel_event: threading.Event | None = None,
             status_queue: multiprocessing.queues.Queue | None = None):
-        self.config = config
+        self.config = cfg
         self.log_level = log_level
         self.log_handler = log_handler
         self.log_path = log_path
@@ -201,7 +201,7 @@ class Pipeline:
         self.extra_flow_sources: list[FlowSource.Builder] = []
         self.extra_flow_queues: list[multiprocessing.Queue] = []
         self.extra_flow_processes: list[SourceProcess] = []
-        self.merge_flows = self.FLOW_MERGING_FUNCTIONS[config.flows_merging_function]
+        self.merge_flows = self.FLOW_MERGING_FUNCTIONS[cfg.flows_merging_function]
         self.flow_output: NumpyOutput | None = None
         self.accumulator: Accumulator | None = None
         self.ckpt_meta: dict = {}
@@ -221,29 +221,28 @@ class Pipeline:
             or self.config.output_intensity\
             or self.config.output_heatmap\
             or self.config.output_accumulator
-    
+
     def export_checkpoint(self, cursor: int):
         output = ZipOutput(self.config.get_secondary_output_path(f"_{cursor:05d}.ckpt.zip"), self.replace)
         output.write_meta({
             "config": self.config.todict(),
             "cursor": cursor,
+            "framerate": self.fs_framerate,
             "timestamp": time.time(),
         })
         output.write_object("accumulator.bin", self.accumulator)
         output.close()
         self.logger.debug("Exported checkpoint at cursor %d", cursor)
-        
-    def get_expected_length(self, start_cursor: int) -> int | None:
-        expected_length = None
+
+    @property
+    def expected_length(self) -> int | None:
         if self.fs_length is not None and self.bs_length is not None:
-            expected_length = min(self.fs_length, self.bs_length)
-        elif self.fs_length is not None:
-            expected_length = self.fs_length
-        elif self.bs_length is not None:
-            expected_length = self.bs_length
-        if expected_length is not None:
-            expected_length -= start_cursor
-        return expected_length
+            return min(self.fs_length, self.bs_length)
+        if self.fs_length is not None:
+            return self.fs_length
+        if self.bs_length is not None:
+            return self.bs_length
+        return None
 
     def _setup_logging(self):
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -292,8 +291,13 @@ class Pipeline:
                 self.ckpt_meta = json.loads(file.read().decode())
             with archive.open("accumulator.bin") as file:
                 self.accumulator = pickle.load(file)
-        self.config.flow_path = self.ckpt_meta["config"]["flow_path"]
-        self.config.seed = self.ckpt_meta["config"]["seed"]
+        self.config = Config.fromdict(self.ckpt_meta["config"])
+        self.config.seek_time += self.ckpt_meta["cursor"] / self.ckpt_meta["framerate"]
+        if self.config.duration_time is not None:
+            self.config.duration_time -= self.ckpt_meta["cursor"] / self.ckpt_meta["framerate"]
+        # TODO: allow ignoring checkpoint config
+        # self.config.flow_path = self.ckpt_meta["config"]["flow_path"]
+        # self.config.seed = self.ckpt_meta["config"]["seed"]
 
     def _setup_flow_sources(self):
         assert self.metadata_queue is not None
@@ -450,6 +454,7 @@ class Pipeline:
             self.config.vcodec,
             self.execute,
             self.replace,
+            self.ckpt_meta.get("cursor", 0)
         )
         output_paths: list[str | None] = []
         if isinstance(self.config.output_path, list):
@@ -458,15 +463,17 @@ class Pipeline:
             output_paths.append(self.config.output_path)
         if self.config.output_path is not None and self.preview_output:
             output_paths.append(None)
-        for path in output_paths:
-            self.output = VideoOutput.from_args(path, *vout_args)
-            if self.export_config and self.output.output_path is not None:
-                with pathlib.Path(self.output.output_path).with_suffix(".config.json").open("w") as file:
+        for i, path in enumerate(output_paths):
+            output = VideoOutput.from_args(path, *vout_args)
+            if output.output_path is not None:
+                self.logger.debug("Output no. %d will write to %s", i, output.output_path)
+            if self.export_config and output.output_path is not None:
+                with pathlib.Path(output.output_path).with_suffix(".config.json").open("w") as file:
                     json.dump(self.config.todict(), file)
             oq = multiprocessing.Queue()
             oq.cancel_join_thread()
             self.output_queues.append(oq)
-            op = OutputProcess(self.output, oq, self.log_queue, self.log_level)
+            op = OutputProcess(output, oq, self.log_queue, self.log_level)
             op.start()
             self.logger.debug("Started output process to %s", path)
             self.output_processes.append(op)
@@ -487,7 +494,7 @@ class Pipeline:
         if self.flow_output is not None:
             self.flow_output.write_array(numpy.round(flow).astype(int) if self.round_flow else flow)
         return flow
-    
+
     def _update_output(self, flow: numpy.ndarray) -> bool:
         assert self.accumulator is not None
         out_frame = None
@@ -512,16 +519,15 @@ class Pipeline:
         assert self.flow_process is not None
         assert self.accumulator is not None
         assert self.fs_direction is not None
-        
+
         exception = False
         cursor: int = self.ckpt_meta.get("cursor", 0)
         if not isinstance(cursor, int):
             raise ValueError("Cursor is not an integer. Is the checkpoint valid?")
-        expected_length = self.get_expected_length(cursor)
-        self.logger.debug("Expected length: %s", expected_length)       
+        self.logger.debug("Expected length: %s", self.expected_length)
 
         start_t = time.time()
-        pbar = tqdm.tqdm(total=expected_length, unit="frame", disable=self.status_queue is not None)
+        pbar = tqdm.tqdm(total=self.expected_length, unit="frame", disable=self.status_queue is not None)
         while True:
             if self.cancel_event is not None and self.cancel_event.is_set():
                 self.logger.debug("Received cancel event, breaking main loop")
@@ -538,7 +544,7 @@ class Pipeline:
                     self.export_checkpoint(cursor)
                 pbar.update(1)
                 if self.status_queue is not None:
-                    self.status_queue.put(Pipeline.Status(cursor, expected_length, time.time() - start_t, None))
+                    self.status_queue.put(Pipeline.Status(cursor, self.expected_length, time.time() - start_t, None))
             except (queue.Empty, queue.Full):
                 pass
             except KeyboardInterrupt:
@@ -550,7 +556,7 @@ class Pipeline:
                 self.logger.error("Main loop received an exception: %s", err)
                 traceback.print_exc()
                 if self.status_queue is not None:
-                    self.status_queue.put(Pipeline.Status(cursor, expected_length, time.time() - start_t, str(err)))
+                    self.status_queue.put(Pipeline.Status(cursor, self.expected_length, time.time() - start_t, str(err)))
                 break
             finally:
                 if (not self.flow_process.is_alive())\

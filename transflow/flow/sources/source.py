@@ -21,12 +21,14 @@ class FlowSource:
         BACKWARD = 1 # present to past
 
         @classmethod
-        def from_arg(cls, arg: "str | FlowSource.Direction | None"):
+        def from_arg(cls, arg: "str | int | FlowSource.Direction | None"):
             if arg is None:
                 logger.debug("Setting flow direction to default (FORWARD)")
                 return FlowSource.Direction.FORWARD
             if isinstance(arg, FlowSource.Direction):
                 return arg
+            if isinstance(arg, int):
+                return FlowSource.Direction(arg)
             if arg == "forward":
                 return FlowSource.Direction.FORWARD
             if arg == "backward":
@@ -39,11 +41,13 @@ class FlowSource:
         SKIP = 1
 
         @classmethod
-        def from_arg(cls, arg: "str | FlowSource.LockMode | None"):
+        def from_arg(cls, arg: "str | int | FlowSource.LockMode | None"):
             if arg is None:
                 return FlowSource.LockMode.STAY
             if isinstance(arg, FlowSource.LockMode):
                 return arg
+            if isinstance(arg, int):
+                return FlowSource.LockMode(arg)
             if arg == "stay":
                 return FlowSource.LockMode.STAY
             if arg == "skip":

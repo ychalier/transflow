@@ -14,18 +14,17 @@ logger = logging.getLogger(__name__)
 
 class FramesVideoOutput(VideoOutput):
 
-    def __init__(self, template: str, width: int, height: int, execute: bool = False):
+    def __init__(self, template: str, width: int, height: int, initial_counter: int = 0, execute: bool = False):
         VideoOutput.__init__(self, width, height)
         self.template = template
         self.directory = pathlib.Path(self.template).parent
         self.execute = execute
-        self.counter = 0
+        self.counter = initial_counter
 
     def __enter__(self):
         if not os.path.isdir(self.directory) and self.directory != "":
             os.makedirs(self.directory)
         logger.debug("Started frames output to %s", self.directory)
-        self.counter = 0
         return self
 
     def feed(self, frame: numpy.ndarray):

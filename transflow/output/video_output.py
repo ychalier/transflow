@@ -26,7 +26,8 @@ class VideoOutput:
     @classmethod
     def from_args(cls, path: str | None, width: int, height: int,
                   framerate: float | None = None, vcodec: str = "h264",
-                  execute: bool = False, replace: bool = False):
+                  execute: bool = False, replace: bool = False,
+                  initial_counter: int = 0):
         if path is None:
             from .cv import CvVideoOutput
             return CvVideoOutput(width, height)
@@ -54,7 +55,7 @@ class VideoOutput:
         m = re.search(r"%(\d+)?d", path)
         if m:
             from .frames import FramesVideoOutput
-            return FramesVideoOutput(path, width, height, execute)
+            return FramesVideoOutput(path, width, height, initial_counter, execute)
         from .ffmpeg import FFmpegVideoOutput
         return FFmpegVideoOutput(path, width, height, framerate, vcodec, execute, replace)
 
