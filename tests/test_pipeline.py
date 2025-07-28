@@ -74,7 +74,7 @@ class TestPipeline(unittest.TestCase):
         transflow.pipeline.transfer(transflow.pipeline.Config(
             "assets/River.mp4",
             "assets/Deer.jpg",
-            (output_dir / "1.mp4").as_posix(),
+            (output_dir / "1-%d.png").as_posix(),
             None,
             duration_time=duration_one,
             checkpoint_every=ckpt,
@@ -82,12 +82,14 @@ class TestPipeline(unittest.TestCase):
         while not status_queue.empty():
             status: transflow.pipeline.Status = status_queue.get()
             self.assertIsNone(status.error)
-        ckpt_path = output_dir / f"1_{ckpt:05d}.ckpt.zip"
+        self.assertEqual(len(list(output_dir.glob("1-*.png"))), ckpt + 1)
+        self.assertTrue((output_dir / f"1-{ckpt}.png").is_file())
+        ckpt_path = output_dir / f"1-%d_{ckpt:05d}.ckpt.zip"
         self.assertTrue(ckpt_path.is_file())
         transflow.pipeline.transfer(transflow.pipeline.Config(
             ckpt_path.as_posix(),
             "assets/Deer.jpg",
-            (output_dir / "2.mp4").as_posix(),
+            (output_dir / "2-%d.png").as_posix(),
             None,
             duration_time=duration_two,
         ), status_queue=status_queue, log_level="CRITICAL")
@@ -98,10 +100,15 @@ class TestPipeline(unittest.TestCase):
                 self.assertEqual(status.cursor, ckpt + 1)
             first_status = False
             self.assertIsNone(status.error)
-        self.assertTrue((output_dir / "2.mp4").is_file())
+        self.assertEqual(len(list(output_dir.glob("2-*.png"))), duration_two * framerate)
+        self.assertTrue((output_dir / f"2-0.png").is_file())
         status_queue.close()
-        # TODO: check the amount of frames produced
-        # TODO: check that the last frame of 1 is the same as the first of 2
+        import numpy
+        import PIL.Image
+        img_one = numpy.array(PIL.Image.open(output_dir / f"1-{ckpt}.png"))
+        img_two = numpy.array(PIL.Image.open(output_dir / f"2-0.png"))
+        diff = float(numpy.average(numpy.abs(img_one - img_two)))
+        self.assertEqual(diff, 0)
         shutil.rmtree(output_dir)
 
 

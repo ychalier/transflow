@@ -72,3 +72,4 @@ class TestOutput(unittest.TestCase):
             self._test_output(output)
         self.assertTrue(directory.is_dir())
         self.assertEqual(len(list(directory.glob("*.png"))), 1)
+        shutil.rmtree(directory)
