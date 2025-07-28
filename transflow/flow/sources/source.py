@@ -150,6 +150,7 @@ class FlowSource:
 
             if self.base_length is not None and self.base_length <= 0:
                 self.base_length = None
+            logger.debug("Flow source Base length: %s", self.base_length)
 
             self.is_stream = self.base_length == None
             if self.is_stream and self.repeat > 1:
@@ -158,18 +159,21 @@ class FlowSource:
             if self.is_stream and self.seek_time is not None and self.seek_time > 0:
                 warnings.warn("Flow source is a stream, seek time is ignored!")
                 self.seek_time = None
+            logger.debug("Flow source Is stream: %s", self.is_stream)
 
             if self.seek_time is not None and not self.is_stream:
                 self.start_frame = int(self.seek_time * self.framerate)
             else:
                 self.start_frame = 0
+            logger.debug("Flow source Start frame: %d", self.start_frame)
 
             if self.duration_time is not None:
-                self.end_frame = self.start_frame + int(self.duration_time * self.framerate)
+                self.end_frame = self.start_frame + int(round(self.duration_time * self.framerate, 3)) # rounding before flooring to avoid float inaccuracies
                 if self.base_length is not None:
                     self.end_frame = min(self.end_frame, self.base_length)
             elif self.base_length is not None:
                 self.end_frame = self.base_length
+            logger.debug("Flow source End frame: %s", self.end_frame)
 
             if self.repeat == 0:
                 self.length = None
@@ -177,6 +181,7 @@ class FlowSource:
                 self.length = self.end_frame
             else:
                 self.length = self.repeat * (self.end_frame - self.start_frame)
+            logger.debug("Flow source Length: %s", self.length)
 
             if self.length is not None and self.lock_mode == FlowSource.LockMode.STAY and self.lock_expr_stay is not None:
                 for _, lock_duration in self.lock_expr_stay:

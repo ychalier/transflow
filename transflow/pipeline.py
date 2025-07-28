@@ -286,17 +286,17 @@ class Pipeline:
         self.ckpt_meta = {}
         if not self.config.flow_path.endswith(".ckpt.zip"):
             return
-        self.logger.debug("Flow path is a checkpoint, loading it")
         with zipfile.ZipFile(self.config.flow_path) as archive:
             with archive.open("meta.json") as file:
                 self.ckpt_meta = json.loads(file.read().decode())
             with archive.open("accumulator.bin") as file:
                 self.accumulator = pickle.load(file)
         self.config = Config.fromdict(self.ckpt_meta["config"])
+        self.logger.debug("Flow path is a checkpoint, restarting from frame %d.", self.ckpt_meta["cursor"])
         self.config.seek_time += self.ckpt_meta["cursor"] / self.ckpt_meta["framerate"]
         if self.config.duration_time is not None:
             self.config.duration_time -= self.ckpt_meta["cursor"] / self.ckpt_meta["framerate"]
-        # TODO: allow ignoring checkpoint config
+        # TODO: allow overriding checkpoint config
         # self.config.flow_path = self.ckpt_meta["config"]["flow_path"]
         # self.config.seed = self.ckpt_meta["config"]["seed"]
 

@@ -46,7 +46,16 @@ class TestEnvironment:
         return pipeline, statuses
     
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        shutil.rmtree(self.folder)
+        # shutil.rmtree(self.folder) # TODO: un-comment this
+        pass
+
+
+def compute_image_diff(left: pathlib.Path, right: pathlib.Path) -> float:
+    import numpy
+    import PIL.Image
+    img_one = numpy.array(PIL.Image.open(left))
+    img_two = numpy.array(PIL.Image.open(right))
+    return float(numpy.average(numpy.abs(img_one - img_two)))
 
 
 class TestPipeline(unittest.TestCase):
@@ -76,57 +85,29 @@ class TestPipeline(unittest.TestCase):
             duration_time=.2)
 
     def test_checkpoint(self):
-        return # TODO: add length / duration tests and fix this
-        # TODO: make the test environment easier to use
-        import shutil
-        from pathlib import Path
-        output_dir = Path(tempfile.gettempdir()) / "test-ckpt"
-        if output_dir.is_dir():
-            shutil.rmtree(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=False)
-        status_queue = multiprocessing.Queue()
         ckpt = 5
         framerate = 50
-        Pipeline(
-            Config(
-                "assets/River.mp4",
-                "assets/Deer.jpg",
-                (output_dir / "1-%d.png").as_posix(),
-                None,
-                duration_time=(ckpt + 1) / framerate,
-            ),
-            checkpoint_every=ckpt,
-            status_queue=status_queue,
-            log_handler="file",
-            safe=False,
-            ).run()
-        while not status_queue.empty():
-            status: Pipeline.Status = status_queue.get()
-            self.assertIsNone(status.error)
-        self.assertEqual(len(list(output_dir.glob("1-*.png"))), ckpt + 1)
-        for i in range(ckpt + 1):
-            self.assertTrue((output_dir / f"1-{i}.png").is_file())
-            os.rename(output_dir / f"1-{i}.png", output_dir / f"2-{i}.png")
-        ckpt_path = output_dir / f"1-%d_{ckpt:05d}.ckpt.zip"
-        self.assertTrue(ckpt_path.is_file())
-        Pipeline(Config(ckpt_path.as_posix()), status_queue=status_queue, safe=False, log_handler="file").run()
-        first_status = True
-        while not status_queue.empty():
-            status: Pipeline.Status = status_queue.get()
-            if first_status:
-                self.assertEqual(status.cursor, ckpt + 1)
-            first_status = False
-            self.assertIsNone(status.error)
-        self.assertEqual(len(list(output_dir.glob("1-*.png"))), 1)
-        self.assertTrue((output_dir / f"1-{ckpt}.png").is_file())
-        status_queue.close()
-        import numpy
-        import PIL.Image
-        img_one = numpy.array(PIL.Image.open(output_dir / f"1-{ckpt}.png"))
-        img_two = numpy.array(PIL.Image.open(output_dir / f"2-{ckpt}.png"))
-        diff = float(numpy.average(numpy.abs(img_one - img_two)))
-        self.assertEqual(diff, 0)
-        shutil.rmtree(output_dir)
+        with TestEnvironment() as env:
+            pipeline, _ = env.run(
+                Config("assets/River.mp4", "assets/Deer.jpg", (env.folder / "1-%d.png").as_posix(), duration_time=(ckpt + 1)/framerate),
+                safe=False,
+                checkpoint_every=ckpt)
+            self.assertEqual(pipeline.cursor, ckpt + 1)
+            self.assertEqual(pipeline.expected_length, ckpt + 1)
+            self.assertEqual(len(list(env.folder.glob("1-*.png"))), ckpt + 1)
+            ckpt_path = env.folder / f"1-%d_{ckpt:05d}.ckpt.zip"
+            self.assertTrue(ckpt_path.is_file())
+            for i in range(ckpt + 1):
+                self.assertTrue((env.folder / f"1-{i}.png").is_file())
+                os.rename(env.folder / f"1-{i}.png", env.folder / f"2-{i}.png")
+            pipeline, _ = env.run(
+                Config(ckpt_path.as_posix()),
+                safe=False,
+                checkpoint_every=ckpt)
+            self.assertEqual(pipeline.cursor, ckpt + 1)
+            self.assertEqual(pipeline.expected_length, 1)
+            self.assertEqual(len(list(env.folder.glob("1-*.png"))), 1)
+            self.assertEqual(compute_image_diff(env.folder / f"1-{ckpt}.png", env.folder / f"2-{ckpt}.png"), 0)
 
     def test_config_io(self):
         config = Config("assets/River.mp4", "assets/Deer.jpg", "out/Test.mp4")
