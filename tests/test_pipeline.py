@@ -8,8 +8,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-import transflow.pipeline
-import transflow.config
+from transflow.pipeline import Pipeline, Config
 
 
 def get_video_duration(path: pathlib.Path) -> float:
@@ -30,15 +29,15 @@ class TestPipeline(unittest.TestCase):
             os.remove(output_path)
         self.assertFalse(os.path.isfile(output_path))
         status_queue = multiprocessing.Queue()
-        transflow.pipeline.transfer(transflow.config.Config(
+        Pipeline(Config(
             flow_path,
             bitmap_path,
             output_path,
             None,
             **kwargs,
-        ), status_queue=status_queue, log_level="CRITICAL")
+        ), status_queue=status_queue, log_level="CRITICAL").run()
         while not status_queue.empty():
-            status: transflow.pipeline.Pipeline.Status = status_queue.get()
+            status: Pipeline.Status = status_queue.get()
             self.assertIsNone(status.error)
         status_queue.close()
         self.assertTrue(os.path.isfile(output_path))
@@ -74,30 +73,30 @@ class TestPipeline(unittest.TestCase):
         framerate = 50
         duration_one = (ckpt + 1) / framerate
         duration_two = .2
-        transflow.pipeline.transfer(transflow.config.Config(
+        Pipeline(Config(
             "assets/River.mp4",
             "assets/Deer.jpg",
             (output_dir / "1-%d.png").as_posix(),
             None,
             duration_time=duration_one,
-        ), checkpoint_every=ckpt, status_queue=status_queue, log_level="CRITICAL")
+        ), checkpoint_every=ckpt, status_queue=status_queue, log_level="CRITICAL").run()
         while not status_queue.empty():
-            status: transflow.pipeline.Pipeline.Status = status_queue.get()
+            status: Pipeline.Status = status_queue.get()
             self.assertIsNone(status.error)
         self.assertEqual(len(list(output_dir.glob("1-*.png"))), ckpt + 1)
         self.assertTrue((output_dir / f"1-{ckpt}.png").is_file())
         ckpt_path = output_dir / f"1-%d_{ckpt:05d}.ckpt.zip"
         self.assertTrue(ckpt_path.is_file())
-        transflow.pipeline.transfer(transflow.config.Config(
+        Pipeline(Config(
             ckpt_path.as_posix(),
             "assets/Deer.jpg",
             (output_dir / "2-%d.png").as_posix(),
             None,
             duration_time=duration_two,
-        ), status_queue=status_queue, log_level="CRITICAL")
+        ), status_queue=status_queue, log_level="CRITICAL").run()
         first_status = True
         while not status_queue.empty():
-            status: transflow.pipeline.Pipeline.Status = status_queue.get()
+            status: Pipeline.Status = status_queue.get()
             if first_status:
                 self.assertEqual(status.cursor, ckpt + 1)
             first_status = False

@@ -194,8 +194,8 @@ def main():
         from .gui import start_gui
         start_gui()
         return
-    from .pipeline import transfer, Config
-    transfer(Config(
+    from .pipeline import Pipeline, Config
+    Pipeline(Config(
         args.flow,
         args.bitmap,
         args.output,
@@ -250,4 +250,4 @@ def main():
         replace=args.replace,
         round_flow=args.round_flow,
         export_flow=args.export_flow,
-    )
+    ).run()

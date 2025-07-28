@@ -97,12 +97,9 @@ class WebsocketServer(threading.Thread):
             if filename != "":
                 self._broadcast(f"FILE {args['key']} {filename}")
         elif cmd == "GENERATE":
-            from ..pipeline import transfer, Config
-            from ..utils import parse_timestamp
+            from ..pipeline import Pipeline, Config
             print("Job args:")
             print(args)
-            seek_time = parse_timestamp(args["flowSource"]["seekTime"]) if args["flowSource"]["seekTime"] is not None else 0
-            duration_time = parse_timestamp(args["flowSource"]["durationTime"])
             bitmap_path = None
             if args["bitmapSource"]["type"] == "file":
                 bitmap_path = args["bitmapSource"]["file"]
@@ -153,10 +150,10 @@ class WebsocketServer(threading.Thread):
                 render_scale=args["output"]["renderScale"],
                 render_colors=args["output"]["renderColors"],
                 render_binary=args["output"]["renderBinary"],
-                seek_time=seek_time,
-                duration_time=duration_time,
+                seek_time=args["flowSource"]["seekTime"],
+                duration_time=args["flowSource"]["durationTime"],
                 repeat=args["flowSource"]["repeat"],
-                bitmap_seek_time=parse_timestamp(args["bitmapSource"]["seekTime"]),
+                bitmap_seek_time=args["bitmapSource"]["seekTime"],
                 bitmap_repeat=args["bitmapSource"]["repeat"],
                 bitmap_introduction_flags=args["accumulator"]["bitmapIntroductionFlags"],
                 lock_mode=args["flowSource"]["lockMode"],
@@ -164,20 +161,21 @@ class WebsocketServer(threading.Thread):
             )
             self.job_cancel_event = threading.Event()
             status_queue = multiprocessing.Queue(maxsize=1)
-            self.job = threading.Thread(
-                target=transfer,
-                args=[config],
-                kwargs={
-                    "execute": False,
-                    "replace": False,
-                    "safe": True,
-                    "preview_output": False,
-                    "round_flow": args["flowSource"]["roundFlow"],
-                    "export_flow": args["flowSource"]["exportFlow"],
-                    "checkpoint_every": args["output"]["checkpointEvery"],
-                    "checkpoint_end": args["output"]["checkpointEnd"],
-                    "cancel_event": self.job_cancel_event,
-                    "status_queue": status_queue})
+            pipeline = Pipeline(
+                config,
+                execute=False,
+                replace=False,
+                safe=True,
+                preview_output=False,
+                round_flow=args["flowSource"]["roundFlow"],
+                export_flow=args["flowSource"]["exportFlow"],
+                checkpoint_every=args["output"]["checkpointEvery"],
+                checkpoint_end=args["output"]["checkpointEnd"],
+                cancel_event=self.job_cancel_event,
+                status_queue=status_queue)
+            def transfer(pipe: Pipeline):
+                pipe.run()
+            self.job = threading.Thread(target=transfer, args=[pipeline])
             self.job.start()
             self._broadcast(f"PREVIEW http://{self.host}:{self.mjpeg_port}/transflow")
             self.job_monitoring = threading.Thread(target=monitor_job, args=(self, args["output"]["file"], status_queue))

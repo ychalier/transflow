@@ -278,7 +278,7 @@ def cupy_launch(strFunction, strKernel):
 
 class _FunctionCorrelation(torch.autograd.Function):
     @staticmethod
-    def forward(self, one, two, intStride):
+    def forward(self, one, two, intStride): # type: ignore
         rbot0 = one.new_zeros([one.shape[0], one.shape[2] + (6 * intStride),
                               one.shape[3] + (6 * intStride), one.shape[1]])
         rbot1 = one.new_zeros([one.shape[0], one.shape[2] + (6 * intStride),
@@ -333,7 +333,7 @@ class _FunctionCorrelation(torch.autograd.Function):
         return output
 
     @staticmethod
-    def backward(self, gradOutput):
+    def backward(self, gradOutput): # type: ignore
         one, two, rbot0, rbot1 = self.saved_tensors
         gradOutput = gradOutput.contiguous()
         assert (gradOutput.is_cuda == True)
@@ -489,14 +489,14 @@ class Network(torch.nn.Module):
                 tenFeaturesOne = self.netFeat(tenFeaturesOne)
                 tenFeaturesTwo = self.netFeat(tenFeaturesTwo)
                 if tenFlow is not None:
-                    tenFlow = self.netUpflow(tenFlow)
+                    tenFlow = self.netUpflow(tenFlow) # type: ignore
                 if tenFlow is not None:
                     tenFeaturesTwo = backwarp(tenInput=tenFeaturesTwo, tenFlow=tenFlow * self.fltBackwarp)
                 if self.netUpcorr is None:
-                    tenCorrelation = torch.nn.functional.leaky_relu(input=FunctionCorrelation(tenOne=tenFeaturesOne, tenTwo=tenFeaturesTwo, intStride=1), negative_slope=0.1, inplace=False)
+                    tenCorrelation = torch.nn.functional.leaky_relu(input=FunctionCorrelation(tenOne=tenFeaturesOne, tenTwo=tenFeaturesTwo, intStride=1), negative_slope=0.1, inplace=False)  # type: ignore
                 elif self.netUpcorr is not None:
-                    tenCorrelation = self.netUpcorr(torch.nn.functional.leaky_relu(input=FunctionCorrelation(tenOne=tenFeaturesOne, tenTwo=tenFeaturesTwo, intStride=2), negative_slope=0.1, inplace=False))
-                return (tenFlow if tenFlow is not None else 0.0) + self.netMain(tenCorrelation)
+                    tenCorrelation = self.netUpcorr(torch.nn.functional.leaky_relu(input=FunctionCorrelation(tenOne=tenFeaturesOne, tenTwo=tenFeaturesTwo, intStride=2), negative_slope=0.1, inplace=False)) # type: ignore
+                return (tenFlow if tenFlow is not None else 0.0) + self.netMain(tenCorrelation) # type: ignore
 
         class Subpixel(torch.nn.Module):
             def __init__(self, intLevel):
@@ -604,7 +604,7 @@ class Network(torch.nn.Module):
             tenFlow = self.netMatching[intLevel](tenOne[intLevel], tenTwo[intLevel], tenFeaturesOne[intLevel], tenFeaturesTwo[intLevel], tenFlow)
             tenFlow = self.netSubpixel[intLevel](tenOne[intLevel], tenTwo[intLevel], tenFeaturesOne[intLevel], tenFeaturesTwo[intLevel], tenFlow)
             tenFlow = self.netRegularization[intLevel](tenOne[intLevel], tenTwo[intLevel], tenFeaturesOne[intLevel], tenFeaturesTwo[intLevel], tenFlow)
-        return tenFlow * 20.0
+        return tenFlow * 20.0 # type: ignore
 
 
 def estimate(netNetwork, tenOne, tenTwo):

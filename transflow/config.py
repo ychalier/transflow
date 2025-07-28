@@ -8,8 +8,6 @@ from .flow import Direction, LockMode
 from .utils import parse_timestamp
 
 
-
-
 class Config:
 
     def __init__(self,

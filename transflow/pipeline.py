@@ -633,7 +633,3 @@ class Pipeline:
             traceback.print_exc()
         finally:
             self._close()
-
-
-def transfer(*args, **kwargs):
-    Pipeline(*args, **kwargs).run()
