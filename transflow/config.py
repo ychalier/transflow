@@ -12,8 +12,6 @@ class Config:
 
     def __init__(self,
             flow_path: str,
-            bitmap_path: str | None = None,
-            output_path: str | list[str] | None = None,
             extra_flow_paths: list[str] | None = None,
             flows_merging_function: str = "first",
             use_mvs: bool = False,
@@ -28,22 +26,24 @@ class Config:
             repeat: int = 1,
             lock_expr: str | None = None,
             lock_mode: str | int | LockMode = LockMode.STAY,
+            bitmap_path: str | None = None,
             bitmap_seek_time: float | str | None = None,
             bitmap_alteration_path: str | None = None,
             bitmap_repeat: int = 1,
+            acc_method: str = "map",
             reset_mode: str = "off",
             reset_alpha: float = .9,
             reset_mask_path: str | None = None,
             heatmap_mode: str = "discrete",
             heatmap_args: str = "0:4:2:1",
             heatmap_reset_threshold: float | None = None,
-            acc_method: str = "map",
             accumulator_background: str = "ffffff",
             stack_composer: str = "top",
             initial_canvas: str | None = None,
             bitmap_mask_path: str | None = None,
             crumble: bool = False,
             bitmap_introduction_flags: int = 1,
+            output_path: str | list[str] | None = None,
             vcodec: str = "h264",
             size: str | tuple[int, int] | list[int] | None = None,
             output_intensity: bool = False,
@@ -54,14 +54,10 @@ class Config:
             render_binary: bool = False,
             seed: int | None = None,
             ):
-        
-        # Positional Args
-        self.flow_path: str = flow_path
-        self.bitmap_path: str | None = bitmap_path
-        self.output_path: str | list[str] | None = None if (isinstance(output_path, list) and not output_path) else output_path
-        self.extra_flow_paths: list[str] = [] if extra_flow_paths is None else extra_flow_paths
-        
+
         # Flow Args
+        self.flow_path: str = flow_path
+        self.extra_flow_paths: list[str] = [] if extra_flow_paths is None else extra_flow_paths
         self.flows_merging_function: str = flows_merging_function
         if not self.extra_flow_paths:
             self.flows_merging_function = "first"
@@ -85,28 +81,30 @@ class Config:
         self.repeat: int = repeat
         self.lock_expr: str | None = lock_expr
         self.lock_mode: LockMode = LockMode.from_arg(lock_mode)
-        
+
         # Bitmap Args
+        self.bitmap_path: str | None = bitmap_path
         self.bitmap_seek_time: float | None = parse_timestamp(bitmap_seek_time)
         self.bitmap_alteration_path: str | None = bitmap_alteration_path
         self.bitmap_repeat: int = bitmap_repeat
-        
+
         # Accumulator Args
+        self.acc_method: str = acc_method
         self.reset_mode: str = reset_mode
         self.reset_alpha: float = reset_alpha
         self.reset_mask_path: str | None = reset_mask_path
         self.heatmap_mode: str = heatmap_mode
         self.heatmap_args: str = heatmap_args
         self.heatmap_reset_threshold: float | None = heatmap_reset_threshold
-        self.acc_method: str = acc_method
         self.accumulator_background: str = accumulator_background
         self.stack_composer: str = stack_composer
         self.initial_canvas: str | None = initial_canvas
         self.bitmap_mask_path: str | None = bitmap_mask_path
         self.crumble: bool = crumble
         self.bitmap_introduction_flags: int = bitmap_introduction_flags
-        
+
         # Output Args
+        self.output_path: str | list[str] | None = None if (isinstance(output_path, list) and not output_path) else output_path
         self.vcodec: str = vcodec
         if isinstance(size, str):
             size_split = re.split(r"[^\d]", size)[0]
@@ -124,7 +122,7 @@ class Config:
             render_colors = tuple(render_colors)
         self.render_colors: tuple[str, ...] | None = render_colors
         self.render_binary: bool = render_binary
-        
+
         # General Args
         self.seed: int = random.randint(0, 2**32-1) if seed is None else seed
 
@@ -132,8 +130,6 @@ class Config:
     def fromdict(cls, d: dict):
         return cls(
             d["flow_path"],
-            bitmap_path=d.get("bitmap_path", None),
-            output_path=d.get("output_path", None),
             extra_flow_paths=d.get("extra_flow_paths", None),
             flows_merging_function=d.get("flows_merging_function", "first"),
             use_mvs=d.get("use_mvs", False),
@@ -148,22 +144,24 @@ class Config:
             repeat=d.get("repeat", 1),
             lock_expr=d.get("lock_expr", None),
             lock_mode=d.get("lock_mode", LockMode.STAY),
+            bitmap_path=d.get("bitmap_path", None),
             bitmap_seek_time=d.get("bitmap_seek_time", None),
             bitmap_alteration_path=d.get("bitmap_alteration_path", None),
             bitmap_repeat=d.get("bitmap_repeat", 1),
+            acc_method=d.get("acc_method", "map"),
             reset_mode=d.get("reset_mode", "off"),
             reset_alpha=d.get("reset_alpha", .9),
             reset_mask_path=d.get("reset_mask_path", None),
             heatmap_mode=d.get("heatmap_mode", "discrete"),
             heatmap_args=d.get("heatmap_args", "0:4:2:1"),
             heatmap_reset_threshold=d.get("heatmap_reset_threshold", None),
-            acc_method=d.get("acc_method", "map"),
             accumulator_background=d.get("accumulator_background", "ffffff"),
             stack_composer=d.get("stack_composer", "top"),
             initial_canvas=d.get("initial_canvas", None),
             bitmap_mask_path=d.get("bitmap_mask_path", None),
             crumble=d.get("crumble",False),
             bitmap_introduction_flags=d.get("bitmap_introduction_flags", 1),
+            output_path=d.get("output_path", None),
             vcodec=d.get("vcodec", "h264"),
             size=d.get("size", None),
             output_intensity=d.get("output_intensity", False),
@@ -174,17 +172,10 @@ class Config:
             render_binary=d.get("render_binary", False),
             seed=d.get("seed", None),
         )
-    
+
     def todict(self) -> dict:
         return {
-            "timestamp": time.time(),
-            "command": {
-                "executable": sys.executable,
-                "argv": sys.argv
-            },
             "flow_path": self.flow_path,
-            "bitmap_path": self.bitmap_path,
-            "output_path": self.output_path,
             "extra_flow_paths": self.extra_flow_paths,
             "flows_merging_function": self.flows_merging_function,
             "use_mvs": self.use_mvs,
@@ -198,22 +189,24 @@ class Config:
             "repeat": self.repeat,
             "lock_expr": self.lock_expr,
             "lock_mode": self.lock_mode.value,
+            "bitmap_path": self.bitmap_path,
             "bitmap_seek_time": self.bitmap_seek_time,
             "bitmap_alteration_path": self.bitmap_alteration_path,
             "bitmap_repeat": self.bitmap_repeat,
+            "acc_method": self.acc_method,
             "reset_mode": self.reset_mode,
             "reset_alpha": self.reset_alpha,
             "reset_mask_path": self.reset_mask_path,
             "heatmap_mode": self.heatmap_mode,
             "heatmap_args": self.heatmap_args,
             "heatmap_reset_threshold": self.heatmap_reset_threshold,
-            "acc_method": self.acc_method,
             "accumulator_background": self.accumulator_background,
             "stack_composer": self.stack_composer,
             "initial_canvas": self.initial_canvas,
             "bitmap_mask_path": self.bitmap_mask_path,
             "crumble": self.crumble,
             "bitmap_introduction_flags": self.bitmap_introduction_flags,
+            "output_path": self.output_path,
             "vcodec": self.vcodec,
             "size": self.size,
             "output_intensity": self.output_intensity,
@@ -223,6 +216,11 @@ class Config:
             "render_colors": self.render_colors,
             "render_binary": self.render_binary,
             "seed": self.seed,
+            "timestamp": time.time(),
+            "command": {
+                "executable": sys.executable,
+                "argv": sys.argv
+            },
         }
 
     def get_secondary_output_path(self, suffix: str) -> str:

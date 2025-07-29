@@ -26,16 +26,16 @@ def get_video_duration(path: pathlib.Path) -> float:
 
 
 class TestEnvironment:
-    
+
     def __init__(self):
         self.folder = pathlib.Path(tempfile.gettempdir()) / "transflow-tests"
-    
+
     def __enter__(self):
         if self.folder.is_dir():
             shutil.rmtree(self.folder)
         self.folder.mkdir(parents=True, exist_ok=False)
         return self
-    
+
     def run(self, config: Config, **kwargs):
         status_queue = multiprocessing.Queue()
         pipeline = Pipeline(config, status_queue=status_queue, **kwargs)
@@ -44,7 +44,7 @@ class TestEnvironment:
         while not status_queue.empty():
             statuses.append(status_queue.get())
         return pipeline, statuses
-    
+
     def __exit__(self, exc_type, exc_value, exc_traceback):
         # shutil.rmtree(self.folder) # TODO: un-comment this
         pass
@@ -63,21 +63,21 @@ class TestPipeline(unittest.TestCase):
     def _test_config(self, flow_path, bitmap_path, **kwargs):
         with TestEnvironment() as env:
             output_path = env.folder / "test.mp4"
-            for status in env.run(Config(flow_path, bitmap_path, output_path.as_posix(), **kwargs))[1]:
+            for status in env.run(Config(flow_path, bitmap_path=bitmap_path, output_path=output_path.as_posix(), **kwargs))[1]:
                 self.assertIsNone(status.error)
             self.assertTrue(output_path.is_file())
 
     def test_basic(self):
         self._test_config(
             "assets/River.mp4",
-            "assets/Deer.jpg",
+            bitmap_path="assets/Deer.jpg",
             direction="backward",
             duration_time=.2)
 
     def test_advanced(self):
         self._test_config(
             "assets/River.mp4",
-            "assets/Frame.png",
+            bitmap_path="assets/Frame.png",
             direction="forward",
             reset_mode="random",
             reset_mask_path="assets/Mask.png",
@@ -89,7 +89,10 @@ class TestPipeline(unittest.TestCase):
         framerate = 50
         with TestEnvironment() as env:
             pipeline, _ = env.run(
-                Config("assets/River.mp4", "assets/Deer.jpg", (env.folder / "1-%d.png").as_posix(), duration_time=(ckpt + 1)/framerate),
+                Config("assets/River.mp4",
+                    bitmap_path="assets/Deer.jpg",
+                    output_path=(env.folder / "1-%d.png").as_posix(),
+                    duration_time=(ckpt + 1)/framerate),
                 safe=False,
                 checkpoint_every=ckpt)
             self.assertEqual(pipeline.cursor, ckpt + 1)
@@ -110,7 +113,7 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(compute_image_diff(env.folder / f"1-{ckpt}.png", env.folder / f"2-{ckpt}.png"), 0)
 
     def test_config_io(self):
-        config = Config("assets/River.mp4", "assets/Deer.jpg", "out/Test.mp4")
+        config = Config("assets/River.mp4", bitmap_path="assets/Deer.jpg", output_path="out/Test.mp4")
         output_path = os.path.join(tempfile.gettempdir(), "test-config.json")
         with open(output_path, "w") as file:
             json.dump(config.todict(), file)
@@ -131,12 +134,12 @@ class TestPipeline(unittest.TestCase):
             "render_binary", "seed"]
         for attr in attrs:
             self.assertEqual(getattr(config, attr), getattr(doppelganger, attr))
-    
+
     def test_cursor(self):
         with TestEnvironment() as env:
             n = 5
             framerate = 50
-            pipeline, _ = env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "%d.png").as_posix(), duration_time=n/framerate))
+            pipeline, _ = env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "%d.png").as_posix(), duration_time=n/framerate))
             self.assertEqual(pipeline.cursor, n)
             self.assertEqual(pipeline.expected_length, n)
 
@@ -144,37 +147,35 @@ class TestPipeline(unittest.TestCase):
         with TestEnvironment() as env:
             n = 5
             framerate = 50
-            pipeline, _ = env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "%d.png").as_posix(), seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate))
+            pipeline, _ = env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "%d.png").as_posix(), seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate))
             self.assertEqual(pipeline.cursor, n - 1)
             self.assertEqual(pipeline.expected_length, n - 1)
 
 
 class TestTimings(unittest.TestCase):
-                
+
     def test_duration(self):
         with TestEnvironment() as env:
-            env.run(Config("assets/River.mp4", "assets/Deer.jpg", (env.folder / "test.mp4").as_posix(), duration_time=0.1))
+            env.run(Config("assets/River.mp4", bitmap_path="assets/Deer.jpg", output_path=(env.folder / "test.mp4").as_posix(), duration_time=0.1))
             self.assertTrue(get_video_duration(env.folder / "test.mp4"), 0.1)
-    
+
     def test_seek(self):
         with TestEnvironment() as env:
-            env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "1-%d.png").as_posix(), duration_time=0.1))
+            env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "1-%d.png").as_posix(), duration_time=0.1))
             self.assertEqual(len(list(env.folder.glob("1-*.png"))), 5)
-            env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "2-%d.png").as_posix(), seek_time=2, duration_time=0.1))
+            env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "2-%d.png").as_posix(), seek_time=2, duration_time=0.1))
             self.assertEqual(len(list(env.folder.glob("2-*.png"))), 5)
             img_one = numpy.array(PIL.Image.open(env.folder / "1-0.png"))
             img_two = numpy.array(PIL.Image.open(env.folder / "2-0.png"))
             diff = float(numpy.average(numpy.abs(img_one - img_two)))
             self.assertNotEqual(diff, 0)
-    
+
     def test_seek_duration(self):
         framerate = 50
         for n in [1, 5, 10]:
             with TestEnvironment() as env:
-                env.run(Config("assets/River.mp4", "assets/River.mp4", (env.folder / "3-%d.png").as_posix(), seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate))
+                env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "3-%d.png").as_posix(), seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate))
                 self.assertEqual(len(list(env.folder.glob("3-*.png"))), n - 1)
-            
-        
 
 
 if __name__ == "__main__":

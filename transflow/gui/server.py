@@ -119,18 +119,29 @@ class WebsocketServer(threading.Thread):
             else:
                 self.output_file = None
             config = Config(
+                # Flow Args
                 args["flowSource"]["file"],
-                bitmap_path,
-                output_paths,
-                None,
-                seed=args["seed"],
+                # extra_flow_paths=None,
+                # flows_merging_function="sum",
                 use_mvs=args["flowSource"]["useMvs"],
-                direction=args["flowSource"]["direction"],
-                acc_method=args["accumulator"]["method"],
                 mask_path=args["flowSource"]["maskPath"],
                 kernel_path=args["flowSource"]["kernelPath"],
                 cv_config=args["flowSource"]["cvConfig"],
                 flow_filters=args["flowSource"]["flowFilters"],
+                direction=args["flowSource"]["direction"],
+                seek_time=args["flowSource"]["seekTime"],
+                duration_time=args["flowSource"]["durationTime"],
+                # to_time=None,
+                repeat=args["flowSource"]["repeat"],
+                lock_expr=args["flowSource"]["lockExpr"],
+                lock_mode=args["flowSource"]["lockMode"],
+                # Bitmap Args
+                bitmap_path=bitmap_path,
+                bitmap_seek_time=args["bitmapSource"]["seekTime"],
+                bitmap_alteration_path=args["bitmapSource"]["alterationPath"],
+                bitmap_repeat=args["bitmapSource"]["repeat"],
+                # Accumulator Args
+                acc_method=args["accumulator"]["method"],
                 reset_mode=args["accumulator"]["resetMode"],
                 reset_alpha=args["accumulator"]["resetAlpha"],
                 reset_mask_path=args["accumulator"]["resetMask"],
@@ -142,35 +153,33 @@ class WebsocketServer(threading.Thread):
                 initial_canvas=initial_canvas,
                 bitmap_mask_path=args["accumulator"]["bitmapMask"],
                 crumble=args["accumulator"]["crumble"],
-                bitmap_alteration_path=args["bitmapSource"]["alterationPath"],
+                bitmap_introduction_flags=args["accumulator"]["bitmapIntroductionFlags"],
+                # Output Args
+                output_path=output_paths,
                 vcodec=args["output"]["vcodec"],
+                # size=None,
                 output_intensity=args["output"]["outputIntensity"],
                 output_heatmap=args["output"]["outputHeatmap"],
                 output_accumulator=args["output"]["outputAccumulator"],
                 render_scale=args["output"]["renderScale"],
                 render_colors=args["output"]["renderColors"],
                 render_binary=args["output"]["renderBinary"],
-                seek_time=args["flowSource"]["seekTime"],
-                duration_time=args["flowSource"]["durationTime"],
-                repeat=args["flowSource"]["repeat"],
-                bitmap_seek_time=args["bitmapSource"]["seekTime"],
-                bitmap_repeat=args["bitmapSource"]["repeat"],
-                bitmap_introduction_flags=args["accumulator"]["bitmapIntroductionFlags"],
-                lock_mode=args["flowSource"]["lockMode"],
-                lock_expr=args["flowSource"]["lockExpr"],
+                # General Args
+                seed=args["seed"],
             )
             self.job_cancel_event = threading.Event()
             status_queue = multiprocessing.Queue(maxsize=1)
             pipeline = Pipeline(
                 config,
-                execute=False,
-                replace=False,
                 safe=True,
-                preview_output=False,
-                round_flow=args["flowSource"]["roundFlow"],
-                export_flow=args["flowSource"]["exportFlow"],
                 checkpoint_every=args["output"]["checkpointEvery"],
                 checkpoint_end=args["output"]["checkpointEnd"],
+                execute=False,
+                replace=False,
+                export_config=True,
+                export_flow=args["flowSource"]["exportFlow"],
+                round_flow=args["flowSource"]["roundFlow"],
+                preview_output=False,
                 cancel_event=self.job_cancel_event,
                 status_queue=status_queue)
             def transfer(pipe: Pipeline):

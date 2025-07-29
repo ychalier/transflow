@@ -2,16 +2,24 @@
 
 This document provides details on how to use the `transflow` module for performing various effects based on optical flow transfer.
 
-## Contents
+## Contents <!-- omit in toc -->
 
 - [Basic Flow Transfer](#basic-flow-transfer)
 - [Detailed Example](#detailed-example)
 - [GUI](#gui)
 - [Flow Estimation Methods](#flow-estimation-methods)
+  - [Gunnar Farnebäck](#gunnar-farnebäck)
+  - [Horn-Schunck](#horn-schunck)
+  - [Lukas-Kanade](#lukas-kanade)
+  - [LiteFlowNet](#liteflownet)
 - [Using Motion Vectors](#using-motion-vectors)
 - [Flow Direction](#flow-direction)
 - [Flow Preprocessing](#flow-preprocessing)
 - [Flow Transformations](#flow-transformations)
+  - [Flow Filters](#flow-filters)
+  - [Flow Locking](#flow-locking)
+  - [Applying A Mask](#applying-a-mask)
+  - [Flow Convolution Kernel](#flow-convolution-kernel)
 - [Multiple Flow Sources](#multiple-flow-sources)
 - [Accumulation Methods](#accumulation-methods)
 - [Accumulator Heatmap](#accumulator-heatmap)
@@ -85,7 +93,7 @@ The formula is based on time `t`. The river video lasts for about 30 seconds. Su
 
 ## GUI
 
-You can run Transflow with `gui` as the only argument to open a graphical user interface. This GUI allows you to set various parameters interactively. It also provides a live preview of the output. It runs as a local webserver. You may use arguments `--gui-host`, `--gui-port` and `--gui-mjpeg-port` to specify the host and ports to use. By default, it listens on `localhost:8000` for the GUI and `localhost:8001` for the MJPEG stream. Once started, your browser should automatically open the GUI. If not, you can open it manually by navigating to the URL
+You can run Transflow with `gui` as the only argument to open a graphical user interface. This GUI allows you to set various parameters interactively. It also provides a live preview of the output. It runs as a local webserver. You may use arguments `-gh, --gui-host`, `-gp, --gui-port` and `-gm, --gui-mjpeg-port` to specify the host and ports to use. By default, it listens on `localhost:8000` for the GUI and `localhost:8001` for the MJPEG stream. Once started, your browser should automatically open the GUI. If not, you can open it manually by navigating to the URL
 
 ```console
 transflow gui
