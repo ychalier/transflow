@@ -134,7 +134,7 @@ class Window:
         with zipfile.ZipFile(self.ckpt_path) as archive:
             with archive.open("meta.json") as file:
                 meta = json.load(file)
-                self.flow_path = meta["flow_path"]
+                self.flow_path = meta["config"]["flow_path"]
                 self.cursor = meta["cursor"]
             with archive.open("accumulator.bin") as file:
                 acc = pickle.load(file)
