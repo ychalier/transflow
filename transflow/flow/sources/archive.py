@@ -14,11 +14,11 @@ class ArchiveFlowSource(FlowSource):
             super().__init__(**kwargs)
             self.path = path
             self.archive = None
-        
+
         @property
         def cls(self):
             return ArchiveFlowSource
-        
+
         def build(self):
             self.archive = zipfile.ZipFile(self.path)
             with self.archive.open("meta.json") as file:
@@ -29,14 +29,17 @@ class ArchiveFlowSource(FlowSource):
             self.height = data["height"]
             self.framerate = data["framerate"]
             self.base_length = len(self.archive.infolist()) - 1
-        
+
         def args(self):
             return [self.archive, *FlowSource.Builder.args(self)]
 
-
     def __init__(self, archive: zipfile.ZipFile, *args, **kwargs):
         self.archive = archive
-        FlowSource.__init__(self, *args, **kwargs)       
+        FlowSource.__init__(self, *args, **kwargs)
+    
+    def validate(self):
+        super().validate()
+        self.assert_type("archive", zipfile.ZipFile)
 
     def next(self) -> numpy.ndarray:
         with self.archive.open(f"{self.input_frame_index:09d}.npy") as file:

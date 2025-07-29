@@ -99,7 +99,7 @@ class FlowSource:
         @property
         def cls(self) -> type["FlowSource"]:
             return FlowSource
-        
+
         def args(self) -> list:
             return [
                 self.direction,
@@ -111,7 +111,7 @@ class FlowSource:
                 self.ckpt_start_frame,
                 self.end_frame
             ]
-    
+
         def kwargs(self) -> dict:
             return {
                 "mask": self.mask,
@@ -196,10 +196,11 @@ class FlowSource:
             self.start_frame = real_start_frame
 
         def __enter__(self):
-            self.source = self.build()
+            self.build()
+            self.source = self.cls(*self.args(), **self.kwargs())
+            self.source.validate()
             logger.debug("Built '%s'", self.source.__class__.__name__)
-            # TODO check that all fields have been instantiated ?
-            return self.cls(*self.args(), **self.kwargs())
+            return self.source
 
         def __exit__(self, exc_type, exc_value, exc_traceback):
             if self.source is not None:
@@ -247,6 +248,24 @@ class FlowSource:
 
     def __len__(self):
         return self.length
+
+    def assert_type(self, attr: str, *types: type):
+        if not any(isinstance(getattr(self, attr), t) for t in types):
+            raise ValueError(f"Attribute {attr} has incorrect type {type(attr)}")
+
+    def validate(self):
+        self.assert_type("direction", FlowSource.Direction)
+        self.assert_type("width", int)
+        self.assert_type("height", int)
+        self.assert_type("framerate", float)
+        self.assert_type("length", int, type(None))
+        self.assert_type("start_frame", int)
+        self.assert_type("end_frame", int)
+        self.assert_type("mask", numpy.ndarray, type(None))
+        self.assert_type("kernel", numpy.ndarray, type(None))
+        self.assert_type("flow_filters", list)
+        self.assert_type("lock_mode", FlowSource.LockMode)
+        self.assert_type("lock_expr_stay", tuple, type(None))
 
     def read_next_flow(self) -> numpy.ndarray:
         if self.input_frame_index == self.end_frame:

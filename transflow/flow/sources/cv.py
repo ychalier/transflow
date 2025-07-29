@@ -436,6 +436,11 @@ class CvFlowSource(FlowSource):
         self.prev_rgb = None
         self.config.start()
         FlowSource.__init__(self, *args, **kwargs)
+    
+    def validate(self):
+        super().validate()
+        self.assert_type("config", CvFlowConfig)
+        self.assert_type("capture", cv2.VideoCapture)
 
     def rewind(self):
         FlowSource.rewind(self)

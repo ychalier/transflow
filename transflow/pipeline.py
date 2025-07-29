@@ -159,7 +159,7 @@ class Pipeline:
 
     def __init__(self,
             cfg: Config,
-            safe: bool = True,
+            safe: bool = False,
             checkpoint_every: int | None = None,
             checkpoint_end: bool = False,
             execute: bool = False,
@@ -280,7 +280,6 @@ class Pipeline:
         self.log_listener = multiprocessing.Process(target=logging_listener_process, args=(self.log_queue, logging_config))
         self.log_listener.start()
         setup_logging(self.log_queue, self.log_level)
-        # TODO: close log process nicely if an error occurs while initializing the pipeline process
 
     def _setup_checkpoint(self):
         self.ckpt_meta = {}
@@ -571,43 +570,47 @@ class Pipeline:
             self.export_checkpoint()
 
     def _close(self):
-        self.logger.debug("Closing pipeline")
+        has_logger = True
+        try:
+            self.logger.debug("Closing pipeline")
+        except AttributeError:
+            has_logger = False
         if self.flow_output is not None:
             self.flow_output.close()
-            self.logger.debug("Closed flow output")
+            if has_logger: self.logger.debug("Closed flow output")
         if self.metadata_queue is not None:
             self.metadata_queue.close()
-            self.logger.debug("Closed metadata queue")
+            if has_logger: self.logger.debug("Closed metadata queue")
         if self.flow_queue is not None:
             self.flow_queue.close()
-            self.logger.debug("Closed flow queue")
+            if has_logger: self.logger.debug("Closed flow queue")
         for i, q in enumerate(self.extra_flow_queues):
             q.close()
-            self.logger.debug("Closed extra flow queue no. %d", i)
+            if has_logger: self.logger.debug("Closed extra flow queue no. %d", i)
         if self.bitmap_queue is not None:
             self.bitmap_queue.close()
-            self.logger.debug("Closed bitmap queue")
+            if has_logger: self.logger.debug("Closed bitmap queue")
         for q in self.output_queues:
             q.put(None)
         if self.flow_process is not None:
             self.flow_process.kill()
-            self.logger.debug("Killed flow process")
+            if has_logger: self.logger.debug("Killed flow process")
         for i, p in enumerate(self.extra_flow_processes):
             p.kill()
-            self.logger.debug("Killed extra flow process no. %d", i)
+            if has_logger: self.logger.debug("Killed extra flow process no. %d", i)
         if self.bitmap_process is not None:
             self.bitmap_process.kill()
-            self.logger.debug("Killed bitmap process")
+            if has_logger: self.logger.debug("Killed bitmap process")
         if self.flow_process is not None:
             self.flow_process.join()
-            self.logger.debug("Killed flow process")
+            if has_logger: self.logger.debug("Killed flow process")
         for p in self.extra_flow_processes:
             p.join()
         if self.bitmap_process is not None:
             self.bitmap_process.join()
         for p in self.output_processes:
             p.join()
-        self.logger.debug("Done closing pipeline")
+        if has_logger: self.logger.debug("Done closing pipeline")
         while self.log_listener is not None and self.log_listener.is_alive():
             self.log_queue.put(None)
             self.log_listener.join(timeout=.01)

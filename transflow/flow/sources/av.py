@@ -44,6 +44,10 @@ class AvFlowSource(FlowSource):
         self.container = container
         self.iterator = self.container.decode(video=0)
         FlowSource.__init__(self, *args, **kwargs)
+    
+    def validate(self):
+        super().validate()
+        self.assert_type("container", av.container.InputContainer)
 
     def rewind(self):
         FlowSource.rewind(self)
