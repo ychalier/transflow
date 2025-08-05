@@ -7,7 +7,6 @@ import numpy
 
 from .accumulator import Accumulator
 from ..utils import parse_hex_color, load_image, load_mask
-from ..flow import Direction
 
 
 class CanvasAccumulator(Accumulator):
@@ -38,7 +37,6 @@ class CanvasAccumulator(Accumulator):
                 warnings.warn(f"Could not use inital canvas argument {initial_canvas}")
         self.canvas = self.initial_canvas.copy()
         self.bitmap_mask = None if bitmap_mask_path is None else load_mask(bitmap_mask_path)
-        self.direction: Direction | None = None
         self.crumble = crumble
         self.mask = numpy.zeros((self.height, self.width), dtype=numpy.uint8)
         self.outer_mask = None
@@ -49,9 +47,8 @@ class CanvasAccumulator(Accumulator):
         if self.reset_mode not in [Accumulator.ResetMode.OFF, Accumulator.ResetMode.RANDOM]:
             warnings.warn(f"Unsupported reset mode '{self.reset_mode}' for CanvasAccumulator")
 
-    def update(self, flow: numpy.ndarray, direction: Direction):
+    def update(self, flow: numpy.ndarray):
         self._update_flow(flow)
-        self.direction = direction
         if self.reset_mode == Accumulator.ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
             below_threshold = numpy.random.random(size=(self.height, self.width)) <= threshold
@@ -71,30 +68,16 @@ class CanvasAccumulator(Accumulator):
 
         bitmap_mask = numpy.ones((self.height, self.width), dtype=numpy.uint8) if self.bitmap_mask is None else self.bitmap_mask
 
-        if self.direction == Direction.FORWARD:
-            pixels_source = numpy.nonzero(self.mask.flat)[0]
-            pixels_target = pixels_source + self.flow_flat[pixels_source]
-            bitmap_source = numpy.nonzero(numpy.multiply(bitmap_mask.flat, self.flow_flat))[0]
-            bitmap_target = bitmap_source + self.flow_flat[bitmap_source]
-            if self.bitmap_introduction_flags & CanvasAccumulator.BitmapIntroductionFlags.NO_OVERWRITE.value:
-                wh = numpy.where(self.mask.flat[bitmap_target] == 0)
-                bitmap_source = bitmap_source[wh]
-                bitmap_target = bitmap_target[wh]
-
-        elif self.direction == Direction.BACKWARD:
-            shift = numpy.arange(self.height * self.width) + self.flow_flat
-            new_mask = self.mask.flat[shift].reshape((self.height, self.width))
-            pixels_target = numpy.nonzero(new_mask.flat)[0]
-            pixels_source = pixels_target + self.flow_flat[pixels_target]
-            new_bitmap_mask = bitmap_mask.flat[shift].reshape((self.height, self.width))
-            if self.bitmap_introduction_flags & CanvasAccumulator.BitmapIntroductionFlags.NO_OVERWRITE.value:
-                bitmap_target = numpy.nonzero(numpy.multiply(numpy.multiply(new_bitmap_mask.flat, self.flow_flat), (1 - self.mask).flat))[0]
-            else:
-                bitmap_target = numpy.nonzero(numpy.multiply(new_bitmap_mask.flat, self.flow_flat))[0]
-            bitmap_source = bitmap_target + self.flow_flat[bitmap_target]
-            
+        shift = numpy.arange(self.height * self.width) + self.flow_flat
+        new_mask = self.mask.flat[shift].reshape((self.height, self.width))
+        pixels_target = numpy.nonzero(new_mask.flat)[0]
+        pixels_source = pixels_target + self.flow_flat[pixels_target]
+        new_bitmap_mask = bitmap_mask.flat[shift].reshape((self.height, self.width))
+        if self.bitmap_introduction_flags & CanvasAccumulator.BitmapIntroductionFlags.NO_OVERWRITE.value:
+            bitmap_target = numpy.nonzero(numpy.multiply(numpy.multiply(new_bitmap_mask.flat, self.flow_flat), (1 - self.mask).flat))[0]
         else:
-            raise ValueError(f"Unknown flow direction {self.direction}")
+            bitmap_target = numpy.nonzero(numpy.multiply(new_bitmap_mask.flat, self.flow_flat))[0]
+        bitmap_source = bitmap_target + self.flow_flat[bitmap_target]
 
         aux = self.canvas.copy()
 

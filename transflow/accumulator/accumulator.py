@@ -4,7 +4,6 @@ import logging
 import numpy
 
 from ..utils import load_mask
-from ..flow import Direction
 
 
 logger = logging.getLogger(__name__)
@@ -109,7 +108,7 @@ class Accumulator:
             self.heatmap = numpy.clip(self.heatmap + numpy.linalg.norm(self.flow_int, axis=2),
                                       self.heatmap_min, self.heatmap_max)
 
-    def update(self, flow: numpy.ndarray, direction: Direction):
+    def update(self, flow: numpy.ndarray):
         raise NotImplementedError()
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:

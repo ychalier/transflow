@@ -19,7 +19,7 @@ import numpy
 import tqdm
 
 from .config import Config
-from .flow import FlowSource, Direction
+from .flow import FlowSource
 from .bitmap import BitmapSource
 from .accumulator import Accumulator
 from .output import VideoOutput, ZipOutput, NumpyOutput
@@ -79,7 +79,6 @@ class SourceProcess(multiprocessing.Process):
                     source.height,
                     source.framerate,
                     source.length,
-                    source.direction if isinstance(source, FlowSource) else None
                 ))
                 try:
                     for item in source:
@@ -209,7 +208,6 @@ class Pipeline:
         self.fs_height: int | None = None
         self.fs_framerate: float | None = None
         self.fs_length: int | None = None
-        self.fs_direction: Direction | None = None
         self.bs_framerate: float | None = None
         self.bs_length: int | None = None
         self.fs_width_factor: int = 1
@@ -336,7 +334,7 @@ class Pipeline:
             try:
                 shape_info = self.metadata_queue.get(timeout=1)
                 if flow_sources_loaded == 0:
-                    (self.fs_width, self.fs_height, self.fs_framerate, self.fs_length, self.fs_direction) = shape_info
+                    (self.fs_width, self.fs_height, self.fs_framerate, self.fs_length) = shape_info
                 flow_sources_loaded += 1
                 self.logger.debug("Received metadata message from a flow process [%d/%d]", flow_sources_loaded, flow_sources_to_load)
                 if flow_sources_loaded >= flow_sources_to_load:
@@ -348,7 +346,7 @@ class Pipeline:
             except KeyboardInterrupt:
                 self._close()
                 return
-        if self.fs_width is None or self.fs_height is None or self.fs_framerate is None or self.fs_direction is None:
+        if self.fs_width is None or self.fs_height is None or self.fs_framerate is None:
             raise ValueError("Could not initialize FlowSource metadata")
         if self.config.size is None:
             self.config.size = self.fs_width, self.fs_height
@@ -518,7 +516,6 @@ class Pipeline:
     def _mainloop(self):
         assert self.flow_process is not None
         assert self.accumulator is not None
-        assert self.fs_direction is not None
 
         exception = False
         self.cursor: int = self.ckpt_meta.get("cursor", 0)
@@ -536,7 +533,7 @@ class Pipeline:
                 flow = self._update_flow()
                 if flow is None:
                     break
-                self.accumulator.update(flow, self.fs_direction)
+                self.accumulator.update(flow)
                 if not self._update_output(flow):
                     break
                 self.cursor += 1

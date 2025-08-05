@@ -245,6 +245,21 @@ class FlowSource:
         self.start_frame = ckpt_start_frame
         self.rewind()
         self.start_frame = start_frame
+        
+        shape = (self.height, self.width)
+        self.base_flat = numpy.arange(self.height * self.width)
+        self.fx_min = numpy.zeros((self.height, self.width), dtype=numpy.int32)
+        self.fx_max = numpy.zeros((self.height, self.width), dtype=numpy.int32)
+        self.fy_min = numpy.zeros((self.height, self.width), dtype=numpy.int32)
+        self.fy_max = numpy.zeros((self.height, self.width), dtype=numpy.int32)
+        for i in range(self.height):
+            for j in range(self.width):
+                self.fx_min[i, j] = -j
+                self.fx_max[i, j] = self.width - j - 1
+                self.fy_min[i, j] = -i
+                self.fy_max[i, j] = self.height - i - 1
+        self.basex = numpy.broadcast_to(numpy.arange(self.width), shape).copy()
+        self.basey = numpy.broadcast_to(numpy.arange(self.height)[:,numpy.newaxis], shape).copy()
 
     def __len__(self):
         return self.length
@@ -333,7 +348,22 @@ class FlowSource:
             flow_masked[:,:,0], self.kernel, mode="same", boundary="fill", fillvalue=0)
         flow_filtered_y = scipy.signal.convolve2d(
             flow_masked[:,:,1], self.kernel, mode="same", boundary="fill", fillvalue=0)
-        return numpy.stack([flow_filtered_x, flow_filtered_y], axis=-1)
+        flow_stacked = numpy.stack([flow_filtered_x, flow_filtered_y], axis=-1)
+        if self.direction == FlowSource.Direction.FORWARD:
+            numpy.clip(flow_stacked[:,:,0], self.fx_min, self.fx_max, flow_stacked[:,:,0])
+            numpy.clip(flow_stacked[:,:,1], self.fy_min, self.fy_max, flow_stacked[:,:,1])
+            flow_int = numpy.round(flow_stacked).astype(numpy.int32)
+            flow_flat = numpy.ravel(flow_int[:,:,1] * self.width + flow_int[:,:,0])
+            where = numpy.nonzero(flow_flat)
+            Ax = self.basex.copy()
+            Ay = self.basey.copy()
+            numpy.put(Ax, self.base_flat[where] + flow_flat[where], Ax.flat[where], mode="clip")
+            numpy.put(Ay, self.base_flat[where] + flow_flat[where], Ay.flat[where], mode="clip")
+            flow_stacked[:,:,0] = Ax - self.basex
+            flow_stacked[:,:,1] = Ay - self.basey
+        numpy.clip(flow_stacked[:,:,0], self.fx_min, self.fx_max, flow_stacked[:,:,0])
+        numpy.clip(flow_stacked[:,:,1], self.fy_min, self.fy_max, flow_stacked[:,:,1])
+        return flow_stacked
 
     @classmethod
     def from_args(cls,

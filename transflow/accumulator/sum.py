@@ -3,7 +3,6 @@ import warnings
 import numpy
 
 from .accumulator import Accumulator
-from ..flow import Direction
 
 
 class SumAccumulator(Accumulator):
@@ -15,9 +14,7 @@ class SumAccumulator(Accumulator):
         self.basex = numpy.broadcast_to(numpy.arange(self.width), shape).copy()
         self.basey = numpy.broadcast_to(numpy.arange(self.height)[:,numpy.newaxis], shape).copy()
 
-    def update(self, flow: numpy.ndarray, direction: Direction):
-        if direction != Direction.BACKWARD:
-            warnings.warn(f"SumAccumulator only works with backward flow, not {direction}")
+    def update(self, flow: numpy.ndarray):
         self._update_flow(flow)
         if self.reset_mode == Accumulator.ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask

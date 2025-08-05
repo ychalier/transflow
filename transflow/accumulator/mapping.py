@@ -1,7 +1,6 @@
 import numpy
 
 from .accumulator import Accumulator
-from ..flow import Direction
 
 
 class MappingAccumulator(Accumulator):
@@ -16,7 +15,7 @@ class MappingAccumulator(Accumulator):
         self.mapx = self.basex.astype(numpy.float32)
         self.mapy = self.basey.astype(numpy.float32)
 
-    def update(self, flow: numpy.ndarray, direction: Direction):
+    def update(self, flow: numpy.ndarray):
         self._update_flow(flow)
         if self.reset_mode == Accumulator.ResetMode.RANDOM:
             threshold = self.reset_alpha if self.reset_mask is None else self.reset_mask
@@ -37,16 +36,9 @@ class MappingAccumulator(Accumulator):
                     + self.reset_mask[where] * self.basex[where]
                 self.mapy[where] = (1 - self.reset_mask[where]) * self.mapy[where]\
                     + self.reset_mask[where] * self.basey[where]
-        if direction == Direction.FORWARD:
-            where = numpy.nonzero(self.flow_flat)
-            numpy.put(self.mapx, self.base_flat[where] + self.flow_flat[where],
-                      self.mapx.flat[where], mode="clip")
-            numpy.put(self.mapy, self.base_flat[where] + self.flow_flat[where],
-                      self.mapy.flat[where], mode="clip")
-        elif direction == Direction.BACKWARD:
-            shift = (self.basey + self.flow_int[:,:,1], self.basex + self.flow_int[:,:,0])
-            self.mapx = self.mapx[shift]
-            self.mapy = self.mapy[shift]
+        shift = (self.basey + self.flow_int[:,:,1], self.basex + self.flow_int[:,:,0])
+        self.mapx = self.mapx[shift]
+        self.mapy = self.mapy[shift]
 
     def apply(self, bitmap: numpy.ndarray) -> numpy.ndarray:
         mapping = numpy.clip(self.mapy.astype(numpy.int32), 0, self.height - 1) * self.width\
