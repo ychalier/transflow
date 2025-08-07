@@ -68,6 +68,7 @@ class Layer:
         self.height = height
         self.reset_mode = reset_mode
         self.sources: list[BitmapSource] = []
+        self.base = numpy.indices((self.height, self.width), dtype=numpy.int32).transpose(1, 2, 0)
         self.data = numpy.zeros((self.height, self.width, 8), dtype=numpy.int32)
         # Data Structure of the Third Dimension
         # 0: source index (0 is None, 1 is static, 2+ are bitmap sources)
@@ -129,6 +130,31 @@ class Layer:
         self.data[aux[:,:,1], aux[:,:,2]][where] = aux[where]
 
     def _update_reset_constant(self):
+        # Where the source is not None
+        # TODO
+        # where = numpy.nonzero(self.data[:,:,0])
+        
+        # dij[i, j] = (di, dj) is the move to apply to that pixel for it to return to its position
+        dij = self.data[:,:,1:3] - self.base
+
+        # TODO: parameter to control reset speed
+        speed = 1
+
+        dij_norm = numpy.linalg.norm(dij, axis=2)
+        dij_scaled = dij.copy()
+        where = numpy.nonzero(dij_norm)
+        dij_scaled[where] = speed * dij[where] / dij_norm.reshape((self.height, self.width, 1))[where]
+        
+        aux = self.data.copy()
+
+        crumble = True # TODO
+        if crumble:
+            pass # TODO
+        
+        # dij_scaled[i, j] + self.base is where to put each pixel
+        # TODO: test this in Numpy?
+        self.data[dij_scaled + self.base] = aux
+
         pass # TODO
 
     def _update_reset_linear(self):
