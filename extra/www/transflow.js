@@ -1032,6 +1032,180 @@ async function main() {
         initialized = true;
     }
 
+    const overlayCanvas = document.getElementById("overlay");
+    const overlayContext = overlayCanvas.getContext("2d");
+    overlayCanvas.width = params.width.value;
+    overlayCanvas.height = params.height.value;
+
+    const overlayData = {
+        color: "#fff",
+        title: "CAMERA 1",
+        zoom: "     2.5",
+        azimuth: " SSE 157°",
+        lat: " 3.1223°W",
+        lon: "45.8722°N",
+        infoLeft: "TRANSFLOW",
+        infoMid: "SYSTEM STATUS: NOMINAL",
+        debugLogs: [
+            "[OK] INIT :: Shader compilation successful [VTX:102ms, FRG:98ms]",
+            "[DBG] Pipeline sync latency: Δ=+14.7μs",
+            "[WRN] Texture #12 dropped: Mipmap inconsistency detected",
+            "[SYS] GL_MAX_UNIFORM_BLOCK_SIZE: 65536",
+            "[MEM] VRAM usage: 483.2MB / 2048MB (23.58%)",
+            "[NET] Ping to telemetry endpoint (192.168.7.22): 2.8ms",
+            "[GPU] Render pass completed with 3 draw calls [IDX: 1024]",
+            "[I/O] Stream buffer flushed to /dev/gfx0 [BLOCKS: 42]",
+            "[TEMP] Core1: 72.4°C | Core2: 71.8°C | GPU: 67.9°C",
+            "[TRACE] FrameID: 3249 | Timestamp: 1696423131.089",
+            "[SEC] No intrusion detected :: all keys synced",
+            "[ENV] Atmosphere sample OK | Ion levels nominal",
+            "[DBG] Allocated new transient buffer: UID=0x5A7E, Size=8192B, Align=64",
+            "[SYS] Frame pacing adjusted :: vsync delta: -1.23ms",
+            "[MEM] Heap fragmentation at 12.8% :: GC cycle postponed",
+            "[I/O] Async flush committed to ring buffer [Channel: 3]",
+            "[GPU] Shader unit latency stabilized at 37.2μs (±2.1μs)",
+            "[WARN] Inferred LOD0 exceeds threshold texture size",
+            "[NET] DNS prefetch success :: TTL: 472s",
+            "[PHYS] Inertia tensor recalculated [Δ = 0.0034]",
+            "[INFO] Spatial resolver converged after 7 iterations",
+            "[AUX] Serial bus idle :: Port COM2 queued for wake",
+            "[SEC] Entropy pool reseeded with 128-bit salt",
+            "[TRACE] Event ID 0x9E14 triggered at T+492ms",
+            "[VRAM] Atlas map realigned :: 4096x4096 > 8192x8192",
+            "[GEO] Quaternion mismatch resolved via SLERP",
+            "[PIPE] Swapchain validated :: Index = 2, Age = 3",
+            "[OPT] SIMD vectorization bypassed due to register spill",
+            "[CTRL] PID dampening applied :: Overshoot: 2.9%",
+            "[MESH] Degenerate triangle culled :: ID#0442A",
+            "[DEV] Build fingerprint: alpha-v18+unstable.3124",
+            "[MON] Thermal deviation logged :: ΔCoreTemp = +4.3°C",
+            "[BUF] Circular queue rewound to index 0x1F",
+            "[PRE] Prologue cache prefetch :: Hit rate 98.1%",
+            "[TIME] LocalClock: sync drift 2.3ms below UTC",
+            "[LOGIC] Execution branch collapsed into single opcode",
+            "[RENDER] Deferred lighting pass: 12.6ms (G-buffer)",
+            "[HARD] I²C signal degraded :: Noise floor +12dB",
+            "[ALERT] Stack trace anomaly at depth=14",
+            "[LUX] Photon budget exceeded in forward pass",
+            "[QUEUE] Semaphore signaled :: FIFO advanced",
+            "[AUTH] Key handshake completed :: ECC-512 OK",
+            "[TRACE] Stack ID: #BF33 :: Return @ 0x7FD09",
+            "[SND] Audio underrun prevented :: Refill=16KB",
+            "[DATA] Packet CRC32 verified :: 0xA42D39B4",
+            "[MEM] Zero-page injection in segment 0x0042",
+            "[SYS] Critical section exited :: Mutex#001F",
+            "[NET] Keepalive ACK received :: seq=1108421",
+            "[GPU] Tile cache invalidated :: Region [13:7]",
+            "[IOCTL] Driver signal latched :: fd=12, ioctl=0x4004667A",
+            "[ALGO] Heuristic threshold adapted: ε=0.00291",
+            "[FX] Motion vector blur: ΔFrameID=+1.003ms",
+            "[FIRM] ROM patch verified (sig:0xAAFF33CC)",
+            "[SCHED] Tick rate throttled :: Load=91.2%",
+            "[BIO] Synth impulse decoded :: Envelope: ADSR OK",
+            "[NAV] Dead reckoning mode fallback :: GPS jitter",
+            "[AUTH] Token refresh cycle initiated :: T-59s",
+            "[STATE] Frame lock granted :: V-Sync pulse match",
+            "[WARN] Latency buffer near overflow :: 93%",
+            "[DEC] Codec pipeline rehydrated :: QP=23, B-frames=2",
+            "[GRAPH] Frustum bounds recalibrated [θ=63.2°]",
+            "[CACHE] L1-d Cache primed :: Bank[3] HitRate=99.4%",
+        ],
+    }
+
+    overlayContext.fillStyle = overlayData.color;
+    overlayContext.strokeStyle = overlayData.color;
+    overlayContext.lineWidth = 2;
+    overlayContext.font = "20px monospace";
+
+    let maxDebugLogLength = 0;
+    for (let i = 0; i < overlayData.debugLogs.length; i++) {
+        maxDebugLogLength = Math.max(maxDebugLogLength, overlayData.debugLogs[i].length);
+    }
+
+    let currentLogIndex = 0;
+    const maxVisibleLogs = 3;
+
+    function drawOverlay() {
+        overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        
+        // Frame
+        overlayContext.strokeRect(20, 20, overlayCanvas.width - 40, overlayCanvas.height - 40);
+
+        // Crosshair
+        const cx = overlayCanvas.width / 2;
+        const cy = overlayCanvas.height / 2;
+        overlayContext.beginPath();
+        overlayContext.moveTo(cx - 15, cy);
+        overlayContext.lineTo(cx + 15, cy);
+        overlayContext.moveTo(cx, cy - 15);
+        overlayContext.lineTo(cx, cy + 15);
+        overlayContext.stroke();
+        
+        overlayContext.textAlign = "left";
+        // Top-left
+        overlayContext.fillText(overlayData.infoLeft, 30, 42);
+        // Mid-left
+
+        const barX = 30;
+        const barY = overlayCanvas.height / 2 - 100;
+        const barWidth = 20;
+        const barHeight = 200;
+        const filledHeight1 = Math.random() * barHeight;
+        overlayContext.fillRect(barX, barY + (barHeight - filledHeight1), barWidth, filledHeight1);
+        overlayContext.strokeRect(barX, barY, barWidth, barHeight);
+        const filledHeight2 = Math.random() * barHeight;
+        overlayContext.fillRect(barX + 30, barY + (barHeight - filledHeight2), barWidth, filledHeight2);
+        overlayContext.strokeRect(barX + 30, barY, barWidth, barHeight);
+
+        // Bottom-left
+        [
+            `FLW: ${params.flowWidth.value}x${params.flowHeight.value}`,
+            `BLK: ${params.blockSize.value}`,
+            `FPS: ${params.fps.value}`,
+            `RES: ${params.width.value}x${params.height.value}`,
+        ].forEach((line, i) => {
+            overlayContext.fillText(line, 30, overlayCanvas.height - 30 - i * 20);
+        }); 
+
+        overlayContext.textAlign = "center";
+        // Top-mid
+        overlayContext.fillText(overlayData.infoMid, overlayCanvas.width / 2, 42);
+        // Bottom-mid
+        for (let i = 0; i < maxVisibleLogs; i++) {
+            const log = overlayData.debugLogs[(currentLogIndex + i) % overlayData.debugLogs.length];
+            overlayContext.textAlign = 'center';
+            overlayContext.fillText(log.padEnd(maxDebugLogLength), overlayCanvas.width / 2, overlayCanvas.height - 30 - (maxVisibleLogs - i - 1) * 20);
+        }
+
+        overlayContext.textAlign = "right";
+        // Top-right
+        overlayContext.font = "40px monospace";
+        overlayContext.fillText(`${overlayData.title}`, overlayCanvas.width - 30, 56);
+        overlayContext.font = "20px monospace";
+        // Mid-right
+        // Bottom-right     
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}-${now.getMonth().toString().padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}`
+        const timeStr = now.toLocaleTimeString();
+        [
+            `${dateStr} ${timeStr}`,
+            `LON: ${overlayData.lon}`,
+            `LAT: ${overlayData.lat}`,
+            `AZM: ${overlayData.azimuth}`,
+            `ZOM: ${overlayData.zoom}x`,
+        ].forEach((line, i) => {
+            overlayContext.fillText(line, overlayCanvas.width - 30, overlayCanvas.height - 30 - i * 20);
+        });       
+        
+    }
+    setInterval(() => {
+        if (Math.random() < .5) {
+            currentLogIndex = (currentLogIndex + 1) % overlayData.debugLogs.length;
+        }
+        drawOverlay();
+    }, 1000);
+    drawOverlay();
+
 }
 
 
