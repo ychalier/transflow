@@ -37,7 +37,7 @@ end
 
 # --- Portal Effect: Bass Wave Ondulating ---
 live_loop :portal do
-  sleep rrand(60, 540)
+  sleep rrand(30, 120)
   with_fx :reverb, room: 1, mix: 0.7 do
     with_fx :slicer, phase: 0.125, mix: 0.4, pulse_width: 0.6 do
       synth :mod_fm,
@@ -93,16 +93,16 @@ live_loop :alien_chirps do
 end
 
 # --- Energy Sparks ---
-live_loop :energy_sparks do
-  sleep rrand(10, 25)
-  with_fx :pan, pan: rrand(-0.6, 0.6) do
-    with_fx :reverb, room: 0.8, mix: 0.5 do
-      synth :beep, note: rrand_i(60, 76), release: 0.3, amp: 0.2
-      sleep 0.1
-      synth :beep, note: rrand_i(60, 76), release: 0.3, amp: 0.15
-    end
-  end
-end
+##| live_loop :energy_sparks do
+##|   sleep rrand(10, 25)
+##|   with_fx :pan, pan: rrand(-0.6, 0.6) do
+##|     with_fx :reverb, room: 0.8, mix: 0.5 do
+##|       synth :beep, note: rrand_i(60, 76), release: 0.3, amp: 0.2
+##|       sleep 0.1
+##|       synth :beep, note: rrand_i(60, 76), release: 0.3, amp: 0.15
+##|     end
+##|   end
+##| end
 
 # --- Gravity Pulses ---
 live_loop :gravity_pulses do
@@ -115,14 +115,14 @@ live_loop :gravity_pulses do
 end
 
 # --- Distant Metallic Echoes ---
-live_loop :metallic_echoes do
-  sleep rrand(20, 45)
-  with_fx :pan, pan: rrand(-0.9, 0.9) do
-    with_fx :echo, phase: 0.4, decay: 8 do
-      synth :pretty_bell, note: rrand_i(55, 65), release: 4, amp: 0.18
-    end
-  end
-end
+##| live_loop :metallic_echoes do
+##|   sleep rrand(20, 45)
+##|   with_fx :pan, pan: rrand(-0.9, 0.9) do
+##|     with_fx :echo, phase: 0.4, decay: 8 do
+##|       synth :pretty_bell, note: rrand_i(55, 65), release: 4, amp: 0.18
+##|     end
+##|   end
+##| end
 
 # --- Dark Vibrations ---
 live_loop :dark_vibrations do
