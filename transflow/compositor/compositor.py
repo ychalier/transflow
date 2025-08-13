@@ -68,8 +68,7 @@ class Layer:
         self.height = height
         self.reset_mode = reset_mode
         self.sources: list[BitmapSource] = []
-        self.base = numpy.indices((self.height, self.width), dtype=numpy.int32).transpose(1, 2, 0)
-        self.rgb = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
+        # self.rgba = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint8)
 
         # A bitmap of where pixels can come from
         self.mask_src = numpy.ones((self.height, self.width), dtype=numpy.bool)
@@ -80,23 +79,32 @@ class Layer:
         # The base alpha channel
         self.mask_alpha = numpy.ones((self.height, self.width), dtype=numpy.bool)
 
+        self.mask_reset = numpy.ones((self.height, self.width), dtype=numpy.float32)
+
+        self.transparent_pixels_can_move: bool = False
+        self.pixels_can_move_to_empty_spot: bool = True
+        self.pixels_can_move_to_filled_spot: bool = True
+        self.moving_pixels_leave_empty_spot: bool = False
+
+        self.base = numpy.indices((self.height, self.width), dtype=numpy.int32).transpose(1, 2, 0)
+        self.rgb = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
+        self.alpha = self.mask_alpha.copy()
+
         self.flow = numpy.zeros((self.height, self.width, 2), dtype=numpy.float32)
         self.flow_int = numpy.zeros((self.height, self.width, 2), dtype=numpy.int32)
         self.flow_flat = numpy.zeros((self.height * self.width, 1), dtype=numpy.int32)
 
-
-
-        # self.data = numpy.zeros((self.height, self.width, 8), dtype=numpy.int32)
-        # Data Structure of the Third Dimension
-        # 0: source index (0 is None, 1 is static, 2+ are bitmap sources)
-        # 1: source I
-        # 2: source J
-        # 3: source t (for dynamic sources)
-        # 4: source R
-        # 5: source G
-        # 6: source B
-        # 7: source A
-        # TODO: initialize data
+        ## self.data = numpy.zeros((self.height, self.width, 8), dtype=numpy.int32)
+        ## Data Structure of the Third Dimension
+        ## 0: source index (0 is None, 1 is static, 2+ are bitmap sources)
+        ## 1: source I
+        ## 2: source J
+        ## 3: source t (for dynamic sources)
+        ## 4: source R
+        ## 5: source G
+        ## 6: source B
+        ## 7: source A
+        ## TODO: initialize data
 
     def _update_flow(self, flow: numpy.ndarray):
         self.flow = flow
@@ -104,7 +112,8 @@ class Layer:
         self.flow_flat = numpy.ravel(self.flow_int[:,:,1] * self.width + self.flow_int[:,:,0])
 
     def _update_insert(self):
-        raise NotImplementedError() # TODO
+        pass
+        # raise NotImplementedError() # TODO
 
     def _update_move(self):
         """Quick recap of the process:
@@ -113,69 +122,71 @@ class Layer:
         3. If set, set the source of moving pixels to None
         4. Apply the movement
         """
+        # raise NotImplementedError()
+        pass
 
-        # TODO: those will probably be reused, so they could be stored as attributes
+        # # TODO: those will probably be reused, so they could be stored as attributes
 
-        shift = numpy.arange(self.height * self.width) + self.flow_flat
+        # shift = numpy.arange(self.height * self.width) + self.flow_flat
 
-        # 2D mask of places where pixels are allowed to move from
-        # TODO: apply other masks on top
-        mask_source = numpy.ones((self.height, self.width), dtype=numpy.bool)
+        # # 2D mask of places where pixels are allowed to move from
+        # # TODO: apply other masks on top
+        # mask_source = numpy.ones((self.height, self.width), dtype=numpy.bool)
 
-        # Apply the flow to the mask so its indices are in the target space
-        mask_source = mask_source.flat[shift].reshape((self.height, self.width))
+        # # Apply the flow to the mask so its indices are in the target space
+        # mask_source = mask_source.flat[shift].reshape((self.height, self.width))
 
-        # 2D mask of places where pixels are allowed to move to
-        # TODO: apply other masks on top
-        mask_target = numpy.ones((self.height, self.width), dtype=numpy.bool)
+        # # 2D mask of places where pixels are allowed to move to
+        # # TODO: apply other masks on top
+        # mask_target = numpy.ones((self.height, self.width), dtype=numpy.bool)
 
-        mask_all_flat = numpy.multiply(mask_source.flat, mask_target.flat)
-        where_target = numpy.multiply(self.flow_flat, mask_all_flat)[0]
-        where_source = where_target + self.flow_flat[where_target]
+        # mask_all_flat = numpy.multiply(mask_source.flat, mask_target.flat)
+        # where_target = numpy.multiply(self.flow_flat, mask_all_flat)[0]
+        # where_source = where_target + self.flow_flat[where_target]
 
-        crumble = True # TODO (and find another name!)
-        if crumble:
-            # Each pixel in where_source should be set to source None
-            putn_1d(self.rgb, 0, where_source, 8, 0)
+        # crumble = True # TODO (and find another name!)
+        # if crumble:
+        #     # Each pixel in where_source should be set to source None
+        #     putn_1d(self.rgb, 0, where_source, 8, 0)
 
-        putn(self.rgb, self.rgb.copy(), where_target, where_source, 8)
+        # putn(self.rgb, self.rgb.copy(), where_target, where_source, 8)
 
     def _update_reset_random(self):
-        threshold = numpy.ones((self.height, self.width), dtype=numpy.float32) # TODO
-        random = numpy.random.random(size=(self.height, self.width))
-        where = numpy.where(random < threshold)
-        aux = self.rgb.copy()
-        crumble = True # TODO
-        if crumble:
-            self.rgb[*where,0] = 0
-        self.rgb[aux[:,:,1], aux[:,:,2]][where] = aux[where]
+        # threshold = numpy.ones((self.height, self.width), dtype=numpy.float32) # TODO
+        # random = numpy.random.random(size=(self.height, self.width))
+        # where = numpy.where(random < threshold)
+        # aux = self.rgb.copy()
+        # crumble = True # TODO
+        # if crumble:
+        #     self.rgb[*where,0] = 0
+        # self.rgb[aux[:,:,1], aux[:,:,2]][where] = aux[where]
+        pass
 
     def _update_reset_constant(self):
-        # Where the source is not None
-        # TODO
-        # where = numpy.nonzero(self.data[:,:,0])
-
-        # dij[i, j] = (di, dj) is the move to apply to that pixel for it to return to its position
-        dij = self.rgb[:,:,1:3] - self.base
-
-        # TODO: parameter to control reset speed
-        speed = 1
-
-        dij_norm = numpy.linalg.norm(dij, axis=2)
-        dij_scaled = dij.copy()
-        where = numpy.nonzero(dij_norm)
-        dij_scaled[where] = speed * dij[where] / dij_norm.reshape((self.height, self.width, 1))[where]
-
-        aux = self.rgb.copy()
-
-        crumble = True # TODO
-        if crumble:
-            pass # TODO
-
-        # dij_scaled[i, j] + self.base is where to put each pixel
-        # TODO: test this in Numpy?
-        self.rgb[dij_scaled + self.base] = aux
-
+        # # Where the source is not None
+        # # TODO
+        # # where = numpy.nonzero(self.data[:,:,0])
+        #
+        # # dij[i, j] = (di, dj) is the move to apply to that pixel for it to return to its position
+        # dij = self.rgb[:,:,1:3] - self.base
+        #
+        # # TODO: parameter to control reset speed
+        # speed = 1
+        #
+        # dij_norm = numpy.linalg.norm(dij, axis=2)
+        # dij_scaled = dij.copy()
+        # where = numpy.nonzero(dij_norm)
+        # dij_scaled[where] = speed * dij[where] / dij_norm.reshape((self.height, self.width, 1))[where]
+        #
+        # aux = self.rgb.copy()
+        #
+        # crumble = True # TODO
+        # if crumble:
+        #     pass # TODO
+        #
+        # # dij_scaled[i, j] + self.base is where to put each pixel
+        # # TODO: test this in Numpy?
+        # self.rgb[dij_scaled + self.base] = aux
         pass # TODO
 
     def _update_reset_linear(self):
@@ -192,13 +203,14 @@ class Layer:
     def _update_sources(self):
         """Update the RGBA values of each dynamic source.
         """
-        for i, source in enumerate(self.sources):
-            source.next()
-            bitmap = source.get_bitmap()
-            where = numpy.where(self.rgb[:,:,0] == i + 2)
-            # self.data[:,:,4:4+bitmap.shape[2]] is the range of RGBA values in data attribute
-            # (self.data[:,:,1], self.data[:,:,2]) are the indices of values used from bitmap in data attribute
-            self.rgb[:,:,4:4+bitmap.shape[2]][where] = bitmap[self.rgb[:,:,1], self.rgb[:,:,2]][where]
+        # for i, source in enumerate(self.sources):
+        #     source.next()
+        #     bitmap = source.get_bitmap()
+        #     where = numpy.where(self.rgb[:,:,0] == i + 2)
+        #     # self.data[:,:,4:4+bitmap.shape[2]] is the range of RGBA values in data attribute
+        #     # (self.data[:,:,1], self.data[:,:,2]) are the indices of values used from bitmap in data attribute
+        #     self.rgb[:,:,4:4+bitmap.shape[2]][where] = bitmap[self.rgb[:,:,1], self.rgb[:,:,2]][where]
+        pass
 
     def update(self, flow: numpy.ndarray):
         self._update_flow(flow)
@@ -212,8 +224,9 @@ class Layer:
         :return: RGBA array of shape (height, width, 4)
         """
         return numpy.clip(
-            numpy.append(self.rgb, 255 * self.mask_alpha.reshape(2, 3, 1), axis=2),
+            numpy.append(self.rgb, 255 * self.alpha.reshape(2, 3, 1), axis=2),
             0, 255, dtype=numpy.uint8)
+        # return numpy.clip(self.rgba, 0, 255, dtype=numpy.uint8)
 
 
 class MappingLayer(Layer):
@@ -223,10 +236,6 @@ class MappingLayer(Layer):
         assert len(self.sources) == 1
         self.source = self.sources[0]
         self.mapping = self.base.copy() # shape: (height, width, 2) [i, j]
-        self.transparent_pixels_can_move: bool = False
-        self.pixels_can_move_to_empty_spot: bool = True
-        self.pixels_can_move_to_filled_spot: bool = True
-        self.moving_pixels_leave_empty_spot: bool = False
 
     def _update_move(self):
 
@@ -234,23 +243,67 @@ class MappingLayer(Layer):
         mask_src = self.mask_src.copy()
 
         if not self.transparent_pixels_can_move:
-            mask_src[numpy.where(self.mask_alpha == 0)] = 0
+            mask_src[numpy.where(self.alpha == 0)] = 0
         mask_src = mask_src.flat[shift].reshape((self.height, self.width))
 
         mask_dst = self.mask_dst.copy()
         if not self.pixels_can_move_to_empty_spot:
-            mask_dst[numpy.where(self.mask_alpha == 0)] = 0
+            mask_dst[numpy.where(self.alpha == 0)] = 0
         if not self.pixels_can_move_to_filled_spot:
-            mask_dst[numpy.nonzero(self.mask_alpha)] = 0
-        
+            mask_dst[numpy.nonzero(self.alpha)] = 0
+
         mask_all_flat = numpy.multiply(mask_src.flat, mask_dst.flat)
         where_target = numpy.nonzero(numpy.multiply(self.flow_flat, mask_all_flat))[0]
         where_source = where_target + self.flow_flat[where_target]
-        
+
         if self.moving_pixels_leave_empty_spot:
-            putn_1d(self.mask_alpha, 0, where_source, 1, 0)
-            putn_1d(self.mask_alpha, 1, where_target, 1, 0)
-        putn(self.rgb, self.rgb.copy(), where_target, where_source, 3)
+            putn_1d(self.alpha, 0, where_source, 1, 0)
+        putn_1d(self.alpha, 1, where_target, 1, 0)
+        putn(self.mapping, self.mapping.copy(), where_target, where_source, 2)
+
+        # NOTE
+        # summation is completely different. it does not take alpha into account.
+        # we could have a third layer class 'SumLayer', but would masks be correctly taken into account?
+        # it should inherit from the same base class as MappingLayer
+
+    def _update_reset_random(self):
+
+        # NOTE
+        # # This is the very basic behavior: some pixels get set back to their original value
+        # where = numpy.where(numpy.random.random(size=(self.height, self.width)) < self.mask_reset)
+        # self.mapping[where] = self.base[where]
+        # self.mask_alpha[where] = 1 # TODO: refer to original mask_alpha?
+
+        # NOTE
+        # Another potential behavior: some pixels GO BACK to their original position
+        # ie. move a selection of pixels to their original location
+        # this allows for 'self.moving_pixels_leave_empty_spot'
+        # and is more general.
+        # the thing is the orignal mask differs, as the original mask is more of source mask
+        # but it can be inverted? # TODO
+
+        # NOTE
+        # the mecanism described above seems like the right thing to do:
+        # moving pixels back to their original position.
+        # yet, the process is destructive: some pixels get overwritten.
+        # more than that, we can have a situation where the pixel is has to go back to has'nt changed
+        # but the spot it leaves when going back has just disappared.
+        # in that case, we have multiple options:
+        #  (i)   do nothing (leave the copy of the pixel / that's half a reset IMO)
+        #  (ii)  leave an empty spot
+        #  (iii) reset the mapping to the base value
+
+        # NOTE
+        # in non-random reset (ie. constant or linear reset), the reset is once
+        # again considered as a movement toward the original position.
+        # the same logic should apply?
+        # one issue I can think of, in case option (iii) 'RESET TO BASE VALUE'
+        # is not selected, is that resetting pixels to their positions will
+        # AGAIN proceed to delete them.
+        # that's probably worth trying.
+
+        # TODO!
+        pass
 
     def _update_sources(self):
         self.source.next()
@@ -261,7 +314,47 @@ class MappingLayer(Layer):
 
 
 class CanvasLayer(Layer):
-    pass
+
+    def __init__(self, *args, **kwargs):
+        Layer.__init__(self, *args, **kwargs)
+        self.origin = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint32)
+        # 0: source index
+        # 1: source i
+        # 2: source j
+        # 3: source frame
+
+    def _update_insert(self):
+        pass #TODO!
+
+    def _update_move(self):
+        shift = numpy.arange(self.height * self.width) + self.flow_flat
+        mask_src = self.mask_src.copy()
+
+        if not self.transparent_pixels_can_move:
+            mask_src[numpy.where(self.alpha == 0)] = 0
+        mask_src = mask_src.flat[shift].reshape((self.height, self.width))
+
+        mask_dst = self.mask_dst.copy()
+        if not self.pixels_can_move_to_empty_spot:
+            mask_dst[numpy.where(self.alpha == 0)] = 0
+        if not self.pixels_can_move_to_filled_spot:
+            mask_dst[numpy.nonzero(self.alpha)] = 0
+
+        mask_all_flat = numpy.multiply(mask_src.flat, mask_dst.flat)
+        where_target = numpy.nonzero(numpy.multiply(self.flow_flat, mask_all_flat))[0]
+        where_source = where_target + self.flow_flat[where_target]
+
+        if self.moving_pixels_leave_empty_spot:
+            putn_1d(self.alpha, 0, where_source, 1, 0)
+        putn_1d(self.alpha, 1, where_target, 1, 0)
+
+        # TODO: this is the only difference with MappingLayer
+        putn(self.rgb, self.rgb.copy(), where_target, where_source, 3)
+
+
+    def _update_sources(self):
+        pass
+
 
 
 class Compositor:
