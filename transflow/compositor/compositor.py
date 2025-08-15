@@ -25,6 +25,10 @@ class BitmapSource:
 
     def next(self):
         pass # TODO
+    
+    @property
+    def frame_number(self) -> int:
+        return 0
 
 
 def putn(target_array: numpy.ndarray, source_array: numpy.ndarray, target_inds: numpy.ndarray, source_inds: numpy.ndarray, scale: int):
@@ -62,23 +66,44 @@ class ResetMode(enum.Enum):
 
 
 class Layer:
+    """Base class for a layer.
+    """
 
-    def __init__(self, width: int, height: int, reset_mode: ResetMode, depth: int = 3):
+    def __init__(self, width: int, height: int, reset_mode: ResetMode):
         self.width = width
         self.height = height
         self.reset_mode = reset_mode
         self.sources: list[BitmapSource] = []
-        # self.rgba = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint8)
+        self.rgba = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint8)
 
-        # A bitmap of where pixels can come from
+    def update(self, flow: numpy.ndarray):
+        raise NotImplementedError()
+
+    def render(self) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
+        """
+        :return: RGBA array of shape (height, width, 4)
+        """
+        # return numpy.clip(
+        #     numpy.append(self.rgb, 255 * self.alpha.reshape(2, 3, 1), axis=2),
+        #     0, 255, dtype=numpy.uint8)
+        return numpy.clip(self.rgba, 0, 255, dtype=numpy.uint8)
+
+
+class MovementLayer(Layer):
+    """A layer moving elements in a 2D array.
+    """
+
+    DEPTH: int = 4
+    POS_I_IDX: int = 0
+    POS_J_IDX: int = 1
+    POS_A_IDX: int = 2
+
+    def __init__(self, width: int, height: int, reset_mode: ResetMode):
+        Layer.__init__(self, width, height, reset_mode)
+
         self.mask_src = numpy.ones((self.height, self.width), dtype=numpy.bool)
-
-        # A bitmap of where pixels can go to
         self.mask_dst = numpy.ones((self.height, self.width), dtype=numpy.bool)
-
-        # The base alpha channel
         self.mask_alpha = numpy.ones((self.height, self.width), dtype=numpy.bool)
-
         self.mask_reset = numpy.ones((self.height, self.width), dtype=numpy.float32)
 
         self.transparent_pixels_can_move: bool = False
@@ -91,12 +116,10 @@ class Layer:
         self.reset_linear_factor: float = 0.1 # 0: no movement / 1: instant reset
 
         self.base = numpy.indices((self.height, self.width), dtype=numpy.int32).transpose(1, 2, 0)
-        self.depth = depth
-        self.data = numpy.zeros((self.height, self.width, self.depth), dtype=numpy.int32)
+        self.data = numpy.zeros((self.height, self.width, self.DEPTH), dtype=numpy.int32)
         self.initial_data = self.data.copy()
-        self.rgb = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
-        self.alpha = self.mask_alpha.copy()
-
+        # self.rgb = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
+        # self.alpha = self.mask_alpha.copy()
         self.flow = numpy.zeros((self.height, self.width, 2), dtype=numpy.float32)
         self.flow_int = numpy.zeros((self.height, self.width, 2), dtype=numpy.int32)
         self.flow_flat = numpy.zeros((self.height * self.width, 1), dtype=numpy.int32)
@@ -113,6 +136,9 @@ class Layer:
         ## 7: source A
         ## TODO: initialize data
 
+    def _post_init(self):
+        self.initial_data = self.data.copy()
+
     def _update_flow(self, flow: numpy.ndarray):
         self.flow = flow
         self.flow_int = numpy.round(self.flow).astype(numpy.int32)
@@ -123,27 +149,23 @@ class Layer:
         mask_src = self.mask_src.copy()
 
         if not self.transparent_pixels_can_move:
-            mask_src[numpy.where(self.alpha == 0)] = 0
+            mask_src[numpy.where(self.data[:,:,self.POS_A_IDX] == 0)] = 0
         mask_src = mask_src.flat[shift].reshape((self.height, self.width))
 
         mask_dst = self.mask_dst.copy()
         if not self.pixels_can_move_to_empty_spot:
-            mask_dst[numpy.where(self.alpha == 0)] = 0
+            mask_dst[numpy.where(self.data[:,:,self.POS_A_IDX] == 0)] = 0
         if not self.pixels_can_move_to_filled_spot:
-            mask_dst[numpy.nonzero(self.alpha)] = 0
+            mask_dst[numpy.nonzero(self.data[:,:,self.POS_A_IDX])] = 0
 
         mask_all_flat = numpy.multiply(mask_src.flat, mask_dst.flat)
         where_target = numpy.nonzero(numpy.multiply(self.flow_flat, mask_all_flat))[0]
         where_source = where_target + self.flow_flat[where_target]
 
         if self.moving_pixels_leave_empty_spot:
-            putn_1d(self.alpha, 0, where_source, 1, 0)
-        putn_1d(self.alpha, 1, where_target, 1, 0)
-        putn(self.data, self.data.copy(), where_target, where_source, self.depth)
-
-    def _update_insert(self):
-        pass
-        # raise NotImplementedError() # TODO      
+            putn_1d(self.data[:,:,self.POS_A_IDX], 0, where_source, 1, 0)
+        putn_1d(self.data[:,:,self.POS_A_IDX], 1, where_target, 1, 0)
+        putn(self.data, self.data.copy(), where_target, where_source, self.DEPTH)
 
     # def _update_move(self):
     #     """Quick recap of the process:
@@ -191,17 +213,16 @@ class Layer:
     #     #     self.rgb[*where,0] = 0
     #     # self.rgb[aux[:,:,1], aux[:,:,2]][where] = aux[where]
     #     pass
-    
+
     def _apply_reset_movement(self, movement_flat: numpy.ndarray, mask_reset: numpy.ndarray):
         where_target = numpy.nonzero(numpy.multiply(movement_flat, mask_reset))[0]
         where_source = where_target + self.flow_flat[where_target]
-        
         if self.reset_pixels_leave_healed_spot:
-            putn(self.data, self.initial_data, where_source, where_source, self.depth)
+            putn(self.data, self.initial_data, where_source, where_source, self.DEPTH)
         elif self.reset_pixels_leave_empty_spot:
-            putn_1d(self.alpha, 0, where_source, 1, 0)
-        putn_1d(self.alpha, 1, where_target, 1, 0)
-        putn(self.data, self.data.copy(), where_target, where_source, self.depth)
+            putn_1d(self.data[:,:,self.POS_A_IDX], 0, where_source, 1, 0)
+        putn_1d(self.data[:,:,self.POS_A_IDX], 1, where_target, 1, 0)
+        putn(self.data, self.data.copy(), where_target, where_source, self.DEPTH)
 
     def _update_reset_random(self):
 
@@ -243,20 +264,20 @@ class Layer:
         mask_reset = self.mask_reset.copy() # TODO: apply more masking?
         random = numpy.random.random(size=(self.height, self.width))
         mask_reset[numpy.where(random < mask_reset)] = 0
-        movement_flat = numpy.arange(self.width * self.height) - numpy.ravel(self.data[:,:,0] * self.width + self.data[:,:,1])
+        movement_flat = numpy.arange(self.width * self.height) - numpy.ravel(self.data[:,:,self.POS_I_IDX] * self.width + self.data[:,:,self.POS_J_IDX])
         self._apply_reset_movement(movement_flat, mask_reset)
 
-    def _update_reset_constant(self):        
-        dij = self.data[:,:,:2] - self.base
+    def _update_reset_constant(self):
+        dij = self.data[:,:,(self.POS_I_IDX, self.POS_J_IDX)] - self.base
         dij_norm = numpy.linalg.norm(dij, axis=2)
         dij_scaled = dij.copy()
         where = numpy.nonzero(dij_norm)
         dij_scaled[where] = self.reset_constant_step * dij[where] / dij_norm.reshape((self.height, self.width, 1))[where]
         movement_flat = numpy.ravel(dij_scaled[:,:,0] * self.width + dij_scaled[:,:,1])
         self._apply_reset_movement(movement_flat, self.mask_reset.copy())
-    
-    def _update_reset_linear(self):        
-        dij = self.reset_linear_factor * (self.data[:,:,:2] - self.base)
+
+    def _update_reset_linear(self):
+        dij = self.reset_linear_factor * (self.data[:,:,(self.POS_I_IDX, self.POS_J_IDX)] - self.base)
         movement_flat = numpy.ravel(dij[:,:,0] * self.width + dij[:,:,1])
         self._apply_reset_movement(movement_flat, self.mask_reset.copy())
 
@@ -268,101 +289,97 @@ class Layer:
         elif self.reset_mode == ResetMode.LINEAR:
             self._update_reset_linear()
 
-    # def _update_sources(self):
-    #     """Update the RGBA values of each dynamic source.
-    #     """
-    #     # for i, source in enumerate(self.sources):
-    #     #     source.next()
-    #     #     bitmap = source.get_bitmap()
-    #     #     where = numpy.where(self.rgb[:,:,0] == i + 2)
-    #     #     # self.data[:,:,4:4+bitmap.shape[2]] is the range of RGBA values in data attribute
-    #     #     # (self.data[:,:,1], self.data[:,:,2]) are the indices of values used from bitmap in data attribute
-    #     #     self.rgb[:,:,4:4+bitmap.shape[2]][where] = bitmap[self.rgb[:,:,1], self.rgb[:,:,2]][where]
-    #     pass
-
-    def _pre_update(self):
-        pass
-
-    def _post_update(self):
-        pass
+    def _update_rgba(self):
+        raise NotImplementedError()
 
     def update(self, flow: numpy.ndarray):
         self._update_flow(flow)
-        self._pre_update()
         self._update_move()
         self._update_reset()
-        self._post_update()
-
-    def render(self) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
-        """
-        :return: RGBA array of shape (height, width, 4)
-        """
-        return numpy.clip(
-            numpy.append(self.rgb, 255 * self.alpha.reshape(2, 3, 1), axis=2),
-            0, 255, dtype=numpy.uint8)
-        # return numpy.clip(self.rgba, 0, 255, dtype=numpy.uint8)
+        self._update_rgba()
 
 
-class VideoLayer(Layer):
+class ReferenceLayer(MovementLayer):
 
-    def __init__(self, *args, **kwargs):
-        Layer.__init__(self, *args, depth=3, **kwargs)
+    DEPTH = 4 # i, j, alpha, source
+    POS_I_IDX: int = 0
+    POS_J_IDX: int = 1
+    POS_A_IDX: int = 2
+
+    def __init__(self, width: int, height: int, reset_mode: ResetMode):
+        MovementLayer.__init__(self, width, height, reset_mode)
         self.data[:,:,0:2] = self.base.copy() # shape: (height, width, 2) [i, j]
-        self.data[:,:,2] = 0 # TODO: initialize source index / set to -1??
-        self.initial_data = self.data.copy()
+        self.data[:,:,2] = 1
+        self.data[:,:,3] = 0 # source index
+        self._post_init()
         # NOTE
         # summation is completely different. it does not take alpha into account.
         # we could have a third layer class 'SumLayer', but would masks be correctly taken into account?
         # it should inherit from the same base class as MappingLayer
 
-    def _post_update(self):
+    def _update_rgba(self):
         for i, source in enumerate(self.sources):
             source.next()
             where = numpy.where(self.data[:,:,2] == i)
             pixmap = source.get_pixmap()
             mapping_i = numpy.clip(numpy.round(self.data[:,:,0]), 0, self.height - 1)[where]
             mapping_j = numpy.clip(numpy.round(self.data[:,:,1]), 0, self.width - 1)[where]
-            self.rgb[:,:,pixmap.shape[2]][where] = pixmap[mapping_i, mapping_j][where]
+            self.rgba[:,:,pixmap.shape[2]][where] = pixmap[mapping_i, mapping_j][where]
+            self.rgba[:,:,3] = self.data[:,:,3] # TODO: pixmap alpha channel (if any) gets overwritten
 
 
-class IntroductionLayer(Layer):
+class IntroductionLayer(MovementLayer):
 
-    def __init__(self, *args, **kwargs):
-        Layer.__init__(self, *args, **kwargs)
-        # self.data = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint32)
-        self.initial_data = self.data.copy()
-        # 0: source index
-        # 1: source i
-        # 2: source j
-        # 3: source frame
-    
-    def _pre_update(self):
-        pass #TODO!
+    DEPTH = 8 # r, g, b, alpha, source, i, j, frame
+    POS_I_IDX: int = 5
+    POS_J_IDX: int = 6
+    POS_A_IDX: int = 3
 
-    def _update_move(self):
-        shift = numpy.arange(self.height * self.width) + self.flow_flat
-        mask_src = self.mask_src.copy()
+    def __init__(self, width: int, height: int, reset_mode: ResetMode):
+        MovementLayer.__init__(self, width, height, reset_mode)
+        self._post_init()
+        self.introduction_masks: list[numpy.ndarray] = []
+        for _ in self.sources:
+            self.introduction_masks.append(numpy.ones((self.height, self.width), dtype=numpy.bool))
+        self.introduce_pixels_on_empty_spots: bool = True
+        self.introduce_pixels_on_filled_spots: bool = True
+        self.introduce_moving_pixels: bool = True
+        self.introduce_unmoving_pixels: bool = True
 
-        if not self.transparent_pixels_can_move:
-            mask_src[numpy.where(self.alpha == 0)] = 0
-        mask_src = mask_src.flat[shift].reshape((self.height, self.width))
+    def _update_introduction(self):
+        mask = numpy.ones((self.height, self.width), dtype=numpy.bool) #self.mask_introduction.copy()
+        if not self.introduce_pixels_on_empty_spots:
+            mask[numpy.where(self.data[:,:,3]) == 0] = 0
+        if not self.introduce_pixels_on_filled_spots:
+            mask[numpy.nonzero(self.data[:,:,3])] = 0
+        if not self.introduce_moving_pixels:
+            mask.flat[numpy.nonzero(self.flow_flat)] = 0
+        if not self.introduce_unmoving_pixels:
+            mask.flat[numpy.where(self.flow_flat) == 0] = 0
+        for i, (source, mask_introduction) in enumerate(zip(self.sources, self.introduction_masks)):
+            source.next()
+            pixmap = source.get_pixmap()
+            where_target = numpy.nonzero(numpy.multiply(mask.flat, mask_introduction.flat))[0]
+            where_source = where_target + self.flow_flat[where_target]
+            arrays = [
+                pixmap,
+                numpy.broadcast_to(i, (self.height, self.width, 1)),
+                self.base,
+                numpy.broadcast_to(source.frame_number, (self.height, self.width, 1)),
+            ]
+            if pixmap.shape[2] == 3:
+                arrays.insert(1, numpy.broadcast_to(1, (self.height, self.width, 1)))
+            putn(self.data, numpy.concat(arrays, axis=2), where_target, where_source, 8)            
 
-        mask_dst = self.mask_dst.copy()
-        if not self.pixels_can_move_to_empty_spot:
-            mask_dst[numpy.where(self.alpha == 0)] = 0
-        if not self.pixels_can_move_to_filled_spot:
-            mask_dst[numpy.nonzero(self.alpha)] = 0
+    def _update_rgba(self):
+        self.rgba = self.data[:,:,:4]
 
-        mask_all_flat = numpy.multiply(mask_src.flat, mask_dst.flat)
-        where_target = numpy.nonzero(numpy.multiply(self.flow_flat, mask_all_flat))[0]
-        where_source = where_target + self.flow_flat[where_target]
-
-        if self.moving_pixels_leave_empty_spot:
-            putn_1d(self.alpha, 0, where_source, 1, 0)
-        putn_1d(self.alpha, 1, where_target, 1, 0)
-
-        # TODO: this is the only difference with MappingLayer
-        putn(self.rgb, self.rgb.copy(), where_target, where_source, 3)
+    def update(self, flow: numpy.ndarray):
+        self._update_flow(flow)
+        self._update_move()
+        self._update_introduction()
+        self._update_reset()
+        self._update_rgba()
 
 
 class Compositor:
