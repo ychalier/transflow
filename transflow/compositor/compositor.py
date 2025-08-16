@@ -354,12 +354,12 @@ class ReferenceLayer(MovementLayer):
 
     def _update_rgba(self):
         for i, source in enumerate(self.sources):
-            where = numpy.where(self.data[:,:,2] == i)
+            where = numpy.where(self.data[:,:,3] == i)
             pixmap = source.next()
             mapping_i = numpy.clip(numpy.round(self.data[:,:,0]), 0, self.height - 1)[where]
             mapping_j = numpy.clip(numpy.round(self.data[:,:,1]), 0, self.width - 1)[where]
-            self.rgba[:,:,pixmap.shape[2]][where] = pixmap[mapping_i, mapping_j][where]
-            self.rgba[:,:,3] = self.data[:,:,3] # TODO: pixmap alpha channel (if any) gets overwritten
+            self.rgba[:,:,:pixmap.shape[2]][where] = pixmap[mapping_i, mapping_j]
+            self.rgba[:,:,3] = self.data[:,:,2] # TODO: pixmap alpha channel (if any) gets overwritten
 
 
 class IntroductionLayer(MovementLayer):
@@ -437,7 +437,7 @@ class Compositor:
         for layer in self.layers:
             layer_image = layer.render()
             where_opaque = numpy.nonzero(layer_image[:,:,3])
-            image[where_opaque] = layer_image[where_opaque][:,:,:3]
+            image[where_opaque] = layer_image[:,:,:3][where_opaque]
         return image
 
     @classmethod
