@@ -8,6 +8,44 @@ from .flow import Direction, LockMode
 from .utils import parse_timestamp
 
 
+class PixmapSourceConfig:
+
+    def __init__(self,
+            path: str,
+            seek_time: float | str | None = None,
+            alteration_path: str | None = None,
+            repeat: int = 1,
+            layer_index: int | None = None,
+            layer_class: str | None = None):
+        self.path: str = path
+        self.seek_time: float | None = parse_timestamp(seek_time)
+        self.alteration_path: str | None = alteration_path
+        self.repeat: int = repeat
+        self.layer_index: int = 0 if layer_index is None else layer_index
+        self.layer_class: str = "reference" if layer_class is None else layer_class
+    
+    @classmethod
+    def fromdict(cls, d: dict):
+        return cls(
+            d["path"],
+            seek_time=d.get("seek_time", None),
+            alteration_path=d.get("alteration_path", None),
+            repeat=d.get("repeat", 1),
+            layer_index=d.get("layer_index", None),
+            layer_class=d.get("layer_class", None),
+        )
+    
+    def todict(self) -> dict:
+        return {
+            "path": self.path,
+            "seek_time": self.seek_time,
+            "alteration_path": self.alteration_path,
+            "repeat": self.repeat,
+            "layer_index": self.layer_index,
+            "layer_class": self.layer_class
+        }
+
+
 class Config:
 
     def __init__(self,
@@ -26,10 +64,7 @@ class Config:
             repeat: int = 1,
             lock_expr: str | None = None,
             lock_mode: str | int | LockMode = LockMode.STAY,
-            bitmap_path: str | None = None,
-            bitmap_seek_time: float | str | None = None,
-            bitmap_alteration_path: str | None = None,
-            bitmap_repeat: int = 1,
+            pixmap_sources: list[PixmapSourceConfig] = [],
             acc_method: str = "map",
             reset_mode: str = "off",
             reset_alpha: float = .9,
@@ -83,10 +118,7 @@ class Config:
         self.lock_mode: LockMode = LockMode.from_arg(lock_mode)
 
         # Bitmap Args
-        self.bitmap_path: str | None = bitmap_path
-        self.bitmap_seek_time: float | None = parse_timestamp(bitmap_seek_time)
-        self.bitmap_alteration_path: str | None = bitmap_alteration_path
-        self.bitmap_repeat: int = bitmap_repeat
+        self.bitmap_sources = pixmap_sources
 
         # Accumulator Args
         self.acc_method: str = acc_method
@@ -144,10 +176,10 @@ class Config:
             repeat=d.get("repeat", 1),
             lock_expr=d.get("lock_expr", None),
             lock_mode=d.get("lock_mode", LockMode.STAY),
-            bitmap_path=d.get("bitmap_path", None),
-            bitmap_seek_time=d.get("bitmap_seek_time", None),
-            bitmap_alteration_path=d.get("bitmap_alteration_path", None),
-            bitmap_repeat=d.get("bitmap_repeat", 1),
+            pixmap_sources=[
+                PixmapSourceConfig.fromdict(dd)
+                for dd in d.get("pixmap_sources", [])
+            ],
             acc_method=d.get("acc_method", "map"),
             reset_mode=d.get("reset_mode", "off"),
             reset_alpha=d.get("reset_alpha", .9),
@@ -189,10 +221,7 @@ class Config:
             "repeat": self.repeat,
             "lock_expr": self.lock_expr,
             "lock_mode": self.lock_mode.value,
-            "bitmap_path": self.bitmap_path,
-            "bitmap_seek_time": self.bitmap_seek_time,
-            "bitmap_alteration_path": self.bitmap_alteration_path,
-            "bitmap_repeat": self.bitmap_repeat,
+            "bitmap_sources": [b.todict() for b in self.bitmap_sources],
             "acc_method": self.acc_method,
             "reset_mode": self.reset_mode,
             "reset_alpha": self.reset_alpha,

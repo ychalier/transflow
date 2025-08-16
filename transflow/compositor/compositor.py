@@ -3,32 +3,46 @@ https://stackoverflow.com/questions/9195455/how-to-document-a-method-with-parame
 """
 import enum
 import logging
-
+import multiprocessing
 import numpy
+from collections.abc import Sequence
 
 from ..utils import parse_hex_color
+from ..config import PixmapSourceConfig
 
 
 logger = logging.getLogger(__name__)
 
 
-class BitmapSource:
+class EndOfPixmap(StopIteration):
+    pass
 
-    def __init__(self, width: int, height: int):
-        self.width = width
-        self.height = height
 
-    def get_pixmap(self) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
-        arr = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
-        # TODO
-        return arr
+class PixmapSourceInterface:
 
-    def next(self):
-        pass # TODO
+    def __init__(self, queue: multiprocessing.Queue):
+        self.queue = queue
+        self.image: numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]] | None = None
+        self.counter: int = -1
+    
+    def get(self) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
+        assert self.image is not None
+        return self.image
+
+    def next(self, timeout: float = 1) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
+        image = self.queue.get(timeout=timeout)
+        if image is None:
+            raise EndOfPixmap
+        assert isinstance(image, numpy.ndarray)
+        assert len(image.shape) == 3
+        assert image.dtype == numpy.uint8
+        self.image = image
+        self.counter += 1
+        return self.image
     
     @property
     def frame_number(self) -> int:
-        return 0
+        return self.counter
 
 
 def putn(target_array: numpy.ndarray, source_array: numpy.ndarray, target_inds: numpy.ndarray, source_inds: numpy.ndarray, scale: int):
@@ -69,11 +83,15 @@ class Layer:
     """Base class for a layer.
     """
 
-    def __init__(self, width: int, height: int, reset_mode: ResetMode):
+    def __init__(self,
+            width: int,
+            height: int,
+            sources: list[PixmapSourceInterface],
+            reset_mode: ResetMode = ResetMode.OFF):
         self.width = width
         self.height = height
+        self.sources: list[PixmapSourceInterface] = sources
         self.reset_mode = reset_mode
-        self.sources: list[BitmapSource] = []
         self.rgba = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint8)
 
     def update(self, flow: numpy.ndarray):
@@ -88,6 +106,23 @@ class Layer:
         #     0, 255, dtype=numpy.uint8)
         return numpy.clip(self.rgba, 0, 255, dtype=numpy.uint8)
 
+    @classmethod
+    def from_args(cls, 
+            classname: str,
+            width: int,
+            height: int,
+            sources: list[PixmapSourceInterface],
+            reset_mode: ResetMode = ResetMode.OFF):
+        args = [width, height, sources]
+        kwargs = {
+            "reset_mode": reset_mode,
+        }
+        if classname == "reference":
+            return ReferenceLayer(*args, **kwargs)
+        if classname == "introduction":
+            return IntroductionLayer(*args, **kwargs)
+        raise ValueError(f"Unknown layer classname {classname}")
+
 
 class MovementLayer(Layer):
     """A layer moving elements in a 2D array.
@@ -98,8 +133,8 @@ class MovementLayer(Layer):
     POS_J_IDX: int = 1
     POS_A_IDX: int = 2
 
-    def __init__(self, width: int, height: int, reset_mode: ResetMode):
-        Layer.__init__(self, width, height, reset_mode)
+    def __init__(self, *args, **kwargs):
+        Layer.__init__(self, *args, **kwargs)
 
         self.mask_src = numpy.ones((self.height, self.width), dtype=numpy.bool)
         self.mask_dst = numpy.ones((self.height, self.width), dtype=numpy.bool)
@@ -306,8 +341,8 @@ class ReferenceLayer(MovementLayer):
     POS_J_IDX: int = 1
     POS_A_IDX: int = 2
 
-    def __init__(self, width: int, height: int, reset_mode: ResetMode):
-        MovementLayer.__init__(self, width, height, reset_mode)
+    def __init__(self, *args, **kwargs):
+        MovementLayer.__init__(self, *args, **kwargs)
         self.data[:,:,0:2] = self.base.copy() # shape: (height, width, 2) [i, j]
         self.data[:,:,2] = 1
         self.data[:,:,3] = 0 # source index
@@ -319,9 +354,8 @@ class ReferenceLayer(MovementLayer):
 
     def _update_rgba(self):
         for i, source in enumerate(self.sources):
-            source.next()
             where = numpy.where(self.data[:,:,2] == i)
-            pixmap = source.get_pixmap()
+            pixmap = source.next()
             mapping_i = numpy.clip(numpy.round(self.data[:,:,0]), 0, self.height - 1)[where]
             mapping_j = numpy.clip(numpy.round(self.data[:,:,1]), 0, self.width - 1)[where]
             self.rgba[:,:,pixmap.shape[2]][where] = pixmap[mapping_i, mapping_j][where]
@@ -335,8 +369,8 @@ class IntroductionLayer(MovementLayer):
     POS_J_IDX: int = 6
     POS_A_IDX: int = 3
 
-    def __init__(self, width: int, height: int, reset_mode: ResetMode):
-        MovementLayer.__init__(self, width, height, reset_mode)
+    def __init__(self, *args, **kwargs):
+        MovementLayer.__init__(self, *args, **kwargs)
         self._post_init()
         self.introduction_masks: list[numpy.ndarray] = []
         for _ in self.sources:
@@ -357,8 +391,7 @@ class IntroductionLayer(MovementLayer):
         if not self.introduce_unmoving_pixels:
             mask.flat[numpy.where(self.flow_flat) == 0] = 0
         for i, (source, mask_introduction) in enumerate(zip(self.sources, self.introduction_masks)):
-            source.next()
-            pixmap = source.get_pixmap()
+            pixmap = source.next()
             where_target = numpy.nonzero(numpy.multiply(mask.flat, mask_introduction.flat))[0]
             where_source = where_target + self.flow_flat[where_target]
             arrays = [
@@ -384,13 +417,13 @@ class IntroductionLayer(MovementLayer):
 
 class Compositor:
 
-    def __init__(self, width: int, height: int, background_color: str = "#ffffff"):
+    def __init__(self, width: int, height: int, layers: Sequence[Layer], background_color: str = "#ffffff"):
         self.width = width
         self.height = height
         self.background_color = parse_hex_color(background_color)
         self.background = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
         self.background[:,:] = self.background_color
-        self.layers: list[Layer] = [] # TODO: how are layers added/created?
+        self.layers: Sequence[Layer] = layers
 
     def update(self, flow: numpy.ndarray):
         for layer in self.layers:
@@ -406,3 +439,25 @@ class Compositor:
             where_opaque = numpy.nonzero(layer_image[:,:,3])
             image[where_opaque] = layer_image[where_opaque][:,:,:3]
         return image
+
+    @classmethod
+    def from_args(cls,
+            width: int,
+            height: int,
+            configs: list[PixmapSourceConfig],
+            interfaces: list[PixmapSourceInterface]):
+        layer_sources = {}
+        layer_classes = {}
+        for config, interface in zip(configs, interfaces):
+            if config.layer_index in layer_classes:
+                if layer_classes[config.layer_index] != config.layer_class:
+                    raise ValueError(f"Clashing layer class for layer {config.layer_index}: got {layer_classes[config.layer_index]} and {config.layer_class}")
+            else:
+                layer_classes[config.layer_index] = config.layer_class
+            layer_sources.setdefault(config.layer_index, [])
+            layer_sources[config.layer_index].append(interface)
+        layers = [
+            Layer.from_args(layer_classes[i], width, height, layer_sources[i])
+            for i in sorted(layer_classes.keys())
+        ]
+        return cls(width, height, layers)

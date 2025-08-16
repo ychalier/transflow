@@ -5,6 +5,25 @@ import argparse
 import pathlib
 
 
+class AppendPixmapSource(argparse.Action):
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        pixmap_sources = getattr(namespace, "pixmap_sources", None)
+        if pixmap_sources is None:
+            pixmap_sources = []
+            setattr(namespace, "pixmap_sources", pixmap_sources)
+        pixmap_sources.append({"path": values})
+
+
+class SetForLastPixmapSource(argparse.Action):
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        pixmap_sources = getattr(namespace, "pixmap_sources", None)
+        if not pixmap_sources:
+            parser.error(f"{option_string} must follow an -p/--pixmap")
+        pixmap_sources[-1][self.dest] = values
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -26,10 +45,12 @@ def main():
     parser.add_argument("-lm", "--lock-mode", type=str, default="stay", choices=["skip", "stay"], help="When the flow is locked, either pause the source ('stay') or continue reading it ('skip')")
 
     # Bitmap Args
-    parser.add_argument("-b", "--bitmap", type=str, default=None, help="input bitmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
-    parser.add_argument("-bss", "--bitmap-seek", type=str, default=None, help="start timestamp for bitmap source")
-    parser.add_argument("-ba", "--bitmap-alteration", type=str, default=None, help="path to a PNG file containing alteration to apply to bitmaps")
-    parser.add_argument("-br", "--bitmap-repeat", type=int, default=1, help="repeat bitmap inputs (0 to loop indefinitely)")
+    parser.add_argument("-p", "--pixmap", action=AppendPixmapSource, type=str, help="input pixmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
+    parser.add_argument("-li", "--layer-index", action=SetForLastPixmapSource, type=int, default=0)
+    parser.add_argument("-lc", "--layer-class", action=SetForLastPixmapSource, type=str, choices=["reference", "introduction"], default="reference")
+    parser.add_argument("-ps", "--pixmap-seek", action=SetForLastPixmapSource, type=str, default=None, help="start timestamp for pixmap source")
+    parser.add_argument("-pa", "--pixmap-alteration", action=SetForLastPixmapSource, type=str, default=None, help="path to a PNG file containing alteration to apply to pixmap")
+    parser.add_argument("-pr", "--pixmap-repeat", action=SetForLastPixmapSource, type=int, default=1, help="repeat pixmap input (0 to loop indefinitely)")
 
     # Accumulator Args
     parser.add_argument("-m", "--acc-method", type=str, default="map", choices=["map", "stack", "sum", "crumble", "canvas"], help="accumulator method ('map' is default, 'stack' is very slow, 'sum' only works with backward flows)")
@@ -84,7 +105,7 @@ def main():
         from .gui import start_gui
         start_gui()
         return
-    from .config import Config
+    from .config import Config, PixmapSourceConfig
     if args.flow.endswith(".json"):
         import json
         with open(args.flow, "r") as file:
@@ -107,11 +128,18 @@ def main():
             repeat=args.repeat,
             lock_expr=args.lock,
             lock_mode=args.lock_mode,
-            # Bitmap Args
-            bitmap_path=args.bitmap,
-            bitmap_seek_time=args.bitmap_seek,
-            bitmap_alteration_path=args.bitmap_alteration,
-            bitmap_repeat=args.bitmap_repeat,
+            # Pixmap Args
+            pixmap_sources=[
+                PixmapSourceConfig(
+                    d["path"],
+                    seek_time=d.get("pixmap_seek"),
+                    alteration_path=d.get("pixmap_alteration"),
+                    repeat=d.get("pixmap_repeat"),
+                    layer_index=d.get("layer_index"),
+                    layer_class=d.get("layer_class"),
+                )
+                for d in args.pixmap_sources
+            ],
             # Accumulator Args
             acc_method=args.acc_method,
             reset_mode=args.reset_mode,
