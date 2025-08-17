@@ -5,23 +5,46 @@ import argparse
 import pathlib
 
 
-class AppendPixmapSource(argparse.Action):
+class AppendAction(argparse.Action):
+
+    LISTNAME = "foo"
+    FIRSTARG = "bar"
 
     def __call__(self, parser, namespace, values, option_string=None):
-        pixmap_sources = getattr(namespace, "pixmap_sources", None)
-        if pixmap_sources is None:
-            pixmap_sources = []
-            setattr(namespace, "pixmap_sources", pixmap_sources)
-        pixmap_sources.append({"path": values})
+        elements = getattr(namespace, self.LISTNAME, None)
+        if elements is None:
+            elements = []
+            setattr(namespace, self.LISTNAME, elements)
+        elements.append({self.FIRSTARG: values})
 
 
-class SetForLastPixmapSource(argparse.Action):
+class SetForLastAction(argparse.Action):
+
+    LISTNAME = "foo"
 
     def __call__(self, parser, namespace, values, option_string=None):
-        pixmap_sources = getattr(namespace, "pixmap_sources", None)
-        if not pixmap_sources:
-            parser.error(f"{option_string} must follow an -p/--pixmap")
-        pixmap_sources[-1][self.dest] = values
+        elements = getattr(namespace, self.LISTNAME, None)
+        if not elements:
+            parser.error(f"{option_string} does not have a {self.LISTNAME} to attach to")
+        elements[-1][self.dest] = values
+
+
+class AppendPixmapSource(AppendAction):
+    LISTNAME = "pixmap_sources"
+    FIRSTARG = "path"
+
+
+class SetForLastPixmapSource(SetForLastAction):
+    LISTNAME = "pixmap_sources"
+
+
+class AppendLayer(AppendAction):
+    LISTNAME = "layers"
+    FIRSTARG = "index"
+
+
+class SetForLastLayer(SetForLastAction):
+    LISTNAME = "layers"
 
 
 def main():
@@ -46,26 +69,31 @@ def main():
 
     # Bitmap Args
     parser.add_argument("-p", "--pixmap", action=AppendPixmapSource, type=str, help="input pixmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
-    parser.add_argument("-li", "--layer-index", action=SetForLastPixmapSource, type=int, default=0)
-    parser.add_argument("-lc", "--layer-class", action=SetForLastPixmapSource, type=str, choices=["reference", "introduction"], default="reference")
+    parser.add_argument("-pl", "--pixmal-layer", action=SetForLastPixmapSource, type=int, default=0)
+    # parser.add_argument("-lc", "--layer-class", action=SetForLastPixmapSource, type=str, choices=["reference", "introduction"], default="reference")
     parser.add_argument("-ps", "--pixmap-seek", action=SetForLastPixmapSource, type=str, default=None, help="start timestamp for pixmap source")
     parser.add_argument("-pa", "--pixmap-alteration", action=SetForLastPixmapSource, type=str, default=None, help="path to a PNG file containing alteration to apply to pixmap")
     parser.add_argument("-pr", "--pixmap-repeat", action=SetForLastPixmapSource, type=int, default=1, help="repeat pixmap input (0 to loop indefinitely)")
+    
+    # Compositor Args
+    parser.add_argument("-l", "--layer", action=AppendLayer, type=int, help="layer index")
+    parser.add_argument("-lc", "--layer-class", action=SetForLastLayer, type=str, choices=["reference", "introduction"], default="reference", help="layer class")
+    parser.add_argument("-lr", "--layer-reset", action=SetForLastLayer, type=str, choices=["off", "random", "constant", "linear"], default="off", help="layer reset mode")
 
     # Accumulator Args
-    parser.add_argument("-m", "--acc-method", type=str, default="map", choices=["map", "stack", "sum", "crumble", "canvas"], help="accumulator method ('map' is default, 'stack' is very slow, 'sum' only works with backward flows)")
-    parser.add_argument("-rm", "--reset-mode", type=str, choices=["off", "random", "linear"], default="off", help="indices re-introduction mode")
-    parser.add_argument("-ra", "--reset-alpha", type=float, default=.1, help="indices re-introduction coefficient (effect my vary depending on mode)")
-    parser.add_argument("-rk", "--reset-mask", type=str, default=None, help="path to an image file to use a per-pixel re-introduction coefficient")
-    parser.add_argument("-hm", "--heatmap-mode", type=str, default="discrete", choices=["discrete", "continuous"], help="heatmap mode, discrete means binary (motion or not) and continuous means flow magnitude")
-    parser.add_argument("-ha", "--heatmap-args", type=str, default="0:4:2:1", help="in discrete mode, args are min:max:add:sub (ints), in continuous mode, args are max:decay:treshold (floats)")
-    parser.add_argument("-hr", "--heatmap-reset-threshold", type=float, default=None, help="heatmap threshold for reset effects")
-    parser.add_argument("-ab", "--accumulator-background", type=str, default="ffffff", help="background color used in stack and crumble remapper")
-    parser.add_argument("-sc", "--stack-composer", type=str, choices=["top", "add", "sub", "avg"], default="top", help="stack remapper compose function")
-    parser.add_argument("-ic", "--initial-canvas", type=str, default=None, help="set initial canvas for canvas accumulator, either a HEX color or a path to an image file")
-    parser.add_argument("-bm", "--bitmap-mask", type=str, default=None, help="path to a bitmap mask (black & white image) for canvas accumulator")
-    parser.add_argument("-cr", "--crumble", action="store_true", help="enable crumble effect for the canvas accumulator")
-    parser.add_argument("-bi", "--bitmap-introduction-flags", type=int, default=1, help="bitmap introduction flags for canvas accumulator (1 for motion, 2 for static, 3 for both)")
+    # parser.add_argument("-m", "--acc-method", type=str, default="map", choices=["map", "stack", "sum", "crumble", "canvas"], help="accumulator method ('map' is default, 'stack' is very slow, 'sum' only works with backward flows)")
+    # parser.add_argument("-rm", "--reset-mode", type=str, choices=["off", "random", "linear"], default="off", help="indices re-introduction mode")
+    # parser.add_argument("-ra", "--reset-alpha", type=float, default=.1, help="indices re-introduction coefficient (effect my vary depending on mode)")
+    # parser.add_argument("-rk", "--reset-mask", type=str, default=None, help="path to an image file to use a per-pixel re-introduction coefficient")
+    # parser.add_argument("-hm", "--heatmap-mode", type=str, default="discrete", choices=["discrete", "continuous"], help="heatmap mode, discrete means binary (motion or not) and continuous means flow magnitude")
+    # parser.add_argument("-ha", "--heatmap-args", type=str, default="0:4:2:1", help="in discrete mode, args are min:max:add:sub (ints), in continuous mode, args are max:decay:treshold (floats)")
+    # parser.add_argument("-hr", "--heatmap-reset-threshold", type=float, default=None, help="heatmap threshold for reset effects")
+    # parser.add_argument("-ab", "--accumulator-background", type=str, default="ffffff", help="background color used in stack and crumble remapper")
+    # parser.add_argument("-sc", "--stack-composer", type=str, choices=["top", "add", "sub", "avg"], default="top", help="stack remapper compose function")
+    # parser.add_argument("-ic", "--initial-canvas", type=str, default=None, help="set initial canvas for canvas accumulator, either a HEX color or a path to an image file")
+    # parser.add_argument("-bm", "--bitmap-mask", type=str, default=None, help="path to a bitmap mask (black & white image) for canvas accumulator")
+    # parser.add_argument("-cr", "--crumble", action="store_true", help="enable crumble effect for the canvas accumulator")
+    # parser.add_argument("-bi", "--bitmap-introduction-flags", type=int, default=1, help="bitmap introduction flags for canvas accumulator (1 for motion, 2 for static, 3 for both)")
 
     # Output Args
     parser.add_argument("-o", "--output", type=str, action="append", help="output path: if provided, path to export the output video (as an MP4 file) ; otherwise, opens a temporary display window")
@@ -105,7 +133,7 @@ def main():
         from .gui import start_gui
         start_gui()
         return
-    from .config import Config, PixmapSourceConfig
+    from .config import Config, PixmapSourceConfig, LayerConfig
     if args.flow.endswith(".json"):
         import json
         with open(args.flow, "r") as file:
@@ -135,25 +163,33 @@ def main():
                     seek_time=d.get("pixmap_seek"),
                     alteration_path=d.get("pixmap_alteration"),
                     repeat=d.get("pixmap_repeat"),
-                    layer_index=d.get("layer_index"),
-                    layer_class=d.get("layer_class"),
+                    layer=d.get("pixmap_layer"),
                 )
-                for d in args.pixmap_sources
+                for d in getattr(args, "pixmap_sources", [])
+            ],
+            # Compositor Args
+            layers=[
+                LayerConfig(
+                    d["index"],
+                    classname=d.get("layer_class"),
+                    reset_mode=d.get("layer_reset"),
+                )
+                for d in getattr(args, "layers", [])
             ],
             # Accumulator Args
-            acc_method=args.acc_method,
-            reset_mode=args.reset_mode,
-            reset_alpha=args.reset_alpha,
-            reset_mask_path=args.reset_mask,
-            heatmap_mode=args.heatmap_mode,
-            heatmap_args=args.heatmap_args,
-            heatmap_reset_threshold=args.heatmap_reset_threshold,
-            accumulator_background=args.accumulator_background,
-            stack_composer=args.stack_composer,
-            initial_canvas=args.initial_canvas,
-            bitmap_mask_path=args.bitmap_mask,
-            crumble=args.crumble,
-            bitmap_introduction_flags=args.bitmap_introduction_flags,
+            # acc_method=args.acc_method,
+            # reset_mode=args.reset_mode,
+            # reset_alpha=args.reset_alpha,
+            # reset_mask_path=args.reset_mask,
+            # heatmap_mode=args.heatmap_mode,
+            # heatmap_args=args.heatmap_args,
+            # heatmap_reset_threshold=args.heatmap_reset_threshold,
+            # accumulator_background=args.accumulator_background,
+            # stack_composer=args.stack_composer,
+            # initial_canvas=args.initial_canvas,
+            # bitmap_mask_path=args.bitmap_mask,
+            # crumble=args.crumble,
+            # bitmap_introduction_flags=args.bitmap_introduction_flags,
             # Output Args
             output_path=args.output,
             vcodec=args.vcodec,

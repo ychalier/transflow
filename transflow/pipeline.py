@@ -218,7 +218,7 @@ class Pipeline:
 
     @property
     def has_output(self) -> bool:
-        return bool(self.config.bitmap_sources)\
+        return bool(self.config.pixmap_sources)\
             or self.config.output_intensity\
             or self.config.output_heatmap\
             or self.config.output_accumulator
@@ -378,7 +378,7 @@ class Pipeline:
         #         self.logger.warning("An alteration path was passed but no bitmap was provided")
         #     return
         assert isinstance(self.config.size, tuple) and self.metadata_queue is not None
-        for i, config in enumerate(self.config.bitmap_sources):
+        for i, config in enumerate(self.config.pixmap_sources):
             source = BitmapSource.from_args(
                 config.path,
                 self.config.size,
@@ -460,11 +460,15 @@ class Pipeline:
         if self.compositor is not None: # already loaded from checkpoint
             return
         assert self.fs_width is not None and self.fs_height is not None
+        interfaces: dict[int, list[PixmapSourceInterface]] = {}
+        for pixmap_config, pixmap_queue in zip(self.config.pixmap_sources, self.pixmap_queues):
+            interfaces.setdefault(pixmap_config.layer, [])
+            interfaces[pixmap_config.layer].append(PixmapSourceInterface(pixmap_queue))
         self.compositor = Compositor.from_args(
             int(self.fs_width * self.fs_width_factor),
             int(self.fs_height * self.fs_height_factor),
-            self.config.bitmap_sources,
-            [PixmapSourceInterface(q) for q in self.pixmap_queues])
+            self.config.layers,
+            interfaces)
 
     def _setup_output(self):
         if not self.has_output:

@@ -5,10 +5,11 @@ import enum
 import logging
 import multiprocessing
 import numpy
+import warnings
 from collections.abc import Sequence
 
 from ..utils import parse_hex_color
-from ..config import PixmapSourceConfig
+from ..config import LayerConfig
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ class PixmapSourceInterface:
         self.queue = queue
         self.image: numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]] | None = None
         self.counter: int = -1
-    
+
     def get(self) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
         assert self.image is not None
         return self.image
@@ -39,7 +40,7 @@ class PixmapSourceInterface:
         self.image = image
         self.counter += 1
         return self.image
-    
+
     @property
     def frame_number(self) -> int:
         return self.counter
@@ -107,21 +108,22 @@ class Layer:
         return numpy.clip(self.rgba, 0, 255, dtype=numpy.uint8)
 
     @classmethod
-    def from_args(cls, 
-            classname: str,
+    def from_args(cls,
+            config: LayerConfig,
             width: int,
             height: int,
-            sources: list[PixmapSourceInterface],
-            reset_mode: ResetMode = ResetMode.OFF):
+            sources: list[PixmapSourceInterface]):
         args = [width, height, sources]
         kwargs = {
-            "reset_mode": reset_mode,
+            "reset_mode": ResetMode.from_string(config.reset_mode),
         }
-        if classname == "reference":
+        if not sources:
+            warnings.warn("Layer has not sources!")
+        if config.classname == "reference":
             return ReferenceLayer(*args, **kwargs)
-        if classname == "introduction":
+        if config.classname == "introduction":
             return IntroductionLayer(*args, **kwargs)
-        raise ValueError(f"Unknown layer classname {classname}")
+        raise ValueError(f"Unknown layer classname {config.classname}")
 
 
 class MovementLayer(Layer):
@@ -402,7 +404,7 @@ class IntroductionLayer(MovementLayer):
             ]
             if pixmap.shape[2] == 3:
                 arrays.insert(1, numpy.broadcast_to(1, (self.height, self.width, 1)))
-            putn(self.data, numpy.concat(arrays, axis=2), where_target, where_source, 8)            
+            putn(self.data, numpy.concat(arrays, axis=2), where_target, where_source, 8)
 
     def _update_rgba(self):
         self.rgba = self.data[:,:,:4]
@@ -444,20 +446,10 @@ class Compositor:
     def from_args(cls,
             width: int,
             height: int,
-            configs: list[PixmapSourceConfig],
-            interfaces: list[PixmapSourceInterface]):
-        layer_sources = {}
-        layer_classes = {}
-        for config, interface in zip(configs, interfaces):
-            if config.layer_index in layer_classes:
-                if layer_classes[config.layer_index] != config.layer_class:
-                    raise ValueError(f"Clashing layer class for layer {config.layer_index}: got {layer_classes[config.layer_index]} and {config.layer_class}")
-            else:
-                layer_classes[config.layer_index] = config.layer_class
-            layer_sources.setdefault(config.layer_index, [])
-            layer_sources[config.layer_index].append(interface)
+            layer_configs: list[LayerConfig],
+            pixmap_interfaces: dict[int, list[PixmapSourceInterface]]):
         layers = [
-            Layer.from_args(layer_classes[i], width, height, layer_sources[i])
-            for i in sorted(layer_classes.keys())
+            Layer.from_args(config, width, height, pixmap_interfaces.get(config.index, []))
+            for config in layer_configs
         ]
         return cls(width, height, layers)
