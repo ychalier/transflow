@@ -78,8 +78,21 @@ def main():
     # Compositor Args
     parser.add_argument("-l", "--layer", action=AppendLayer, type=int, help="layer index")
     parser.add_argument("-lc", "--layer-class", action=SetForLastLayer, type=str, choices=["reference", "introduction"], default="reference", help="layer class")
+    parser.add_argument("-lms", "--layer-mask-src", action=SetForLastLayer, type=str, default=None)
+    parser.add_argument("-lmd", "--layer-mask-dst", action=SetForLastLayer, type=str, default=None)
+    parser.add_argument("-lma", "--layer-mask-alpha", action=SetForLastLayer, type=str, default=None)
+    parser.add_argument("-lft", "--layer-flag-movetransparent", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
+    parser.add_argument("-lfe", "--layer-flag-movetoempty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-lff", "--layer-flag-movetofilled", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-lfl", "--layer-flag-leaveempty", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
     parser.add_argument("-lr", "--layer-reset", action=SetForLastLayer, type=str, choices=["off", "random", "constant", "linear"], default="off", help="layer reset mode")
-
+    parser.add_argument("-lmr", "--layer-mask-reset", action=SetForLastLayer, type=str, default=None)    
+    parser.add_argument("-lfh", "--layer-flag-resetleavehealed", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-lfr", "--layer-flag-resetleaveempty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-lrr", "--layer-reset-random-factor", action=SetForLastLayer, type=float, default=0.1)
+    parser.add_argument("-lrc", "--layer-reset-constant-step", action=SetForLastLayer, type=float, default=1)
+    parser.add_argument("-lrl", "--layer-reset-linear-factor", action=SetForLastLayer, type=float, default=0.1)
+    
     # Accumulator Args
     # parser.add_argument("-m", "--acc-method", type=str, default="map", choices=["map", "stack", "sum", "crumble", "canvas"], help="accumulator method ('map' is default, 'stack' is very slow, 'sum' only works with backward flows)")
     # parser.add_argument("-rm", "--reset-mode", type=str, choices=["off", "random", "linear"], default="off", help="indices re-introduction mode")
@@ -172,7 +185,20 @@ def main():
                 LayerConfig(
                     d["index"],
                     classname=d.get("layer_class"),
+                    mask_src=d.get("layer_mask_src"),
+                    mask_dst=d.get("layer_mask_dst"),
+                    mask_alpha=d.get("layer_mask_alpha"),
+                    transparent_pixels_can_move=d.get("layer_flag_movetransparent"),
+                    pixels_can_move_to_empty_spot=d.get("layer_flag_movetoempty"),
+                    pixels_can_move_to_filled_spot=d.get("layer_flag_movetofilled"),
+                    moving_pixels_leave_empty_spot=d.get("layer_flag_leaveempty"),
                     reset_mode=d.get("layer_reset"),
+                    reset_mask=d.get("layer_reset_mask"),
+                    reset_pixels_leave_healed_spot=d.get("layer_flag_resetleavehealed"),
+                    reset_pixels_leave_empty_spot=d.get("layer_flag_resetleaveempty"),
+                    reset_random_factor=d.get("layer_reset_random_factor"),
+                    reset_constant_step=d.get("layer_reset_constant_step"),
+                    reset_linear_factor=d.get("layer_reset_linear_factor"),
                 )
                 for d in getattr(args, "layers", [])
             ],

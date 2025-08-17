@@ -42,29 +42,89 @@ class PixmapSourceConfig:
         }
 
 
+def parse_bool_arg(arg: bool | str | None, default: bool) -> bool:
+    if arg is None:
+        return default
+    if isinstance(arg, str):
+        return arg.lower().strip() in ("1", "on", "o", "oui", "yes", "y")
+    return arg
+
+
 class LayerConfig:
     
     def __init__(self,
             index: int,
             classname: str | None = None,
-            reset_mode: str | None = None):
+            mask_src: str | None = None,
+            mask_dst: str | None = None,
+            mask_alpha: str | None = None,
+            transparent_pixels_can_move: bool | str | None = None,
+            pixels_can_move_to_empty_spot: bool | str | None = None,
+            pixels_can_move_to_filled_spot: bool | str | None = None,
+            moving_pixels_leave_empty_spot: bool | str | None = None,
+            reset_mode: str | None = None,
+            reset_mask: str | None = None,
+            reset_pixels_leave_healed_spot: bool | str | None = None,
+            reset_pixels_leave_empty_spot: bool | str | None = None,
+            reset_random_factor: float | None = None,
+            reset_constant_step: float | None = None,
+            reset_linear_factor: float | None = None):
         self.index: int = index
         self.classname = "reference" if classname is None else classname
+        self.mask_src = mask_src
+        self.mask_dst = mask_dst
+        self.mask_alpha = mask_alpha
+        self.transparent_pixels_can_move = parse_bool_arg(transparent_pixels_can_move, False)
+        self.pixels_can_move_to_empty_spot = parse_bool_arg(pixels_can_move_to_empty_spot, True)
+        self.pixels_can_move_to_filled_spot = parse_bool_arg(pixels_can_move_to_filled_spot, True)
+        self.moving_pixels_leave_empty_spot = parse_bool_arg(moving_pixels_leave_empty_spot, False)
         self.reset_mode = "off" if reset_mode is None else reset_mode
+        self.reset_mask = reset_mask
+        self.reset_pixels_leave_healed_spot = parse_bool_arg(reset_pixels_leave_healed_spot, True)
+        self.reset_pixels_leave_empty_spot = parse_bool_arg(reset_pixels_leave_empty_spot, True)
+        self.reset_random_factor = 1 if reset_random_factor is None else reset_random_factor
+        self.reset_constant_step = 1 if reset_constant_step is None else reset_constant_step
+        self.reset_linear_factor = 0.1 if reset_linear_factor is None else reset_linear_factor
     
     @classmethod
     def fromdict(cls, d: dict):
         return cls(
             d["index"],
             classname=d.get("classname", "reference"),
-            reset_mode=d.get("reset_mode", "off")
+            reset_mode=d.get("reset_mode", "off"),
+            mask_src=d.get("mask_src", None),
+            mask_dst=d.get("mask_dst", None),
+            mask_alpha=d.get("mask_alpha", None),
+            reset_mask=d.get("reset_mask", None),
+            transparent_pixels_can_move=d.get("transparent_pixels_can_move", False),
+            pixels_can_move_to_empty_spot=d.get("pixels_can_move_to_empty_spot", True),
+            pixels_can_move_to_filled_spot=d.get("pixels_can_move_to_filled_spot", True),
+            moving_pixels_leave_empty_spot=d.get("moving_pixels_leave_empty_spot", False),
+            reset_pixels_leave_healed_spot=d.get("reset_pixels_leave_healed_spot", True),
+            reset_pixels_leave_empty_spot=d.get("reset_pixels_leave_empty_spot", True),
+            reset_random_factor=d.get("reset_random_factor", 1),
+            reset_constant_step=d.get("reset_constant_step", 1),
+            reset_linear_factor=d.get("reset_linear_factor", 0.1),
         )
     
     def todict(self) -> dict:
         return {
             "index": self.index,
             "classname": self.classname,
+            "mask_src": self.mask_src,
+            "mask_dst": self.mask_dst,
+            "mask_alpha": self.mask_alpha,
+            "transparent_pixels_can_move": self.transparent_pixels_can_move,
+            "pixels_can_move_to_empty_spot": self.pixels_can_move_to_empty_spot,
+            "pixels_can_move_to_filled_spot": self.pixels_can_move_to_filled_spot,
+            "moving_pixels_leave_empty_spot": self.moving_pixels_leave_empty_spot,
             "reset_mode": self.reset_mode,
+            "reset_mask": self.reset_mask,
+            "reset_pixels_leave_healed_spot": self.reset_pixels_leave_healed_spot,
+            "reset_pixels_leave_empty_spot": self.reset_pixels_leave_empty_spot,
+            "reset_random_factor": self.reset_random_factor,
+            "reset_constant_step": self.reset_constant_step,
+            "reset_linear_factor": self.reset_linear_factor,
         }
 
 
