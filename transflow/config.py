@@ -68,7 +68,14 @@ class LayerConfig:
             reset_pixels_leave_empty_spot: bool | str | None = None,
             reset_random_factor: float | None = None,
             reset_constant_step: float | None = None,
-            reset_linear_factor: float | None = None):
+            reset_linear_factor: float | None = None,
+            mask_introduction: str | None = None,
+            introduce_pixels_on_empty_spots: bool | None = None,
+            introduce_pixels_on_filled_spots: bool | None = None,
+            introduce_moving_pixels: bool | None = None,
+            introduce_unmoving_pixels: bool | None = None,
+            introduce_once: bool | None = None,
+            ):
         self.index: int = index
         self.classname = "reference" if classname is None else classname
         self.mask_src = mask_src
@@ -85,6 +92,12 @@ class LayerConfig:
         self.reset_random_factor = 1 if reset_random_factor is None else reset_random_factor
         self.reset_constant_step = 1 if reset_constant_step is None else reset_constant_step
         self.reset_linear_factor = 0.1 if reset_linear_factor is None else reset_linear_factor
+        self.mask_introduction = mask_introduction
+        self.introduce_pixels_on_empty_spots = parse_bool_arg(introduce_pixels_on_empty_spots, True)
+        self.introduce_pixels_on_filled_spots = parse_bool_arg(introduce_pixels_on_filled_spots, True)
+        self.introduce_moving_pixels = parse_bool_arg(introduce_moving_pixels, True)
+        self.introduce_unmoving_pixels = parse_bool_arg(introduce_unmoving_pixels, True)
+        self.introduce_once = parse_bool_arg(introduce_once, False)
     
     @classmethod
     def fromdict(cls, d: dict):
@@ -105,6 +118,12 @@ class LayerConfig:
             reset_random_factor=d.get("reset_random_factor", 1),
             reset_constant_step=d.get("reset_constant_step", 1),
             reset_linear_factor=d.get("reset_linear_factor", 0.1),
+            mask_introduction=d.get("mask_introduction", None),
+            introduce_pixels_on_empty_spots=d.get("introduce_pixels_on_empty_spots", True),
+            introduce_pixels_on_filled_spots=d.get("introduce_pixels_on_filled_spots", True),
+            introduce_moving_pixels=d.get("introduce_moving_pixels", True),
+            introduce_unmoving_pixels=d.get("introduce_unmoving_pixels", True),
+            introduce_once=d.get("introduce_once", False),
         )
     
     def todict(self) -> dict:
@@ -125,6 +144,12 @@ class LayerConfig:
             "reset_random_factor": self.reset_random_factor,
             "reset_constant_step": self.reset_constant_step,
             "reset_linear_factor": self.reset_linear_factor,
+            "mask_introduction": self.mask_introduction,
+            "introduce_pixels_on_empty_spots": self.introduce_pixels_on_empty_spots,
+            "introduce_pixels_on_filled_spots": self.introduce_pixels_on_filled_spots,
+            "introduce_moving_pixels": self.introduce_moving_pixels,
+            "introduce_unmoving_pixels": self.introduce_unmoving_pixels,
+            "introduce_once": self.introduce_once,
         }
 
 

@@ -7,12 +7,14 @@ import multiprocessing
 import numpy
 import warnings
 from collections.abc import Sequence
+from typing import Literal, cast
 
-from ..utils import parse_hex_color
+from ..utils import parse_hex_color, load_mask
 from ..config import LayerConfig
 
 
 logger = logging.getLogger(__name__)
+RGBA = numpy.ndarray[tuple[int, int, Literal[4]], numpy.dtype[numpy.uint8]] # TODO: create FLOW type
 
 
 class EndOfPixmap(StopIteration):
@@ -97,14 +99,14 @@ class Layer:
     def update(self, flow: numpy.ndarray):
         raise NotImplementedError()
 
-    def render(self) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
+    def render(self) -> RGBA:
         """
         :return: RGBA array of shape (height, width, 4)
         """
         # return numpy.clip(
         #     numpy.append(self.rgb, 255 * self.alpha.reshape(2, 3, 1), axis=2),
         #     0, 255, dtype=numpy.uint8)
-        return numpy.clip(self.rgba, 0, 255, dtype=numpy.uint8)
+        return cast(RGBA, numpy.clip(self.rgba, 0, 255).astype(numpy.uint8))
 
     @classmethod
     def from_args(cls,
@@ -115,16 +117,16 @@ class Layer:
         args = [width, height, sources]
         kwargs = {}
         movement_kwargs = {
-            "mask_src": config.mask_src,
-            "mask_dst": config.mask_dst,
-            "mask_alpha": config.mask_alpha,
+            "mask_src": None if config.mask_src is None else load_mask(config.mask_src),
+            "mask_dst": None if config.mask_dst is None else load_mask(config.mask_dst),
+            "mask_alpha": None if config.mask_alpha is None else load_mask(config.mask_alpha),
             "transparent_pixels_can_move": config.transparent_pixels_can_move,
             "pixels_can_move_to_empty_spot": config.pixels_can_move_to_empty_spot,
             "pixels_can_move_to_filled_spot": config.pixels_can_move_to_filled_spot,
             "moving_pixels_leave_empty_spot": config.moving_pixels_leave_empty_spot,
         }
         reference_kwargs = {
-            "reset_mask": config.reset_mask,
+            "reset_mask": None if config.reset_mask is None else load_mask(config.reset_mask),
             "reset_mode": ResetMode.from_string(config.reset_mode),
             "reset_pixels_leave_healed_spot": config.reset_pixels_leave_healed_spot,
             "reset_pixels_leave_empty_spot": config.reset_pixels_leave_empty_spot,
@@ -132,14 +134,36 @@ class Layer:
             "reset_constant_step": config.reset_constant_step,
             "reset_linear_factor": config.reset_linear_factor,
         }
+        introduction_kwargs = {
+            "mask_introduction": None if config.mask_introduction is None else load_mask(config.mask_introduction),
+            "introduce_pixels_on_empty_spots": config.introduce_pixels_on_empty_spots,
+            "introduce_pixels_on_filled_spots": config.introduce_pixels_on_filled_spots,
+            "introduce_moving_pixels": config.introduce_moving_pixels,
+            "introduce_unmoving_pixels": config.introduce_unmoving_pixels,
+            "introduce_once": config.introduce_once,
+        }
         # NOTE: pass the whole LayerConfig instead of separated args?
         if not sources:
             warnings.warn("Layer has not sources!")
         if config.classname == "reference":
             return ReferenceLayer(*args, **reference_kwargs, **movement_kwargs, **kwargs)
         if config.classname == "introduction":
-            return IntroductionLayer(*args, **movement_kwargs, **kwargs)
+            return IntroductionLayer(*args, **introduction_kwargs, **movement_kwargs, **kwargs)
+        if config.classname == "static":
+            return StaticLayer(*args, **kwargs)
         raise ValueError(f"Unknown layer classname {config.classname}")
+
+
+class StaticLayer(Layer):
+    
+    def __init__(self, *args, **kwargs):
+        Layer.__init__(self, *args, **kwargs)
+        self.rgba[:,:,3] = 1
+    
+    def update(self, flow: numpy.ndarray):
+        for source in self.sources:
+            pixmap = source.next()
+            self.rgba[:,:,:pixmap.shape[2]] = pixmap
 
 
 class MovementLayer(Layer):
@@ -193,7 +217,7 @@ class MovementLayer(Layer):
         ## TODO: initialize data
 
     def _post_init(self):
-        self.initial_data = self.data.copy()
+        self.initial_data = self.data.copy() # TODO: move this to ReferenceLayer, otherwise useless as long as the IntroductionLayer does not have reset features
 
     def _update_flow(self, flow: numpy.ndarray):
         self.flow = flow
@@ -455,18 +479,33 @@ class IntroductionLayer(MovementLayer):
     POS_J_IDX: int = 6
     POS_A_IDX: int = 3
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+            *args,
+            mask_introduction: numpy.ndarray | None = None,
+            introduce_pixels_on_empty_spots: bool = True,
+            introduce_pixels_on_filled_spots: bool = True,
+            introduce_moving_pixels: bool = True,
+            introduce_unmoving_pixels: bool = True,
+            introduce_once: bool = False,
+            **kwargs):
         MovementLayer.__init__(self, *args, **kwargs)
         self._post_init()
-        self.introduction_masks: list[numpy.ndarray] = []
-        for _ in self.sources:
-            self.introduction_masks.append(numpy.ones((self.height, self.width), dtype=numpy.bool))
-        self.introduce_pixels_on_empty_spots: bool = True
-        self.introduce_pixels_on_filled_spots: bool = True
-        self.introduce_moving_pixels: bool = True
-        self.introduce_unmoving_pixels: bool = True
+        # TODO: consider using one mask per source
+        self.mask_introduction: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.bool) if mask_introduction is None else mask_introduction
+        # self.introduction_masks: list[numpy.ndarray] = []
+        # for _ in self.sources:
+        #     self.introduction_masks.append(numpy.ones((self.height, self.width), dtype=numpy.bool))
+        self.introduce_pixels_on_empty_spots: bool = introduce_pixels_on_empty_spots
+        self.introduce_pixels_on_filled_spots: bool = introduce_pixels_on_filled_spots
+        self.introduce_moving_pixels: bool = introduce_moving_pixels
+        self.introduce_unmoving_pixels: bool = introduce_unmoving_pixels
+        self.introduce_once: bool = introduce_once
+        self.introduced_once: bool = False
 
     def _update_introduction(self):
+        if self.introduce_once and self.introduced_once:
+            return
+        self.introduced_once = True
         mask = numpy.ones((self.height, self.width), dtype=numpy.bool) #self.mask_introduction.copy()
         if not self.introduce_pixels_on_empty_spots:
             mask[numpy.where(self.data[:,:,3]) == 0] = 0
@@ -476,9 +515,9 @@ class IntroductionLayer(MovementLayer):
             mask.flat[numpy.nonzero(self.flow_flat)] = 0
         if not self.introduce_unmoving_pixels:
             mask.flat[numpy.where(self.flow_flat) == 0] = 0
-        for i, (source, mask_introduction) in enumerate(zip(self.sources, self.introduction_masks)):
+        for i, source in enumerate(self.sources):
             pixmap = source.next()
-            where_target = numpy.nonzero(numpy.multiply(mask.flat, mask_introduction.flat))[0]
+            where_target = numpy.nonzero(numpy.multiply(mask.flat, self.mask_introduction.flat))[0]
             where_source = where_target + self.flow_flat[where_target]
             arrays = [
                 pixmap,

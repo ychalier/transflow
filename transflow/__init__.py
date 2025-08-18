@@ -69,7 +69,7 @@ def main():
 
     # Bitmap Args
     parser.add_argument("-p", "--pixmap", action=AppendPixmapSource, type=str, help="input pixmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
-    parser.add_argument("-pl", "--pixmal-layer", action=SetForLastPixmapSource, type=int, default=0)
+    parser.add_argument("-pl", "--pixmap-layer", action=SetForLastPixmapSource, type=int, default=0)
     # parser.add_argument("-lc", "--layer-class", action=SetForLastPixmapSource, type=str, choices=["reference", "introduction"], default="reference")
     parser.add_argument("-ps", "--pixmap-seek", action=SetForLastPixmapSource, type=str, default=None, help="start timestamp for pixmap source")
     parser.add_argument("-pa", "--pixmap-alteration", action=SetForLastPixmapSource, type=str, default=None, help="path to a PNG file containing alteration to apply to pixmap")
@@ -77,21 +77,27 @@ def main():
     
     # Compositor Args
     parser.add_argument("-l", "--layer", action=AppendLayer, type=int, help="layer index")
-    parser.add_argument("-lc", "--layer-class", action=SetForLastLayer, type=str, choices=["reference", "introduction"], default="reference", help="layer class")
+    parser.add_argument("-lc", "--layer-class", action=SetForLastLayer, type=str, choices=["reference", "introduction", "static"], default="reference", help="layer class")
     parser.add_argument("-lms", "--layer-mask-src", action=SetForLastLayer, type=str, default=None)
     parser.add_argument("-lmd", "--layer-mask-dst", action=SetForLastLayer, type=str, default=None)
     parser.add_argument("-lma", "--layer-mask-alpha", action=SetForLastLayer, type=str, default=None)
+    parser.add_argument("-lmi", "--layer-mask-introduction", action=SetForLastLayer, type=str, default=None)
     parser.add_argument("-lft", "--layer-flag-movetransparent", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
     parser.add_argument("-lfe", "--layer-flag-movetoempty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-lff", "--layer-flag-movetofilled", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-lfl", "--layer-flag-leaveempty", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
     parser.add_argument("-lr", "--layer-reset", action=SetForLastLayer, type=str, choices=["off", "random", "constant", "linear"], default="off", help="layer reset mode")
     parser.add_argument("-lmr", "--layer-mask-reset", action=SetForLastLayer, type=str, default=None)    
-    parser.add_argument("-lfh", "--layer-flag-resetleavehealed", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
-    parser.add_argument("-lfr", "--layer-flag-resetleaveempty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-lfh", "--layer-flag-resetleavehealed", action=SetForLastLayer, type=str, default="on", choices=["on", "off"]) # TODO: consider removing those
+    parser.add_argument("-lfr", "--layer-flag-resetleaveempty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"]) # TODO: consider removing those
     parser.add_argument("-lrr", "--layer-reset-random-factor", action=SetForLastLayer, type=float, default=0.1)
     parser.add_argument("-lrc", "--layer-reset-constant-step", action=SetForLastLayer, type=float, default=1)
     parser.add_argument("-lrl", "--layer-reset-linear-factor", action=SetForLastLayer, type=float, default=0.1)
+    parser.add_argument("-lie", "--layer-introduce-empty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-lif", "--layer-introduce-filled", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-lim", "--layer-introduce-moving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-liu", "--layer-introduce-unmoving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
+    parser.add_argument("-lio", "--layer-introduce-once", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
     
     # Accumulator Args
     # parser.add_argument("-m", "--acc-method", type=str, default="map", choices=["map", "stack", "sum", "crumble", "canvas"], help="accumulator method ('map' is default, 'stack' is very slow, 'sum' only works with backward flows)")
@@ -199,6 +205,12 @@ def main():
                     reset_random_factor=d.get("layer_reset_random_factor"),
                     reset_constant_step=d.get("layer_reset_constant_step"),
                     reset_linear_factor=d.get("layer_reset_linear_factor"),
+                    mask_introduction=d.get("layer_mask_introduction"),
+                    introduce_pixels_on_empty_spots=d.get("layer_introduce_empty"),
+                    introduce_pixels_on_filled_spots=d.get("layer_introduce_filled"),
+                    introduce_moving_pixels=d.get("layer_introduce_moving"),
+                    introduce_unmoving_pixels=d.get("layer_introduce_unmoving"),
+                    introduce_once=d.get("layer_introduce_once"),
                 )
                 for d in getattr(args, "layers", [])
             ],
