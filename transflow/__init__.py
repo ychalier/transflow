@@ -70,14 +70,13 @@ def main():
     # Bitmap Args
     parser.add_argument("-p", "--pixmap", action=AppendPixmapSource, type=str, help="input pixmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
     parser.add_argument("-pl", "--pixmap-layer", action=SetForLastPixmapSource, type=int, default=0)
-    # parser.add_argument("-lc", "--layer-class", action=SetForLastPixmapSource, type=str, choices=["reference", "introduction"], default="reference")
     parser.add_argument("-ps", "--pixmap-seek", action=SetForLastPixmapSource, type=str, default=None, help="start timestamp for pixmap source")
     parser.add_argument("-pa", "--pixmap-alteration", action=SetForLastPixmapSource, type=str, default=None, help="path to a PNG file containing alteration to apply to pixmap")
     parser.add_argument("-pr", "--pixmap-repeat", action=SetForLastPixmapSource, type=int, default=1, help="repeat pixmap input (0 to loop indefinitely)")
     
     # Compositor Args
     parser.add_argument("-l", "--layer", action=AppendLayer, type=int, help="layer index")
-    parser.add_argument("-lc", "--layer-class", action=SetForLastLayer, type=str, choices=["reference", "introduction", "static"], default="reference", help="layer class")
+    parser.add_argument("-lc", "--layer-class", action=SetForLastLayer, type=str, choices=["moveref", "introduction", "static", "sum"], default="moveref", help="layer class")
     parser.add_argument("-lms", "--layer-mask-src", action=SetForLastLayer, type=str, default=None)
     parser.add_argument("-lmd", "--layer-mask-dst", action=SetForLastLayer, type=str, default=None)
     parser.add_argument("-lma", "--layer-mask-alpha", action=SetForLastLayer, type=str, default=None)

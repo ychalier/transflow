@@ -77,7 +77,7 @@ class LayerConfig:
             introduce_once: bool | None = None,
             ):
         self.index: int = index
-        self.classname = "reference" if classname is None else classname
+        self.classname = "moveref" if classname is None else classname
         self.mask_src = mask_src
         self.mask_dst = mask_dst
         self.mask_alpha = mask_alpha
