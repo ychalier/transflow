@@ -3,15 +3,15 @@ import warnings
 import cv2
 import numpy
 
-from .source import BitmapSource
+from .source import PixmapSource
 
 
-class CvBitmapSource(BitmapSource):
+class CvPixmapSource(PixmapSource):
 
     def __init__(self, path: str, seek: int | None = None,
                  seek_time: float | None = None,
                  alteration_path: str | None = None, repeat: int = 1):
-        BitmapSource.__init__(self, alteration_path)
+        PixmapSource.__init__(self, alteration_path)
         self.path = path
         self.capture = None
         self.seek = seek
@@ -46,7 +46,7 @@ class CvBitmapSource(BitmapSource):
     def __next__(self) -> numpy.ndarray:
         assert self.capture is not None
         if not self.capture.isOpened():
-            warnings.warn("Attempt to read frame from bitmap capture, which was not opened")
+            warnings.warn("Attempt to read frame from pixmap capture, which was not opened")
             raise StopIteration
         while True:
             success, frame = self.capture.read()

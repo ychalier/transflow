@@ -67,7 +67,7 @@ def main():
     parser.add_argument("-lo", "--lock", type=str, default=None, help="Expression to lock the flow. In lock mode 'stay', a list of couples (start_t, duration). In lock mode 'skip', an expression based on variable `t`. Timings are the output frame timestamps, in seconds.")
     parser.add_argument("-lm", "--lock-mode", type=str, default="stay", choices=["skip", "stay"], help="When the flow is locked, either pause the source ('stay') or continue reading it ('skip')")
 
-    # Bitmap Args
+    # Pixmap Args
     parser.add_argument("-p", "--pixmap", action=AppendPixmapSource, type=str, help="input pixmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
     parser.add_argument("-pl", "--pixmap-layer", action=SetForLastPixmapSource, type=int, default=0)
     parser.add_argument("-ps", "--pixmap-seek", action=SetForLastPixmapSource, type=str, default=None, help="start timestamp for pixmap source")
@@ -97,35 +97,18 @@ def main():
     parser.add_argument("-lim", "--layer-introduce-moving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-liu", "--layer-introduce-unmoving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-lio", "--layer-introduce-once", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
-    
-    # Accumulator Args
-    # parser.add_argument("-m", "--acc-method", type=str, default="map", choices=["map", "stack", "sum", "crumble", "canvas"], help="accumulator method ('map' is default, 'stack' is very slow, 'sum' only works with backward flows)")
-    # parser.add_argument("-rm", "--reset-mode", type=str, choices=["off", "random", "linear"], default="off", help="indices re-introduction mode")
-    # parser.add_argument("-ra", "--reset-alpha", type=float, default=.1, help="indices re-introduction coefficient (effect my vary depending on mode)")
-    # parser.add_argument("-rk", "--reset-mask", type=str, default=None, help="path to an image file to use a per-pixel re-introduction coefficient")
-    # parser.add_argument("-hm", "--heatmap-mode", type=str, default="discrete", choices=["discrete", "continuous"], help="heatmap mode, discrete means binary (motion or not) and continuous means flow magnitude")
-    # parser.add_argument("-ha", "--heatmap-args", type=str, default="0:4:2:1", help="in discrete mode, args are min:max:add:sub (ints), in continuous mode, args are max:decay:treshold (floats)")
-    # parser.add_argument("-hr", "--heatmap-reset-threshold", type=float, default=None, help="heatmap threshold for reset effects")
-    # parser.add_argument("-ab", "--accumulator-background", type=str, default="ffffff", help="background color used in stack and crumble remapper")
-    # parser.add_argument("-sc", "--stack-composer", type=str, choices=["top", "add", "sub", "avg"], default="top", help="stack remapper compose function")
-    # parser.add_argument("-ic", "--initial-canvas", type=str, default=None, help="set initial canvas for canvas accumulator, either a HEX color or a path to an image file")
-    # parser.add_argument("-bm", "--bitmap-mask", type=str, default=None, help="path to a bitmap mask (black & white image) for canvas accumulator")
-    # parser.add_argument("-cr", "--crumble", action="store_true", help="enable crumble effect for the canvas accumulator")
-    # parser.add_argument("-bi", "--bitmap-introduction-flags", type=int, default=1, help="bitmap introduction flags for canvas accumulator (1 for motion, 2 for static, 3 for both)")
 
     # Output Args
     parser.add_argument("-o", "--output", type=str, action="append", help="output path: if provided, path to export the output video (as an MP4 file) ; otherwise, opens a temporary display window")
     parser.add_argument("-vc", "--vcodec", type=str, default="h264", help="video codec for the output video file")
-    parser.add_argument("-sz", "--size", type=str, default=None, help="target video size, for webcams and generated bitmaps, of the form WIDTHxHEIGHT")
+    parser.add_argument("-sz", "--size", type=str, default=None, help="target video size, for webcams and generated pixmaps, of the form WIDTHxHEIGHT")
     parser.add_argument("-oi", "--output-intensity", action="store_true", help="output flow intensity as a heatmap")
-    parser.add_argument("-oh", "--output-heatmap", action="store_true", help="output heatmap instead of transformed bitmap")
-    parser.add_argument("-oa", "--output-accumulator", action="store_true", help="output accumulator instead of transformed bitmap")
     parser.add_argument("-rs", "--render-scale", type=float, default=0.1, help="render scale for heatmap and accumulator output")
     parser.add_argument("-rc", "--render-colors", type=str, default=None, help="colors for rendering heatmap (2 colors) and accumulator (4 colors) outputs, hex format, separated by commas")
     parser.add_argument("-rb", "--render-binary", action="store_true", help="1d render will be binary, ie. no gradient will appear")
 
     # General Args
-    parser.add_argument("-sd", "--seed", type=int, default=None, help="random seed for generating bitmaps")
+    parser.add_argument("-sd", "--seed", type=int, default=None, help="random seed")
 
     # Pipeline Args
     parser.add_argument("-s", "--safe", action="store_true", help="save a checkpoint when the program gets interrupted or an error occurs")
@@ -213,27 +196,11 @@ def main():
                 )
                 for d in getattr(args, "layers", [])
             ],
-            # Accumulator Args
-            # acc_method=args.acc_method,
-            # reset_mode=args.reset_mode,
-            # reset_alpha=args.reset_alpha,
-            # reset_mask_path=args.reset_mask,
-            # heatmap_mode=args.heatmap_mode,
-            # heatmap_args=args.heatmap_args,
-            # heatmap_reset_threshold=args.heatmap_reset_threshold,
-            # accumulator_background=args.accumulator_background,
-            # stack_composer=args.stack_composer,
-            # initial_canvas=args.initial_canvas,
-            # bitmap_mask_path=args.bitmap_mask,
-            # crumble=args.crumble,
-            # bitmap_introduction_flags=args.bitmap_introduction_flags,
             # Output Args
             output_path=args.output,
             vcodec=args.vcodec,
             size=args.size,
             output_intensity=args.output_intensity,
-            output_heatmap=args.output_heatmap,
-            output_accumulator=args.output_accumulator,
             render_scale=args.render_scale,
             render_colors=args.render_colors,
             render_binary=args.render_binary,

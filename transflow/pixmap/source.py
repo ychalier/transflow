@@ -10,7 +10,7 @@ import numpy
 logger = logging.getLogger(__name__)
 
 
-class BitmapSource:
+class PixmapSource:
 
     IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".ico", ".tiff"}
 
@@ -88,33 +88,33 @@ class BitmapSource:
                 raise ValueError(f"Please specify a resolution with {stillm.group(1)}:width:height")
             match stillm.group(1):
                 case "color":
-                    from .still import ColorBitmapSource
-                    return ColorBitmapSource(width, height, seed=seed, alteration_path=alteration_path)
+                    from .still import ColorPixmapSource
+                    return ColorPixmapSource(width, height, seed=seed, alteration_path=alteration_path)
                 case _ if re.match(r"#?[0-9a-f]{6}", stillm.group(1)):
-                    from .still import ColorBitmapSource
-                    return ColorBitmapSource(width, height, stillm.group(1), seed=seed, alteration_path=alteration_path)
+                    from .still import ColorPixmapSource
+                    return ColorPixmapSource(width, height, stillm.group(1), seed=seed, alteration_path=alteration_path)
                 case "noise":
-                    from .still import NoiseBitmapSource
-                    return NoiseBitmapSource(width, height, seed, alteration_path)
+                    from .still import NoisePixmapSource
+                    return NoisePixmapSource(width, height, seed, alteration_path)
                 case "bwnoise":
-                    from .still import BwNoiseBitmapSource
-                    return BwNoiseBitmapSource(width, height, seed, alteration_path)
+                    from .still import BwNoisePixmapSource
+                    return BwNoisePixmapSource(width, height, seed, alteration_path)
                 case "cnoise":
-                    from .still import ColoredNoiseBitmapSource
-                    return ColoredNoiseBitmapSource(width, height, seed, alteration_path)
+                    from .still import ColoredNoisePixmapSource
+                    return ColoredNoisePixmapSource(width, height, seed, alteration_path)
                 case "gradient":
-                    from .still import GradientBitmapSource
-                    return GradientBitmapSource(width, height, seed)
+                    from .still import GradientPixmapSource
+                    return GradientPixmapSource(width, height, seed)
                 case "first":
-                    from .still import VideoStillBitmapSource
+                    from .still import VideoStillPixmapSource
                     assert flow_path is not None
-                    return VideoStillBitmapSource(flow_path, alteration_path)
+                    return VideoStillPixmapSource(flow_path, alteration_path)
                 case _:
-                    raise ValueError(f"Unknown bitmap source '{stillm.group(1)}'")
-        elif os.path.isfile(path) and ext.lower() in BitmapSource.IMAGE_EXTS:
-            from .still import ImageBitmapSource
-            return ImageBitmapSource(path, alteration_path)
+                    raise ValueError(f"Unknown pixmap source '{stillm.group(1)}'")
+        elif os.path.isfile(path) and ext.lower() in PixmapSource.IMAGE_EXTS:
+            from .still import ImagePixmapSource
+            return ImagePixmapSource(path, alteration_path)
         else:
-            from .cv import CvBitmapSource
-            return CvBitmapSource(path, seek, seek_time, alteration_path, repeat)
+            from .cv import CvPixmapSource
+            return CvPixmapSource(path, seek, seek_time, alteration_path, repeat)
 

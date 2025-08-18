@@ -21,7 +21,7 @@ class PixmapSourceConfig:
         self.alteration_path: str | None = alteration_path
         self.repeat: int = 1 if repeat is None else repeat
         self.layer: int = 0 if layer is None else layer
-    
+
     @classmethod
     def fromdict(cls, d: dict):
         return cls(
@@ -31,7 +31,7 @@ class PixmapSourceConfig:
             repeat=d.get("repeat", 1),
             layer=d.get("layer", None),
         )
-    
+
     def todict(self) -> dict:
         return {
             "path": self.path,
@@ -51,7 +51,7 @@ def parse_bool_arg(arg: bool | str | None, default: bool) -> bool:
 
 
 class LayerConfig:
-    
+
     def __init__(self,
             index: int,
             classname: str | None = None,
@@ -98,7 +98,7 @@ class LayerConfig:
         self.introduce_moving_pixels = parse_bool_arg(introduce_moving_pixels, True)
         self.introduce_unmoving_pixels = parse_bool_arg(introduce_unmoving_pixels, True)
         self.introduce_once = parse_bool_arg(introduce_once, False)
-    
+
     @classmethod
     def fromdict(cls, d: dict):
         return cls(
@@ -125,7 +125,7 @@ class LayerConfig:
             introduce_unmoving_pixels=d.get("introduce_unmoving_pixels", True),
             introduce_once=d.get("introduce_once", False),
         )
-    
+
     def todict(self) -> dict:
         return {
             "index": self.index,
@@ -173,25 +173,10 @@ class Config:
             lock_mode: str | int | LockMode = LockMode.STAY,
             pixmap_sources: list[PixmapSourceConfig] = [],
             layers: list[LayerConfig] = [],
-            # acc_method: str = "map",
-            # reset_mode: str = "off",
-            # reset_alpha: float = .9,
-            # reset_mask_path: str | None = None,
-            # heatmap_mode: str = "discrete",
-            # heatmap_args: str = "0:4:2:1",
-            # heatmap_reset_threshold: float | None = None,
-            # accumulator_background: str = "ffffff",
-            # stack_composer: str = "top",
-            # initial_canvas: str | None = None,
-            # bitmap_mask_path: str | None = None,
-            # crumble: bool = False,
-            # bitmap_introduction_flags: int = 1,
             output_path: str | list[str] | None = None,
             vcodec: str = "h264",
             size: str | tuple[int, int] | list[int] | None = None,
             output_intensity: bool = False,
-            output_heatmap: bool = False,
-            output_accumulator: bool = False,
             render_scale: float = 1,
             render_colors: str | tuple[str, ...] | list[str] | None = None,
             render_binary: bool = False,
@@ -225,7 +210,7 @@ class Config:
         self.lock_expr: str | None = lock_expr
         self.lock_mode: LockMode = LockMode.from_arg(lock_mode)
 
-        # Bitmap Args
+        # Pixmap Args
         self.pixmap_sources = pixmap_sources
 
         # Compositor Args
@@ -240,21 +225,6 @@ class Config:
                 self.layers.append(LayerConfig(pixmap_config.layer))
                 layer_indices.add(pixmap_config.layer)
 
-        # Accumulator Args
-        # self.acc_method: str = acc_method
-        # self.reset_mode: str = reset_mode
-        # self.reset_alpha: float = reset_alpha
-        # self.reset_mask_path: str | None = reset_mask_path
-        # self.heatmap_mode: str = heatmap_mode
-        # self.heatmap_args: str = heatmap_args
-        # self.heatmap_reset_threshold: float | None = heatmap_reset_threshold
-        # self.accumulator_background: str = accumulator_background
-        # self.stack_composer: str = stack_composer
-        # self.initial_canvas: str | None = initial_canvas
-        # self.bitmap_mask_path: str | None = bitmap_mask_path
-        # self.crumble: bool = crumble
-        # self.bitmap_introduction_flags: int = bitmap_introduction_flags
-
         # Output Args
         self.output_path: str | list[str] | None = None if (isinstance(output_path, list) and not output_path) else output_path
         self.vcodec: str = vcodec
@@ -265,8 +235,6 @@ class Config:
             size = (size[0], size[1])
         self.size: tuple[int, int] | None = size
         self.output_intensity: bool = output_intensity
-        self.output_heatmap: bool = output_heatmap
-        self.output_accumulator: bool = output_accumulator
         self.render_scale: float = render_scale
         if isinstance(render_colors, str):
             render_colors = tuple(render_colors.split(","))
@@ -298,25 +266,10 @@ class Config:
             lock_mode=d.get("lock_mode", LockMode.STAY),
             pixmap_sources=[PixmapSourceConfig.fromdict(dd) for dd in d.get("pixmap_sources", [])],
             layers=[LayerConfig.fromdict(dd) for dd in d.get("layers", [])],
-            # acc_method=d.get("acc_method", "map"),
-            # reset_mode=d.get("reset_mode", "off"),
-            # reset_alpha=d.get("reset_alpha", .9),
-            # reset_mask_path=d.get("reset_mask_path", None),
-            # heatmap_mode=d.get("heatmap_mode", "discrete"),
-            # heatmap_args=d.get("heatmap_args", "0:4:2:1"),
-            # heatmap_reset_threshold=d.get("heatmap_reset_threshold", None),
-            # accumulator_background=d.get("accumulator_background", "ffffff"),
-            # stack_composer=d.get("stack_composer", "top"),
-            # initial_canvas=d.get("initial_canvas", None),
-            # bitmap_mask_path=d.get("bitmap_mask_path", None),
-            # crumble=d.get("crumble",False),
-            # bitmap_introduction_flags=d.get("bitmap_introduction_flags", 1),
             output_path=d.get("output_path", None),
             vcodec=d.get("vcodec", "h264"),
             size=d.get("size", None),
             output_intensity=d.get("output_intensity", False),
-            output_heatmap=d.get("output_heatmap", False),
-            output_accumulator=d.get("output_accumulator", False),
             render_scale=d.get("render_scale", 1),
             render_colors=d.get("render_colors", None),
             render_binary=d.get("render_binary", False),
@@ -341,25 +294,10 @@ class Config:
             "lock_mode": self.lock_mode.value,
             "pixmap_sources": [x.todict() for x in self.pixmap_sources],
             "layers": [x.todict() for x in self.layers],
-            # "acc_method": self.acc_method,
-            # "reset_mode": self.reset_mode,
-            # "reset_alpha": self.reset_alpha,
-            # "reset_mask_path": self.reset_mask_path,
-            # "heatmap_mode": self.heatmap_mode,
-            # "heatmap_args": self.heatmap_args,
-            # "heatmap_reset_threshold": self.heatmap_reset_threshold,
-            # "accumulator_background": self.accumulator_background,
-            # "stack_composer": self.stack_composer,
-            # "initial_canvas": self.initial_canvas,
-            # "bitmap_mask_path": self.bitmap_mask_path,
-            # "crumble": self.crumble,
-            # "bitmap_introduction_flags": self.bitmap_introduction_flags,
             "output_path": self.output_path,
             "vcodec": self.vcodec,
             "size": self.size,
             "output_intensity": self.output_intensity,
-            "output_heatmap": self.output_heatmap,
-            "output_accumulator": self.output_accumulator,
             "render_scale": self.render_scale,
             "render_colors": self.render_colors,
             "render_binary": self.render_binary,

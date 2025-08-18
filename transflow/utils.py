@@ -143,3 +143,15 @@ def parse_lambda_expression(expr_string: str, vars: tuple[str, ...] = ("t", )) -
 
 def upscale_array(arr: numpy.ndarray, wf: int, hf: int) -> numpy.ndarray:
     return numpy.kron(arr * (wf, hf), numpy.ones((hf, wf, 1))).astype(arr.dtype)
+
+
+def putn(target_array: numpy.ndarray, source_array: numpy.ndarray, target_inds: numpy.ndarray, source_inds: numpy.ndarray, scale: int):
+    target_inds_scaled = target_inds * scale
+    source_inds_scaled = source_inds * scale
+    for i in range(scale):
+        target_array.flat[target_inds_scaled + i] = source_array.flat[source_inds_scaled + i]
+
+
+def putn_1d(target_array: numpy.ndarray, value: int | float, target_inds: numpy.ndarray, scale: int, axis: int):
+    target_inds_scaled = target_inds * scale
+    target_array.flat[target_inds_scaled + axis] = value

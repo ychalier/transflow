@@ -20,11 +20,10 @@ import tqdm
 
 from .config import Config
 from .flow import FlowSource
-from .bitmap import BitmapSource
-from .compositor.compositor import PixmapSourceInterface, Compositor
-# from .accumulator import Accumulator
+from .pixmap import PixmapSource
+from .compositor import PixmapSourceInterface, Compositor
 from .output import VideoOutput, ZipOutput, NumpyOutput
-from .output.render import render1d, render2d
+from .output.render import render1d
 from .utils import multiply_arrays, binarize_arrays, absmax, upscale_array
 
 
@@ -56,7 +55,7 @@ def logging_listener_process(log_queue: multiprocessing.Queue, config: dict):
 class SourceProcess(multiprocessing.Process):
 
     def __init__(self,
-            source: FlowSource.Builder | BitmapSource,
+            source: FlowSource.Builder | PixmapSource,
             out_queue: multiprocessing.Queue,
             metadata_queue: multiprocessing.Queue,
             log_queue: multiprocessing.Queue,
@@ -203,7 +202,6 @@ class Pipeline:
         self.extra_flow_processes: list[SourceProcess] = []
         self.merge_flows = self.FLOW_MERGING_FUNCTIONS[cfg.flows_merging_function]
         self.flow_output: NumpyOutput | None = None
-        # self.accumulator: Accumulator | None = None
         self.compositor: Compositor | None = None
         self.ckpt_meta: dict = {}
         self.fs_width: int | None = None
@@ -219,9 +217,7 @@ class Pipeline:
     @property
     def has_output(self) -> bool:
         return bool(self.config.pixmap_sources)\
-            or self.config.output_intensity\
-            or self.config.output_heatmap\
-            or self.config.output_accumulator
+            or self.config.output_intensity
 
     def export_checkpoint(self):
         assert self.compositor is not None
@@ -378,15 +374,9 @@ class Pipeline:
         })
 
     def _setup_pixmap_sources(self):
-        # if self.config.bitmap_path is None:
-        #     if self.config.bitmap_alteration_path is not None:
-        #         warnings.warn(
-        #             "An alteration path was passed but no bitmap was provided")
-        #         self.logger.warning("An alteration path was passed but no bitmap was provided")
-        #     return
         assert isinstance(self.config.size, tuple) and self.metadata_queue is not None
         for i, config in enumerate(self.config.pixmap_sources):
-            source = BitmapSource.from_args(
+            source = PixmapSource.from_args(
                 config.path,
                 self.config.size,
                 seek=self.ckpt_meta.get("cursor"),
@@ -400,7 +390,7 @@ class Pipeline:
             process = SourceProcess(source, queue, self.metadata_queue, self.log_queue, self.log_level)
             self.pixmap_processes.append(process)
             process.start()
-            self.logger.debug("Started bitmap process no. %d", i)
+            self.logger.debug("Started pixmap process no. %d", i)
 
     def _wait_for_pixmap_sources(self):
         pixmap_sources_to_load = len(self.pixmap_processes)
@@ -409,7 +399,7 @@ class Pipeline:
         bs_width, bs_height = 0, 0
         while pixmap_sources_loaded < pixmap_sources_to_load:
             try:
-                self.logger.debug("Received metadata message from bitmap process")
+                self.logger.debug("Received metadata message from pixmap process")
                 shape_info = self.metadata_queue.get(timeout=1)
                 if pixmap_sources_loaded == 0:
                     (bs_width, bs_height, self.bs_framerate, self.bs_length, *_) = shape_info
@@ -437,31 +427,10 @@ class Pipeline:
                 raise ValueError(
                     f"Resolutions do not match: "\
                     f"flow is {self.fs_width}x{self.fs_height} "\
-                    f"while bitmap is {bs_width}x{bs_height}.")
+                    f"while pixmap is {bs_width}x{bs_height}.")
             self.fs_width_factor = bs_width // self.fs_width
             self.fs_height_factor = bs_height // self.fs_height
-            self.logger.debug("Flow and bitmap dimension do not match. Setting scaling factors to %dx%d", self.fs_width_factor, self.fs_height_factor)
-
-    # def _setup_accumulator(self):
-    #     if self.accumulator is not None: # already loaded from checkpoint
-    #         return
-    #     assert self.fs_width is not None and self.fs_height is not None
-    #     self.accumulator = Accumulator.from_args(
-    #         int(self.fs_width * self.fs_width_factor),
-    #         int(self.fs_height * self.fs_height_factor),
-    #         method=self.config.acc_method,
-    #         reset_mode=self.config.reset_mode,
-    #         reset_alpha=self.config.reset_alpha,
-    #         reset_mask_path=self.config.reset_mask_path,
-    #         heatmap_mode=self.config.heatmap_mode,
-    #         heatmap_args=self.config.heatmap_args,
-    #         heatmap_reset_threshold=self.config.heatmap_reset_threshold,
-    #         bg_color=self.config.accumulator_background,
-    #         stack_composer=self.config.stack_composer,
-    #         initial_canvas=self.config.initial_canvas,
-    #         bitmap_mask_path=self.config.bitmap_mask_path,
-    #         crumble=self.config.crumble,
-    #         bitmap_introduction_flags=self.config.bitmap_introduction_flags)
+            self.logger.debug("Flow and pixmap dimension do not match. Setting scaling factors to %dx%d", self.fs_width_factor, self.fs_height_factor)
     
     def _setup_compositor(self):
         assert self.fs_width is not None and self.fs_height is not None
@@ -529,22 +498,12 @@ class Pipeline:
         return flow
 
     def _update_output(self, flow: numpy.ndarray) -> bool:
-        # assert self.accumulator is not None
         assert self.compositor is not None
         out_frame = None
         if self.config.output_intensity:
             flow_intensity = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
             out_frame = render1d(flow_intensity, self.config.render_scale, self.config.render_colors, self.config.render_binary)
-        # elif self.config.output_heatmap:
-        #     out_frame = render1d(self.accumulator.get_heatmap_array(), self.config.render_scale, self.config.render_colors, self.config.render_binary) # TODO
-        # elif self.config.output_accumulator:
-        #     out_frame = render2d(self.accumulator.get_accumulator_array(), self.config.render_scale, self.config.render_colors), # TODO
-        # elif self.pixmap_queues is not None:
         elif self.pixmap_queues:
-            # bitmap = self.pixmap_queues.get(timeout=1)
-            # if bitmap is None:
-            #     return False
-            # out_frame = self.accumulator.apply(bitmap)
             out_frame = self.compositor.render()
         if out_frame is not None:
             for oq in self.output_queues:
@@ -553,7 +512,6 @@ class Pipeline:
 
     def _mainloop(self):
         assert self.flow_process is not None
-        # assert self.accumulator is not None
         assert self.compositor is not None
 
         exception = False
@@ -572,7 +530,6 @@ class Pipeline:
                 flow = self._update_flow()
                 if flow is None:
                     break
-                # self.accumulator.update(flow)
                 self.compositor.update(flow)
                 if not self._update_output(flow):
                     break
@@ -637,7 +594,7 @@ class Pipeline:
             if has_logger: self.logger.debug("Killed extra flow process no. %d", i)
         for i, p in enumerate(self.pixmap_processes):
             p.kill()
-            if has_logger: self.logger.debug("Killed bitmap process no. %d", i)
+            if has_logger: self.logger.debug("Killed pixmap process no. %d", i)
         if self.flow_process is not None:
             self.flow_process.join()
             if has_logger: self.logger.debug("Killed flow process")
@@ -669,7 +626,6 @@ class Pipeline:
             self._wait_for_pixmap_sources()
             self.metadata_queue.close()
             self.logger.debug("Closed metadata queue")
-            # self._setup_accumulator()
             self._setup_compositor()
             self._setup_output()
             if self.safe:

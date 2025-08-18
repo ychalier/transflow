@@ -3,15 +3,15 @@ import random
 import cv2
 import numpy
 
-from .source import BitmapSource
+from .source import PixmapSource
 from ..utils import parse_hex_color
 
 
-class StillBitmapSource(BitmapSource):
+class StillPixmapSource(PixmapSource):
 
     def __init__(self, width: int | None = None, height: int | None = None,
                  seed: int | None = None, alteration_path: str | None = None):
-        BitmapSource.__init__(self, alteration_path, length=None)
+        PixmapSource.__init__(self, alteration_path, length=None)
         self.width = width
         self.height = height
         self.seed = seed
@@ -32,20 +32,19 @@ class StillBitmapSource(BitmapSource):
         return self.alter(self.array.copy())
 
 
+class ColorPixmapSource(StillPixmapSource):
 
-class ColorBitmapSource(StillBitmapSource):
-
-    def __init__(self, width: int, height: int, bitmap_color: str | None = None,
+    def __init__(self, width: int, height: int, color: str | None = None,
                  seed: int | None = None, alteration_path: str | None = None):
-        StillBitmapSource.__init__(self, width, height, seed, alteration_path)
-        self.bitmap_color = bitmap_color
+        StillPixmapSource.__init__(self, width, height, seed, alteration_path)
+        self.color = color
 
     def _init_array(self):
         numpy.random.seed(self.seed)
-        if self.bitmap_color is None:
+        if self.color is None:
             color = list(numpy.random.randint(0, 256, size=(3), dtype=numpy.uint8))
         else:
-            color = parse_hex_color(self.bitmap_color)
+            color = parse_hex_color(self.color)
         if self.width is None or self.height is None:
             raise ValueError("Width or height not initialized")
         array = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
@@ -53,7 +52,7 @@ class ColorBitmapSource(StillBitmapSource):
         return array
 
 
-class NoiseBitmapSource(StillBitmapSource):
+class NoisePixmapSource(StillPixmapSource):
 
     def _init_array(self):
         numpy.random.seed(self.seed)
@@ -64,7 +63,7 @@ class NoiseBitmapSource(StillBitmapSource):
             3, axis=2)
 
 
-class BwNoiseBitmapSource(StillBitmapSource):
+class BwNoisePixmapSource(StillPixmapSource):
 
     def _init_array(self):
         numpy.random.seed(self.seed)
@@ -74,7 +73,7 @@ class BwNoiseBitmapSource(StillBitmapSource):
                             3, axis=2).astype(numpy.uint8)
 
 
-class ColoredNoiseBitmapSource(StillBitmapSource):
+class ColoredNoisePixmapSource(StillPixmapSource):
 
     def _init_array(self):
         numpy.random.seed(self.seed)
@@ -83,7 +82,7 @@ class ColoredNoiseBitmapSource(StillBitmapSource):
         return numpy.random.randint(0, 256, size=(self.height, self.width, 3), dtype=numpy.uint8)
 
 
-class GradientBitmapSource(StillBitmapSource):
+class GradientPixmapSource(StillPixmapSource):
 
     NODE_I = 0
     NODE_J = 1
@@ -165,10 +164,10 @@ class GradientBitmapSource(StillBitmapSource):
         return array.astype(numpy.uint8)
 
 
-class ImageBitmapSource(StillBitmapSource):
+class ImagePixmapSource(StillPixmapSource):
 
     def __init__(self, path: str, alteration_path: str | None = None):
-        StillBitmapSource.__init__(self, alteration_path=alteration_path)
+        StillPixmapSource.__init__(self, alteration_path=alteration_path)
         self.path = path
 
     def _init_array(self):
@@ -179,7 +178,7 @@ class ImageBitmapSource(StillBitmapSource):
         return array
 
 
-class VideoStillBitmapSource(ImageBitmapSource):
+class VideoStillPixmapSource(ImagePixmapSource):
 
     def _init_array(self):
         capture = cv2.VideoCapture(self.path)
