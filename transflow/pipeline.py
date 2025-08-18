@@ -224,6 +224,7 @@ class Pipeline:
             or self.config.output_accumulator
 
     def export_checkpoint(self):
+        assert self.compositor is not None
         output = ZipOutput(self.config.get_secondary_output_path(f"_{self.cursor:05d}.ckpt.zip"), self.replace)
         output.write_meta({
             "config": self.config.todict(),
@@ -231,8 +232,14 @@ class Pipeline:
             "framerate": self.fs_framerate,
             "timestamp": time.time(),
         })
-        output.write_object("accumulator.bin", self.accumulator)
+        sources = []
+        for layer in self.compositor.layers:
+            sources.append(layer.sources[:])
+            layer.sources = []
+        output.write_object("compositor.bin", self.compositor)
         output.close()
+        for layer, layer_sources in zip(self.compositor.layers, sources):
+            layer.sources = layer_sources
         self.logger.debug("Exported checkpoint at cursor %d", self.cursor)
 
     @property
@@ -288,8 +295,8 @@ class Pipeline:
         with zipfile.ZipFile(self.config.flow_path) as archive:
             with archive.open("meta.json") as file:
                 self.ckpt_meta = json.loads(file.read().decode())
-            with archive.open("accumulator.bin") as file:
-                self.accumulator = pickle.load(file)
+            with archive.open("compositor.bin") as file:
+                self.compositor = pickle.load(file)
         self.config = Config.fromdict(self.ckpt_meta["config"])
         self.logger.debug("Flow path is a checkpoint, restarting from frame %d.", self.ckpt_meta["cursor"])
         self.config.seek_time += self.ckpt_meta["cursor"] / self.ckpt_meta["framerate"]
@@ -457,18 +464,17 @@ class Pipeline:
     #         bitmap_introduction_flags=self.config.bitmap_introduction_flags)
     
     def _setup_compositor(self):
-        if self.compositor is not None: # already loaded from checkpoint
-            return
         assert self.fs_width is not None and self.fs_height is not None
+        if self.compositor is None:
+            self.compositor = Compositor.from_args(
+                int(self.fs_width * self.fs_width_factor),
+                int(self.fs_height * self.fs_height_factor),
+                self.config.layers)
         interfaces: dict[int, list[PixmapSourceInterface]] = {}
         for pixmap_config, pixmap_queue in zip(self.config.pixmap_sources, self.pixmap_queues):
             interfaces.setdefault(pixmap_config.layer, [])
             interfaces[pixmap_config.layer].append(PixmapSourceInterface(pixmap_queue))
-        self.compositor = Compositor.from_args(
-            int(self.fs_width * self.fs_width_factor),
-            int(self.fs_height * self.fs_height_factor),
-            self.config.layers,
-            interfaces)
+        self.compositor.set_sources(interfaces)
 
     def _setup_output(self):
         if not self.has_output:

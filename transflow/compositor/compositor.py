@@ -102,7 +102,7 @@ class Layer:
         self.height = height
         self.sources: list[PixmapSourceInterface] = sources
         self.rgba = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint8)
-        self.mask_alpha: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.bool) if self.config.mask_alpha is None else load_mask(self.config.mask_alpha)        
+        self.mask_alpha: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.bool) if self.config.mask_alpha is None else load_mask(self.config.mask_alpha)
 
     def update(self, flow: Flow):
         raise NotImplementedError()
@@ -118,8 +118,6 @@ class Layer:
             height: int,
             sources: list[PixmapSourceInterface]):
         args = [config, width, height, sources]
-        if not sources:
-            warnings.warn("Layer has not sources!")
         if config.classname == "moveref":
             return MoveReferenceLayer(*args)
         if config.classname == "introduction":
@@ -144,16 +142,16 @@ class StaticLayer(Layer):
 
 
 class DataLayer(Layer):
-    
+
     DEPTH: int = 4
     POS_I_IDX: int = 0
     POS_J_IDX: int = 1
     POS_A_IDX: int = 2
-    
+
     def __init__(self, *args):
         Layer.__init__(self, *args)
         self.base = numpy.indices((self.height, self.width), dtype=numpy.int32).transpose(1, 2, 0)
-        self.data = numpy.zeros((self.height, self.width, self.DEPTH), dtype=numpy.int32)       
+        self.data = numpy.zeros((self.height, self.width, self.DEPTH), dtype=numpy.int32)
 
 
 class MovementLayer(DataLayer):
@@ -194,7 +192,7 @@ class MovementLayer(DataLayer):
         if self.config.moving_pixels_leave_empty_spot:
             putn_1d(self.data[:,:,self.POS_A_IDX], 0, where_source, 1, 0)
         putn_1d(self.data[:,:,self.POS_A_IDX], 1, where_target, 1, 0)
-    
+
     def update(self, flow: Flow):
         self._update_flow(flow)
         self._update_move()
@@ -213,7 +211,7 @@ class ReferenceLayer(DataLayer):
         # it should inherit from the same base class as MappingLayer
         self.reset_mode: ResetMode = ResetMode.from_string(self.config.reset_mode)
         self.reset_mask: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.float32) if self.config.reset_mask is None else load_mask(self.config.reset_mask)
-    
+
     def _update_reset_random(self):
         random = numpy.random.random(size=(self.height, self.width))
         reset_mask = numpy.zeros((self.height, self.width), dtype=numpy.bool)
@@ -258,21 +256,21 @@ class ReferenceLayer(DataLayer):
 
 
 class MoveReferenceLayer(MovementLayer, ReferenceLayer):
-    
+
     def __init__(self, *args):
         MovementLayer.__init__(self, *args)
         ReferenceLayer.__init__(self, *args)
-    
+
     def update(self, flow: Flow):
         MovementLayer.update(self, flow)
         ReferenceLayer.update(self, flow)
 
 
 class SumLayer(ReferenceLayer):
-    
+
     def _update_sum(self, flow: Flow):
         self.data[:,:,[self.POS_I_IDX, self.POS_J_IDX]] += numpy.floor(flow).astype(numpy.int32)
-    
+
     def update(self, flow: Flow):
         self._update_sum(flow)
         ReferenceLayer.update(self, flow)
@@ -359,10 +357,10 @@ class Compositor:
     def from_args(cls,
             width: int,
             height: int,
-            layer_configs: list[LayerConfig],
-            pixmap_interfaces: dict[int, list[PixmapSourceInterface]]):
-        layers = [
-            Layer.from_args(config, width, height, pixmap_interfaces.get(config.index, []))
-            for config in layer_configs
-        ]
+            layer_configs: list[LayerConfig]):
+        layers = [Layer.from_args(config, width, height, []) for config in layer_configs]
         return cls(width, height, layers)
+
+    def set_sources(self, pixmap_interfaces: dict[int, list[PixmapSourceInterface]]):
+        for i, layer in enumerate(self.layers):
+            layer.sources = pixmap_interfaces.get(i, [])
