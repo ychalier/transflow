@@ -4,7 +4,6 @@ https://stackoverflow.com/questions/9195455/how-to-document-a-method-with-parame
 import enum
 import logging
 import multiprocessing
-import warnings
 from collections.abc import Sequence
 from typing import Literal, TypeVar, cast
 
@@ -205,10 +204,6 @@ class ReferenceLayer(DataLayer):
         self.data[:,:,0:2] = self.base.copy() # shape: (height, width, 2) [i, j]
         self.data[:,:,2] = 1
         self.data[:,:,3] = 0 # source index
-        # NOTE
-        # summation is completely different. it does not take alpha into account.
-        # we could have a third layer class 'SumLayer', but would masks be correctly taken into account?
-        # it should inherit from the same base class as MappingLayer
         self.reset_mode: ResetMode = ResetMode.from_string(self.config.reset_mode)
         self.reset_mask: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.float32) if self.config.reset_mask is None else load_mask(self.config.reset_mask)
 
@@ -217,7 +212,8 @@ class ReferenceLayer(DataLayer):
         reset_mask = numpy.zeros((self.height, self.width), dtype=numpy.bool)
         reset_mask[numpy.where(random < self.config.reset_random_factor * self.reset_mask)] = 1
         where = numpy.nonzero(reset_mask)
-        self.data[:,:,[self.POS_I_IDX, self.POS_J_IDX]][where] = self.base[where]
+        self.data[:,:,self.POS_I_IDX][where] = self.base[:,:,0][where]
+        self.data[:,:,self.POS_J_IDX][where] = self.base[:,:,1][where]
         self.data[:,:,self.POS_A_IDX][where] = 1
 
     def _update_reset_constant(self):
