@@ -7,8 +7,8 @@ from typing import Callable, cast
 import numpy
 
 from ..filters import FlowFilter
-from ...utils import load_mask, parse_lambda_expression
-from ...types import Flow
+from ...utils import load_float_mask, parse_lambda_expression
+from ...types import Flow, FloatMask
 
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class FlowSource:
             self.height: int | None = None
             self.framerate: float = 30
             self.mask_path: str | None = mask_path
-            self.mask: numpy.ndarray | None = None
+            self.mask: FloatMask | None = None
             self.kernel_path = kernel_path
             self.kernel: numpy.ndarray | None = None
             self.flow_filters: list[FlowFilter] = []
@@ -125,7 +125,8 @@ class FlowSource:
         def build(self):
 
             if self.mask_path is not None:
-                self.mask = load_mask(self.mask_path, newaxis=True)
+                self.mask = load_float_mask(self.mask_path)
+                self.mask = cast(FloatMask, self.mask.reshape((*self.mask.shape, 1)))
 
             if self.kernel_path is not None:
                 self.kernel = numpy.load(self.kernel_path)
@@ -216,7 +217,7 @@ class FlowSource:
             start_frame: int,
             ckpt_start_frame: int,
             end_frame: int,
-            mask: numpy.ndarray | None = None,
+            mask: FloatMask | None = None,
             kernel: numpy.ndarray | None = None,
             flow_filters: list[FlowFilter] = [],
             lock_mode: LockMode = LockMode.STAY,

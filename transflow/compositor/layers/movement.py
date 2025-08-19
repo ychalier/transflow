@@ -1,7 +1,9 @@
+from typing import cast
+
 import numpy
 
-from ...utils import load_mask, putn, putn_1d
-from ...types import Flow
+from ...utils import load_bool_mask, putn, putn_1d
+from ...types import Flow, BoolMask
 from .data import DataLayer
 
 
@@ -9,9 +11,9 @@ class MovementLayer(DataLayer):
 
     def __init__(self, *args):
         DataLayer.__init__(self, *args)
-        self.mask_src: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.bool) if self.config.mask_src is None else load_mask(self.config.mask_src)
-        self.mask_dst: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.bool) if self.config.mask_dst is None else load_mask(self.config.mask_dst)
-        self.flow = numpy.zeros((self.height, self.width, 2), dtype=numpy.float32)
+        self.mask_src: BoolMask = load_bool_mask(self.config.mask_src, (self.height, self.width), True)
+        self.mask_dst: BoolMask = load_bool_mask(self.config.mask_dst, (self.height, self.width), True)
+        self.flow: Flow = cast(Flow, numpy.zeros((self.height, self.width, 2), dtype=numpy.float32))
         self.flow_int = numpy.zeros((self.height, self.width, 2), dtype=numpy.int32)
         self.flow_flat = numpy.zeros((self.height * self.width, 1), dtype=numpy.int32)
 

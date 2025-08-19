@@ -3,8 +3,8 @@ from typing import cast
 import numpy
 
 from ...config import LayerConfig
-from ...utils import load_mask
-from ...types import Flow, Rgba
+from ...utils import load_float_mask
+from ...types import Flow, Rgba, FloatMask
 from ..pixmap_source_interface import PixmapSourceInterface
 
 
@@ -21,7 +21,7 @@ class Layer:
         self.height = height
         self.sources: list[PixmapSourceInterface] = sources
         self.rgba = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint8)
-        self.mask_alpha: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.bool) if self.config.mask_alpha is None else load_mask(self.config.mask_alpha)
+        self.mask_alpha: FloatMask = load_float_mask(self.config.mask_alpha, (self.height, self.width), 1)
 
     def update(self, flow: Flow):
         raise NotImplementedError()

@@ -3,30 +3,36 @@ import os
 import random
 import re
 import warnings
-from typing import Callable
+from typing import Callable, cast
 
 import numpy
 
+from .types import BoolMask, FloatMask
 
-def load_image(image_path: str) -> numpy.ndarray:
+
+def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), default: float = 0) -> FloatMask:
+    if mask_path is None:
+        arr = numpy.zeros(shape, dtype=numpy.float32)
+        arr[:,:] = default
+        return arr
     import PIL.Image
-    image = PIL.Image.open(image_path)
-    arr = numpy.array(image)
+    image = PIL.Image.open(mask_path)
+    arr = numpy.array(image).astype(numpy.float32)
     image.close()
-    return arr
-
-
-def load_mask(mask_path: str, newaxis: bool = False) -> numpy.ndarray:
-    arr = load_image(mask_path).astype(numpy.float32)
     if arr.ndim == 2:
         mask = arr / 255
     elif arr.ndim == 3:
-        mask = numpy.mean(arr[:,:,:3], axis=2) / 255
+        if arr.shape[2] == 4:
+            mask = arr[:,:,3] / 255
+        else:
+            mask = numpy.mean(arr[:,:,:3], axis=2) / 255
     else:
         raise ValueError(f"Image has wrong number of dimensions {arr.ndim}, expected 2 or 3")
-    if newaxis:
-        return mask.reshape((*mask.shape, 1))
-    return mask
+    return cast(FloatMask, mask)
+
+
+def load_bool_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), default: bool = False) -> BoolMask:
+    return load_float_mask(mask_path, shape, float(default)).astype(numpy.bool)
 
 
 def find_unique_path(path: str) -> str:

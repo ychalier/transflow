@@ -1,7 +1,7 @@
 import numpy
 
-from ...utils import load_mask, putn
-from ...types import Flow
+from ...utils import load_bool_mask, putn
+from ...types import Flow, BoolMask
 from .movement import MovementLayer
 
 
@@ -15,8 +15,8 @@ class IntroductionLayer(MovementLayer):
     def __init__(self, *args):
         MovementLayer.__init__(self, *args)
         # TODO: consider using one mask per source
-        self.mask_introduction: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.bool) if self.config.mask_introduction is None else load_mask(self.config.mask_introduction)
-        # self.introduction_masks: list[numpy.ndarray] = []
+        self.mask_introduction: BoolMask = load_bool_mask(self.config.mask_introduction, (self.height, self.width), True)
+        # self.introduction_masks: list[BoolMask] = []
         # for _ in self.sources:
         #     self.introduction_masks.append(numpy.ones((self.height, self.width), dtype=numpy.bool))
         self.introduced_once: bool = False

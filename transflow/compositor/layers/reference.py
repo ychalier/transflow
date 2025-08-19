@@ -2,8 +2,8 @@ import enum
 
 import numpy
 
-from ...types import Flow
-from ...utils import load_mask
+from ...types import Flow, FloatMask
+from ...utils import load_float_mask
 from .data import DataLayer
 
 
@@ -37,7 +37,7 @@ class ReferenceLayer(DataLayer):
         self.data[:,:,2] = 1
         self.data[:,:,3] = 0 # source index
         self.reset_mode: ResetMode = ResetMode.from_string(self.config.reset_mode)
-        self.reset_mask: numpy.ndarray = numpy.ones((self.height, self.width), dtype=numpy.float32) if self.config.reset_mask is None else load_mask(self.config.reset_mask)
+        self.reset_mask: FloatMask = load_float_mask(self.config.reset_mask, (self.height, self.width), 1)
 
     def _update_reset_random(self):
         random = numpy.random.random(size=(self.height, self.width))
