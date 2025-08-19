@@ -173,6 +173,7 @@ class Config:
             lock_mode: str | int | LockMode = LockMode.STAY,
             pixmap_sources: list[PixmapSourceConfig] = [],
             layers: list[LayerConfig] = [],
+            compositor_background: str | None = None,
             output_path: str | list[str] | None = None,
             vcodec: str = "h264",
             size: str | tuple[int, int] | list[int] | None = None,
@@ -224,6 +225,7 @@ class Config:
             if pixmap_config.layer not in layer_indices:
                 self.layers.append(LayerConfig(pixmap_config.layer))
                 layer_indices.add(pixmap_config.layer)
+        self.compositor_background: str = "#FFFFFF" if compositor_background is None else compositor_background
 
         # Output Args
         self.output_path: str | list[str] | None = None if (isinstance(output_path, list) and not output_path) else output_path
@@ -266,6 +268,7 @@ class Config:
             lock_mode=d.get("lock_mode", LockMode.STAY),
             pixmap_sources=[PixmapSourceConfig.fromdict(dd) for dd in d.get("pixmap_sources", [])],
             layers=[LayerConfig.fromdict(dd) for dd in d.get("layers", [])],
+            compositor_background=d.get("compositor_background", "#ffffff"),
             output_path=d.get("output_path", None),
             vcodec=d.get("vcodec", "h264"),
             size=d.get("size", None),
@@ -294,6 +297,7 @@ class Config:
             "lock_mode": self.lock_mode.value,
             "pixmap_sources": [x.todict() for x in self.pixmap_sources],
             "layers": [x.todict() for x in self.layers],
+            "compositor_background": self.compositor_background,
             "output_path": self.output_path,
             "vcodec": self.vcodec,
             "size": self.size,

@@ -43,9 +43,10 @@ class Compositor:
     def from_args(cls,
             width: int,
             height: int,
-            layer_configs: list[LayerConfig]):
+            layer_configs: list[LayerConfig],
+            background_color: str = "#ffffff"):
         layers = [Layer.from_args(config, width, height, []) for config in layer_configs]
-        return cls(width, height, layers)
+        return cls(width, height, layers, background_color=background_color)
 
     def set_sources(self, pixmap_interfaces: dict[int, list[PixmapSourceInterface]]):
         for i, layer in enumerate(self.layers):

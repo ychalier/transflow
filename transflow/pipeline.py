@@ -439,7 +439,8 @@ class Pipeline:
             self.compositor = Compositor.from_args(
                 int(self.fs_width * self.fs_width_factor),
                 int(self.fs_height * self.fs_height_factor),
-                self.config.layers)
+                self.config.layers,
+                background_color=self.config.compositor_background)
         interfaces: dict[int, list[PixmapSourceInterface]] = {}
         for pixmap_config, pixmap_queue in zip(self.config.pixmap_sources, self.pixmap_queues):
             interfaces.setdefault(pixmap_config.layer, [])

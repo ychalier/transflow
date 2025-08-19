@@ -97,6 +97,7 @@ def main():
     parser.add_argument("-lim", "--layer-introduce-moving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-liu", "--layer-introduce-unmoving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-lio", "--layer-introduce-once", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
+    parser.add_argument("-cb", "--compositor-background", type=str, default="#ffffff", help="compositor background color")
 
     # Output Args
     parser.add_argument("-o", "--output", type=str, action="append", help="output path: if provided, path to export the output video (as an MP4 file) ; otherwise, opens a temporary display window")
