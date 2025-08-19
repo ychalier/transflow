@@ -3,10 +3,10 @@ import os
 import pathlib
 
 import cv2
-import numpy
 
 from .video_output import VideoOutput
 from ..utils import startfile
+from ..types import Rgb
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class FramesVideoOutput(VideoOutput):
         logger.debug("Started frames output to %s", self.directory)
         return self
 
-    def feed(self, frame: numpy.ndarray):
+    def feed(self, frame: Rgb):
         cv2.imwrite(self.template % self.counter, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         self.counter += 1
 

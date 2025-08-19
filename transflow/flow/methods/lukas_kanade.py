@@ -1,13 +1,17 @@
+from typing import cast
+
 import cv2
 import numpy
 
+from ...types import Grey, Flow
+
 
 def calc_optical_flow_lukas_kanade(
-        prev_grey: numpy.ndarray,
-        next_grey: numpy.ndarray,
+        prev_grey: Grey,
+        next_grey: Grey,
         win_size: int,
         max_level: int,
-        step: int) -> numpy.ndarray:
+        step: int) -> Flow:
     m, n = prev_grey.shape
     p0 = numpy.stack(
         numpy.meshgrid(
@@ -28,5 +32,5 @@ def calc_optical_flow_lukas_kanade(
         maxLevel=max_level)
     flow = p1.reshape((p, q, 2)) - p0.reshape((p, q, 2))
     if step == 1:
-        return flow
-    return numpy.kron(flow, numpy.ones((step, step, 1)))[0:m,0:n,:].astype(flow.dtype)
+        return cast(Flow, flow)
+    return cast(Flow, numpy.kron(flow, numpy.ones((step, step, 1)))[0:m,0:n,:].astype(flow.dtype))

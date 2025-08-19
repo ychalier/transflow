@@ -3,6 +3,7 @@ import json
 import os
 import re
 import threading
+from typing import cast
 
 import cv2
 import numpy
@@ -10,6 +11,7 @@ import numpy
 from .source import FlowSource
 from ..methods.horn_schunck import calc_optical_flow_horn_schunck
 from ..methods.lukas_kanade import calc_optical_flow_lukas_kanade
+from ...types import Grey, Rgb, Flow
 
 
 class CvFlowConfigWindow(threading.Thread):
@@ -432,8 +434,8 @@ class CvFlowSource(FlowSource):
     def __init__(self, capture: cv2.VideoCapture, config: CvFlowConfig, *args, **kwargs):
         self.config = config
         self.capture = capture
-        self.prev_gray = None
-        self.prev_rgb = None
+        self.prev_gray: Grey | None = None
+        self.prev_rgb: Rgb | None = None
         self.config.start()
         FlowSource.__init__(self, *args, **kwargs)
     
@@ -451,17 +453,17 @@ class CvFlowSource(FlowSource):
                 raise RuntimeError(f"An error occurred while reading frame at index {i}")
             if i == self.input_frame_index:
                 resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
-                self.prev_gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-                self.prev_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+                self.prev_gray = cast(Grey, cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY))
+                self.prev_rgb = cast(Rgb, cv2.cvtColor(resized, cv2.COLOR_BGR2RGB))
         self.prev_flow = None
 
-    def next(self) -> numpy.ndarray:
+    def next(self) -> Flow:
         success, frame = self.capture.read()
         if frame is None or not success:
             raise StopIteration
         resized = cv2.resize(frame, dsize=(self.width, self.height), interpolation=cv2.INTER_NEAREST)
-        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        gray: Grey = cast(Grey, cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY))
+        rgb: Rgb = cast(Rgb, cv2.cvtColor(resized, cv2.COLOR_BGR2RGB))
         if self.direction == FlowSource.Direction.FORWARD:
             left_gray, right_gray = self.prev_gray, gray
             left_rgb, right_rgb = self.prev_rgb, rgb

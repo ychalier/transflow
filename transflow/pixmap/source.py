@@ -6,6 +6,8 @@ from typing import cast
 
 import numpy
 
+from ..types import Pixmap
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ class PixmapSource:
     def __enter__(self) -> typing.Self:
         return self
 
-    def __next__(self) -> numpy.ndarray:
+    def __next__(self) -> Pixmap:
         raise NotImplementedError()
 
     def __iter__(self):
@@ -60,7 +62,7 @@ class PixmapSource:
     def setup(self):
         self.load_alteration()
 
-    def alter(self, array: numpy.ndarray) -> numpy.ndarray:
+    def alter(self, array: Pixmap) -> Pixmap:
         if self.alteration is None:
             return array
         numpy.put(array, self.alteration[0], self.alteration[1])

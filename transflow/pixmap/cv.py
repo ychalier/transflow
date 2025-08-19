@@ -1,9 +1,11 @@
 import warnings
+from typing import cast
 
 import cv2
 import numpy
 
 from .source import PixmapSource
+from ..types import Rgb
 
 
 class CvPixmapSource(PixmapSource):
@@ -43,7 +45,7 @@ class CvPixmapSource(PixmapSource):
         self.rewind()
         return self
 
-    def __next__(self) -> numpy.ndarray:
+    def __next__(self) -> Rgb:
         assert self.capture is not None
         if not self.capture.isOpened():
             warnings.warn("Attempt to read frame from pixmap capture, which was not opened")
@@ -57,7 +59,7 @@ class CvPixmapSource(PixmapSource):
                 self.rewind()
                 continue
             raise StopIteration
-        return self.alter(numpy.array(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+        return cast(Rgb, self.alter(cast(Rgb, numpy.array(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))))
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         if self.capture is not None:

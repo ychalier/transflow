@@ -2,6 +2,7 @@ import cv2
 import numpy
 
 from .video_output import VideoOutput
+from ..types import Rgb
 
 
 cv_video_outputs = []
@@ -33,7 +34,7 @@ class CvVideoOutput(VideoOutput):
             cv_video_outputs.append(self)
         return self
 
-    def feed(self, frame: numpy.ndarray):
+    def feed(self, frame: Rgb):
         self.frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         self.draw()
     

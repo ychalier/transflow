@@ -1,15 +1,19 @@
+from typing import cast
+
 import cv2
 import numpy
 
+from ...types import Grey, Flow
+
 
 def calc_optical_flow_horn_schunck(
-        prev_grey: numpy.ndarray,
-        next_grey: numpy.ndarray,
-        flow: numpy.ndarray | None = None,
+        prev_grey: Grey,
+        next_grey: Grey,
+        flow: Flow | None = None,
         alpha: float = 1,
         max_iters: int = 3,
         decay: float = 0,
-        delta: float = 1):
+        delta: float = 1) -> Flow:
     import scipy.ndimage
     a = cv2.GaussianBlur(prev_grey.astype(numpy.float32), (5, 5), 0)
     b = cv2.GaussianBlur(next_grey.astype(numpy.float32), (5, 5), 0)
@@ -38,4 +42,4 @@ def calc_optical_flow_horn_schunck(
         v = v_avg - numpy.multiply(ey, c)
         if delta is not None and numpy.linalg.norm(u - prev, 2) < delta:
             break
-    return numpy.stack([u, v], axis=-1).astype(numpy.float32)
+    return cast(Flow, numpy.stack([u, v], axis=-1).astype(numpy.float32))

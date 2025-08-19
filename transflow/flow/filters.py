@@ -1,6 +1,7 @@
 import numpy
 
 from ..utils import parse_lambda_expression
+from ..types import Flow
 
 
 class FlowFilter:
@@ -8,7 +9,7 @@ class FlowFilter:
     def __init__(self):
         pass
 
-    def apply(self, flow: numpy.ndarray, t: float) -> None:
+    def apply(self, flow: Flow, t: float) -> None:
         raise NotImplementedError()
     
     @classmethod
@@ -37,7 +38,7 @@ class ScaleFlowFilter(FlowFilter):
     def __init__(self, filter_args: tuple[str]):
         self.expr = parse_lambda_expression(filter_args[0])
     
-    def apply(self, flow: numpy.ndarray, t: float):
+    def apply(self, flow: Flow, t: float):
         flow *= self.expr(t)
 
 
@@ -46,7 +47,7 @@ class ThresholdFlowFilter(FlowFilter):
     def __init__(self, filter_args: tuple[str]):
         self.expr = parse_lambda_expression(filter_args[0])
     
-    def apply(self, flow: numpy.ndarray, t: float):
+    def apply(self, flow: Flow, t: float):
         height, width, _ = flow.shape
         norm = numpy.linalg.norm(flow.reshape(height * width, 2), axis=1).reshape((height, width))
         threshold = self.expr(t)
@@ -59,7 +60,7 @@ class ClipFlowFilter(FlowFilter):
     def __init__(self, filter_args: tuple[str]):
         self.expr = parse_lambda_expression(filter_args[0])
     
-    def apply(self, flow: numpy.ndarray, t: float):
+    def apply(self, flow: Flow, t: float):
         height, width, _ = flow.shape
         norm = numpy.linalg.norm(flow.reshape(height * width, 2), axis=1).reshape((height, width))
         factors = numpy.ones((height, width))
@@ -76,7 +77,7 @@ class PolarFlowFilter(FlowFilter):
         self.expr_radius = parse_lambda_expression(filter_args[0], ("t", "r", "a"))
         self.expr_theta = parse_lambda_expression(filter_args[1], ("t", "r", "a"))
     
-    def apply(self, flow: numpy.ndarray, t: float):
+    def apply(self, flow: Flow, t: float):
         height, width, _ = flow.shape
         radius = numpy.linalg.norm(flow.reshape(height * width, 2), axis=1).reshape((height, width))
         theta = numpy.atan2(flow[:,:,1], flow[:,:,0])

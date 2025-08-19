@@ -14,6 +14,7 @@ from aiohttp import MultipartWriter, web
 from aiohttp.web_runner import GracefulExit
 
 from .video_output import VideoOutput
+from ..types import Rgb
 
 
 logger = logging.getLogger(__name__)
@@ -172,7 +173,7 @@ class MjpegOutput(VideoOutput):
         self.server.start()
         return self
     
-    def feed(self, frame: numpy.ndarray):
+    def feed(self, frame: Rgb):
         if self.stream is None:
             raise ValueError("Stream not initialized")
         if isinstance(frame, tuple):

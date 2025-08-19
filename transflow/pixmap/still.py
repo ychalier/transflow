@@ -1,10 +1,12 @@
 import random
+from typing import cast
 
 import cv2
 import numpy
 
 from .source import PixmapSource
 from ..utils import parse_hex_color
+from ..types import Rgb, Pixmap
 
 
 class StillPixmapSource(PixmapSource):
@@ -15,9 +17,9 @@ class StillPixmapSource(PixmapSource):
         self.width = width
         self.height = height
         self.seed = seed
-        self.array: numpy.ndarray | None = None
+        self.array: Pixmap | None = None
 
-    def _init_array(self) -> numpy.ndarray:
+    def _init_array(self) -> Pixmap:
         raise NotImplementedError()
 
     def __enter__(self):
@@ -27,7 +29,7 @@ class StillPixmapSource(PixmapSource):
         self.setup()
         return self
 
-    def __next__(self) -> numpy.ndarray:
+    def __next__(self) -> Pixmap:
         assert self.array is not None
         return self.alter(self.array.copy())
 
@@ -49,7 +51,7 @@ class ColorPixmapSource(StillPixmapSource):
             raise ValueError("Width or height not initialized")
         array = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
         array[:,:,:] = color
-        return array
+        return cast(Rgb, array)
 
 
 class NoisePixmapSource(StillPixmapSource):
@@ -58,9 +60,7 @@ class NoisePixmapSource(StillPixmapSource):
         numpy.random.seed(self.seed)
         if self.width is None or self.height is None:
             raise ValueError("Width or height not initialized")
-        return numpy.repeat(
-            numpy.random.randint(0, 256, size=(self.height, self.width, 1), dtype=numpy.uint8),
-            3, axis=2)
+        return cast(Rgb, numpy.repeat(numpy.random.randint(0, 256, size=(self.height, self.width, 1), dtype=numpy.uint8), 3, axis=2))
 
 
 class BwNoisePixmapSource(StillPixmapSource):
@@ -69,8 +69,7 @@ class BwNoisePixmapSource(StillPixmapSource):
         numpy.random.seed(self.seed)
         if self.width is None or self.height is None:
             raise ValueError("Width or height not initialized")
-        return numpy.repeat(numpy.random.choice([0, 255], size=(self.height, self.width, 1)),
-                            3, axis=2).astype(numpy.uint8)
+        return cast(Rgb, numpy.repeat(numpy.random.choice([0, 255], size=(self.height, self.width, 1)), 3, axis=2).astype(numpy.uint8))
 
 
 class ColoredNoisePixmapSource(StillPixmapSource):
@@ -79,7 +78,7 @@ class ColoredNoisePixmapSource(StillPixmapSource):
         numpy.random.seed(self.seed)
         if self.width is None or self.height is None:
             raise ValueError("Width or height not initialized")
-        return numpy.random.randint(0, 256, size=(self.height, self.width, 3), dtype=numpy.uint8)
+        return cast(Rgb, numpy.random.randint(0, 256, size=(self.height, self.width, 3), dtype=numpy.uint8))
 
 
 class GradientPixmapSource(StillPixmapSource):
@@ -161,7 +160,7 @@ class GradientPixmapSource(StillPixmapSource):
                 array[i, j, 0] = 255 * (r + 1) / 2
                 array[i, j, 1] = 255 * (g + 1) / 2
                 array[i, j, 2] = 255 * (b + 1) / 2
-        return array.astype(numpy.uint8)
+        return cast(Rgb, array.astype(numpy.uint8))
 
 
 class ImagePixmapSource(StillPixmapSource):
@@ -173,9 +172,10 @@ class ImagePixmapSource(StillPixmapSource):
     def _init_array(self):
         import PIL.Image
         image = PIL.Image.open(self.path)
-        array = numpy.array(image)[:,:,:3]
+        array = numpy.array(image)[:,:,:]
         image.close()
-        return array
+        assert array.shape[2] == 3 or array.shape[2] == 4, f"Pixmap image has unsupported dimension: {array.shape}"
+        return cast(Pixmap, array)
 
 
 class VideoStillPixmapSource(ImagePixmapSource):
@@ -186,4 +186,4 @@ class VideoStillPixmapSource(ImagePixmapSource):
         assert success, "Could not open video for still bitmap source"
         array = numpy.array(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         capture.release()
-        return array
+        return cast(Rgb, array)

@@ -1,9 +1,13 @@
 import math
 import re
+from typing import cast
 
 import cupy
 import numpy
 import torch
+
+from ...types import Rgb, Flow
+
 
 torch.set_grad_enabled(False)
 torch.backends.cudnn.enabled = True
@@ -632,9 +636,7 @@ def estimate(netNetwork, tenOne, tenTwo):
     return tenFlow[0, :, :, :].cpu()
 
 
-def calc_optical_flow_liteflownet(
-        prev_frame: numpy.ndarray,
-        next_frame: numpy.ndarray) -> numpy.ndarray:
+def calc_optical_flow_liteflownet(prev_frame: Rgb, next_frame: Rgb) -> Flow:
     global netNetwork
     if netNetwork is None:
         netNetwork = Network().cuda().train(False)
@@ -642,4 +644,4 @@ def calc_optical_flow_liteflownet(
     tenTwo = torch.FloatTensor(numpy.ascontiguousarray(next_frame[:, :, ::-1].transpose(2, 0, 1).astype(numpy.float32) * (1.0 / 255.0)))
     tenOutput = estimate(netNetwork, tenOne, tenTwo)
     flow = numpy.ascontiguousarray(numpy.array(tenOutput.numpy(force=True).transpose(1, 2, 0), numpy.float32))
-    return flow
+    return cast(Flow, flow)

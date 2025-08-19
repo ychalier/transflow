@@ -2,12 +2,13 @@ import enum
 import logging
 import os
 import warnings
-from typing import Callable
+from typing import Callable, cast
 
 import numpy
 
 from ..filters import FlowFilter
 from ...utils import load_mask, parse_lambda_expression
+from ...types import Flow
 
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,6 @@ class FlowSource:
             self.ckpt_start_frame: int = 0
             self.end_frame: int = 0
             self.repeat: int = repeat
-            self.prev_flow: numpy.ndarray | None = None
             self.lock_expr_string: str | None = lock_expr
             self.lock_expr_stay: tuple[tuple[float, float]] | None = None
             self.lock_expr_stay_index: int = 0
@@ -238,7 +238,7 @@ class FlowSource:
         self.lock_expr_skip = lock_expr_skip
         self.input_frame_index: int = 0
         self.output_frame_index: int = 0
-        self.prev_flow: numpy.ndarray | None = None
+        self.prev_flow: Flow | None = None
         self.lock_start: float | None = None
         self.lock_expr_stay_index: int = 0
 
@@ -282,14 +282,14 @@ class FlowSource:
         self.assert_type("lock_mode", FlowSource.LockMode)
         self.assert_type("lock_expr_stay", tuple, type(None))
 
-    def read_next_flow(self) -> numpy.ndarray:
+    def read_next_flow(self) -> Flow:
         if self.input_frame_index == self.end_frame:
             self.rewind()
         flow = self.next()
         self.input_frame_index += 1
         return flow
 
-    def __next__(self) -> numpy.ndarray:
+    def __next__(self) -> Flow:
         if self.length is not None and self.output_frame_index >= self.length:
             raise StopIteration
         locked = False
@@ -323,7 +323,7 @@ class FlowSource:
     def t(self) -> float:
         return 0 if self.framerate is None else self.output_frame_index / self.framerate
 
-    def next(self) -> numpy.ndarray:
+    def next(self) -> Flow:
         raise NotImplementedError()
 
     def rewind(self):
@@ -333,7 +333,8 @@ class FlowSource:
     def __iter__(self):
         return self
 
-    def post_process(self, flow: numpy.ndarray) -> numpy.ndarray:
+    def post_process(self, raw: Flow) -> Flow:
+        flow = raw
         if self.flow_filters:
             for flow_filter in self.flow_filters:
                 flow_filter.apply(flow, self.t)
@@ -358,7 +359,7 @@ class FlowSource:
             flow[:,:,1] = Ay - self.basey
         numpy.clip(flow[:,:,0], self.fx_min, self.fx_max, flow[:,:,0])
         numpy.clip(flow[:,:,1], self.fy_min, self.fy_max, flow[:,:,1])
-        return flow
+        return cast(Flow, flow)
 
     @classmethod
     def from_args(cls,

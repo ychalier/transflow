@@ -6,6 +6,7 @@ import numpy
 
 from .video_output import VideoOutput
 from ..utils import find_unique_path, startfile
+from ..types import Rgb
 
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class FFmpegVideoOutput(VideoOutput):
         ], stdin=subprocess.PIPE)
         return self
 
-    def feed(self, frame: numpy.ndarray):
+    def feed(self, frame: Rgb):
         if self.process is None or self.process.stdin is None:
             raise ValueError("Process not initialized")
         self.process.stdin.write(frame.astype(numpy.uint8).tobytes())

@@ -2,6 +2,8 @@ import multiprocessing
 
 import numpy
 
+from ..types import Pixmap
+
 
 class EndOfPixmap(StopIteration):
     pass
@@ -11,14 +13,14 @@ class PixmapSourceInterface:
 
     def __init__(self, queue: multiprocessing.Queue):
         self.queue = queue
-        self.image: numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]] | None = None
+        self.image: Pixmap | None = None
         self.counter: int = -1
 
-    def get(self) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
+    def get(self) -> Pixmap:
         assert self.image is not None
         return self.image
 
-    def next(self, timeout: float = 1) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
+    def next(self, timeout: float = 1) -> Pixmap:
         image = self.queue.get(timeout=timeout)
         if image is None:
             raise EndOfPixmap

@@ -1,10 +1,11 @@
 import logging
 from collections.abc import Sequence
+from typing import cast
 
 import numpy
 
 from ..utils import parse_hex_color
-from ..types import Flow
+from ..types import Flow, Rgb
 from ..config import LayerConfig
 from .layers import Layer
 from .pixmap_source_interface import PixmapSourceInterface
@@ -19,7 +20,7 @@ class Compositor:
         self.width = width
         self.height = height
         self.background_color = parse_hex_color(background_color)
-        self.background = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)
+        self.background: Rgb = cast(Rgb, numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8))
         self.background[:,:] = self.background_color
         self.layers: Sequence[Layer] = layers
 
@@ -27,7 +28,7 @@ class Compositor:
         for layer in self.layers:
             layer.update(flow)
 
-    def render(self) -> numpy.ndarray[tuple[int, int, int], numpy.dtype[numpy.uint8]]:
+    def render(self) -> Rgb:
         """
         :return: RGB array of shape (height, width, 3)
         """
@@ -36,7 +37,7 @@ class Compositor:
             layer_image = layer.render()
             where_opaque = numpy.nonzero(layer_image[:,:,3])
             image[where_opaque] = layer_image[:,:,:3][where_opaque]
-        return image
+        return cast(Rgb, image)
 
     @classmethod
     def from_args(cls,

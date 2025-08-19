@@ -25,6 +25,7 @@ from .compositor import PixmapSourceInterface, Compositor
 from .output import VideoOutput, ZipOutput, NumpyOutput
 from .output.render import render1d
 from .utils import multiply_arrays, binarize_arrays, absmax, upscale_array
+from .types import Flow
 
 
 def setup_logging(log_queue: multiprocessing.Queue, level: str):
@@ -145,11 +146,11 @@ class Pipeline:
         elapsed: float
         error: str | None
 
-    FLOW_MERGING_FUNCTIONS: dict[str, typing.Callable[[list[numpy.ndarray]], numpy.ndarray]] = {
+    FLOW_MERGING_FUNCTIONS: dict[str, typing.Callable[[list[Flow]], Flow]] = {
         "first": lambda flows: flows[0],
         "sum": lambda flows: numpy.sum(flows, axis=0),
         "average": lambda flows: numpy.sum(flows, axis=0) / len(flows),
-        "difference": lambda flows: flows[0] - sum(flows[1:]),
+        "difference": lambda flows: typing.cast(Flow, flows[0] - sum(flows[1:])),
         "product": multiply_arrays,
         "maskbin": lambda flows: multiply_arrays([flows[0]] + binarize_arrays(flows[1:])),
         "masklin": lambda flows: multiply_arrays([flows[0]] + [numpy.abs(f) for f in flows[1:]]),
@@ -480,7 +481,7 @@ class Pipeline:
             self.logger.debug("Started output process to %s", path)
             self.output_processes.append(op)
 
-    def _update_flow(self) -> numpy.ndarray | None:
+    def _update_flow(self) -> Flow | None:
         assert self.flow_queue is not None
         flows = []
         for q in [self.flow_queue] + self.extra_flow_queues:
@@ -497,7 +498,7 @@ class Pipeline:
             self.flow_output.write_array(numpy.round(flow).astype(int) if self.round_flow else flow)
         return flow
 
-    def _update_output(self, flow: numpy.ndarray) -> bool:
+    def _update_output(self, flow: Flow) -> bool:
         assert self.compositor is not None
         out_frame = None
         if self.config.output_intensity:

@@ -1,7 +1,10 @@
+from typing import Optional, cast
+
 import av.container
 import numpy
 
 from .source import FlowSource
+from ...types import Flow
 
 
 class AvFlowSource(FlowSource):
@@ -55,10 +58,9 @@ class AvFlowSource(FlowSource):
         for _ in range(self.input_frame_index + 1):
             next(self.iterator)
 
-    def next(self) -> numpy.ndarray:
-        flow = numpy.zeros((self.height, self.width, 2), dtype=numpy.float32)
+    def next(self) -> Flow:
+        flow = cast(Flow, numpy.zeros((self.height, self.width, 2), dtype=numpy.float32))
         frame = next(self.iterator)
-        from typing import Optional, cast
         from av.sidedata.motionvectors import MotionVectors
         vectors = cast(Optional[MotionVectors], frame.side_data.get("MOTION_VECTORS"))
         if vectors is None:

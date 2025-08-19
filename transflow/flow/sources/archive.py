@@ -4,6 +4,7 @@ import zipfile
 import numpy
 
 from .source import FlowSource
+from ...types import Flow
 
 
 class ArchiveFlowSource(FlowSource):
@@ -41,7 +42,7 @@ class ArchiveFlowSource(FlowSource):
         super().validate()
         self.assert_type("archive", zipfile.ZipFile)
 
-    def next(self) -> numpy.ndarray:
+    def next(self) -> Flow:
         with self.archive.open(f"{self.input_frame_index:09d}.npy") as file:
             flow = numpy.load(file)
         return flow

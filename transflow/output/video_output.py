@@ -1,7 +1,7 @@
 import logging
 import re
 
-import numpy
+from ..types import Rgb
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ class VideoOutput:
     def __enter__(self):
         return self
 
-    def feed(self, frame: numpy.ndarray):
+    def feed(self, frame: Rgb):
         raise NotImplementedError()
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
