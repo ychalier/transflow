@@ -1,54 +1,72 @@
-"""Set of tools for transferring optical flow from one media to another.
+"""Transflow - Optical Flow Transfer
+
+Set of tools for transferring optical flow from one media to another.
 """
 
-import argparse
-import pathlib
+__version__ = "1.10.0"
+__author__ = "Yohan Chalier"
+__license__ = "GNU GPLv3"
+__maintainer__ = "Yohan Chalier"
+__email__ = "yohan@chalier.fr"
 
-
-class AppendAction(argparse.Action):
-
-    LISTNAME = "foo"
-    FIRSTARG = "bar"
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        elements = getattr(namespace, self.LISTNAME, None)
-        if elements is None:
-            elements = []
-            setattr(namespace, self.LISTNAME, elements)
-        elements.append({self.FIRSTARG: values})
-
-
-class SetForLastAction(argparse.Action):
-
-    LISTNAME = "foo"
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        elements = getattr(namespace, self.LISTNAME, None)
-        if not elements:
-            parser.error(f"{option_string} does not have a {self.LISTNAME} to attach to")
-        elements[-1][self.dest] = values
-
-
-class AppendPixmapSource(AppendAction):
-    LISTNAME = "pixmap_sources"
-    FIRSTARG = "path"
-
-
-class SetForLastPixmapSource(SetForLastAction):
-    LISTNAME = "pixmap_sources"
-
-
-class AppendLayer(AppendAction):
-    LISTNAME = "layers"
-    FIRSTARG = "index"
-
-
-class SetForLastLayer(SetForLastAction):
-    LISTNAME = "layers"
+__all__ = [
+    "__version__",
+    "__author__",
+    "__license__",
+    "__maintainer__",
+    "__email__",
+    "main",
+]
 
 
 def main():
+
+    import argparse
+    import pathlib
+
+    class AppendAction(argparse.Action):
+
+        LISTNAME = "foo"
+        FIRSTARG = "bar"
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            elements = getattr(namespace, self.LISTNAME, None)
+            if elements is None:
+                elements = []
+                setattr(namespace, self.LISTNAME, elements)
+            elements.append({self.FIRSTARG: values})
+
+
+    class SetForLastAction(argparse.Action):
+
+        LISTNAME = "foo"
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            elements = getattr(namespace, self.LISTNAME, None)
+            if not elements:
+                parser.error(f"{option_string} does not have a {self.LISTNAME} to attach to")
+            elements[-1][self.dest] = values
+
+
+    class AppendPixmapSource(AppendAction):
+        LISTNAME = "pixmap_sources"
+        FIRSTARG = "path"
+
+
+    class SetForLastPixmapSource(SetForLastAction):
+        LISTNAME = "pixmap_sources"
+
+
+    class AppendLayer(AppendAction):
+        LISTNAME = "layers"
+        FIRSTARG = "index"
+
+
+    class SetForLastLayer(SetForLastAction):
+        LISTNAME = "layers"
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-v", "--version", action="version", version=f"Transflow v{__version__}")
 
     # Flow Args
     parser.add_argument("flow", type=str, help="input flow: a path to either a video file or a zip archive (precomputed flow or checkpoint)")
@@ -73,7 +91,7 @@ def main():
     parser.add_argument("-ps", "--pixmap-seek", action=SetForLastPixmapSource, type=str, default=None, help="start timestamp for pixmap source")
     parser.add_argument("-pa", "--pixmap-alteration", action=SetForLastPixmapSource, type=str, default=None, help="path to a PNG file containing alteration to apply to pixmap")
     parser.add_argument("-pr", "--pixmap-repeat", action=SetForLastPixmapSource, type=int, default=1, help="repeat pixmap input (0 to loop indefinitely)")
-    
+
     # Compositor Args
     parser.add_argument("-l", "--layer", action=AppendLayer, type=int, help="layer index")
     parser.add_argument("-lc", "--layer-class", action=SetForLastLayer, type=str, choices=["moveref", "introduction", "static", "sum"], default="moveref", help="layer class")
@@ -86,7 +104,7 @@ def main():
     parser.add_argument("-lff", "--layer-flag-movetofilled", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-lfl", "--layer-flag-leaveempty", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
     parser.add_argument("-lr", "--layer-reset", action=SetForLastLayer, type=str, choices=["off", "random", "constant", "linear"], default="off", help="layer reset mode")
-    parser.add_argument("-lmr", "--layer-mask-reset", action=SetForLastLayer, type=str)    
+    parser.add_argument("-lrm", "--layer-reset-mask", action=SetForLastLayer, type=str)
     parser.add_argument("-lrr", "--layer-reset-random-factor", action=SetForLastLayer, type=float, default=0.1)
     parser.add_argument("-lrc", "--layer-reset-constant-step", action=SetForLastLayer, type=float, default=1)
     parser.add_argument("-lrl", "--layer-reset-linear-factor", action=SetForLastLayer, type=float, default=0.1)
@@ -129,6 +147,9 @@ def main():
     parser.add_argument("-gm", "--gui-mjpeg-port", type=int, default=8001, help="GUI MJPEG port")
 
     args = parser.parse_args()
+    if args.version:
+        print(f"Transflow v{__version__}")
+        return
     if args.flow == "gui":
         from .gui import start_gui
         start_gui()
@@ -180,7 +201,7 @@ def main():
                     pixels_can_move_to_filled_spot=d.get("layer_flag_movetofilled"),
                     moving_pixels_leave_empty_spot=d.get("layer_flag_leaveempty"),
                     reset_mode=d.get("layer_reset"),
-                    reset_mask=d.get("layer_mask_reset"),
+                    reset_mask=d.get("layer_reset_mask"),
                     reset_random_factor=d.get("layer_reset_random_factor"),
                     reset_constant_step=d.get("layer_reset_constant_step"),
                     reset_linear_factor=d.get("layer_reset_linear_factor"),

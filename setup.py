@@ -7,17 +7,19 @@ with open(os.path.join(os.path.dirname(__file__), 'README.md')) as readme:
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
+import transflow
+
 setup(
     name='transflow',
-    version='1.10.0',
+    version=transflow.__version__,
     packages=["transflow"],
     include_package_data=True,
-    license='GNU GPLv3',
+    license=transflow.__license__,
     description='Set of tools for transferring optical flow from one media to another.',
     long_description=README,
     url='https://chalier.fr/',
-    author='Yohan Chalier',
-    author_email='yohan@chalier.fr',
+    author=transflow.__author__,
+    author_email=transflow.__email__,
     install_requires=[
         "aiohttp",
         "av",
