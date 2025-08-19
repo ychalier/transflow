@@ -510,6 +510,27 @@ class Pipeline:
             for oq in self.output_queues:
                 oq.put(out_frame, timeout=1)
         return True
+    
+    def _setup(self):
+        self._setup_logging()
+        self.logger = logging.getLogger(__name__)
+        self.logger.debug("Entering transfer function")
+        self._setup_checkpoint()
+        if not (self.has_output or self.export_flow or self.checkpoint_end):
+            warnings.warn("No output or exportation selected")
+        self.metadata_queue = multiprocessing.Queue()
+        self._setup_flow_sources()
+        self._wait_for_flow_sources()
+        self._setup_flow_export()
+        self._setup_pixmap_sources()
+        self._wait_for_pixmap_sources()
+        self.metadata_queue.close()
+        self.logger.debug("Closed metadata queue")
+        self._setup_compositor()
+        self._setup_output()
+        if self.safe:
+            with open("last-config.json", "w") as file:
+                json.dump(self.config.todict(), file)
 
     def _mainloop(self):
         assert self.flow_process is not None
@@ -613,25 +634,7 @@ class Pipeline:
 
     def run(self):
         try:
-            self._setup_logging()
-            self.logger = logging.getLogger(__name__)
-            self.logger.debug("Entering transfer function")
-            self._setup_checkpoint()
-            if not (self.has_output or self.export_flow or self.checkpoint_end):
-                warnings.warn("No output or exportation selected")
-            self.metadata_queue = multiprocessing.Queue()
-            self._setup_flow_sources()
-            self._wait_for_flow_sources()
-            self._setup_flow_export()
-            self._setup_pixmap_sources()
-            self._wait_for_pixmap_sources()
-            self.metadata_queue.close()
-            self.logger.debug("Closed metadata queue")
-            self._setup_compositor()
-            self._setup_output()
-            if self.safe:
-                with open("last-config.json", "w") as file:
-                    json.dump(self.config.todict(), file)
+            self._setup()
             self._mainloop()
         except Exception as err:
             self.logger.error("Pipeline encountered an error: %s", err)
