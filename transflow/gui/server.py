@@ -97,21 +97,52 @@ class WebsocketServer(threading.Thread):
             if filename != "":
                 self._broadcast(f"FILE {args['key']} {filename}")
         elif cmd == "GENERATE":
-            from ..pipeline import Pipeline, Config
+            from ..pipeline import Pipeline
+            from ..config import Config, PixmapSourceConfig, LayerConfig
             print("Job args:")
             print(args)
-            bitmap_path = None
-            if args["bitmapSource"]["type"] == "file":
-                bitmap_path = args["bitmapSource"]["file"]
-            elif args["bitmapSource"]["type"] == "color":
-                bitmap_path = args["bitmapSource"]["color"]
-            else:
-                bitmap_path = args["bitmapSource"]["type"]
-            initial_canvas = None
-            if args["accumulator"]["initialCanvasFile"] is None:
-                initial_canvas = args["accumulator"]["initialCanvasColor"]
-            else:
-                initial_canvas = args["accumulator"]["initialCanvasFile"]
+            pixmap_sources = []
+            layers = []
+            for i, layer_dict in enumerate(args["compositor"]["layers"][:args["compositor"]["layerCount"]]):
+                layer_config = LayerConfig(
+                    i,
+                    classname=layer_dict["classname"],
+                    mask_alpha=layer_dict["maskAlpha"],
+                    mask_src=layer_dict["maskSource"],
+                    mask_dst=layer_dict["maskDestination"],
+                    transparent_pixels_can_move=layer_dict["flagMoveTransparent"],
+                    pixels_can_move_to_empty_spot=layer_dict["flagMoveToEmpty"],
+                    pixels_can_move_to_filled_spot=layer_dict["flagMoveToFilled"],
+                    moving_pixels_leave_empty_spot=layer_dict["flagLeaveEmpty"],
+                    mask_introduction=layer_dict["maskIntroduction"],
+                    introduce_pixels_on_empty_spots=layer_dict["introduceEmpty"],
+                    introduce_pixels_on_filled_spots=layer_dict["introduceFilled"],
+                    introduce_moving_pixels=layer_dict["introduceMoving"],
+                    introduce_unmoving_pixels=layer_dict["introduceUnmoving"],
+                    introduce_once=layer_dict["introduceOnce"],
+                    reset_mode=layer_dict["resetMode"],
+                    reset_mask=layer_dict["maskReset"],
+                    reset_random_factor=layer_dict["resetRandomFactor"],
+                    reset_constant_step=layer_dict["resetConstantStep"],
+                    reset_linear_factor=layer_dict["resetLinearFactor"],
+                )
+                layers.append(layer_config)
+                for source_dict in layer_dict["sources"][:layer_dict["sourceCount"]]:
+                    pixmap_path = None
+                    if source_dict["type"] == "file":
+                        pixmap_path = source_dict["file"]
+                    elif source_dict["type"] == "color":
+                        pixmap_path = source_dict["color"]
+                    else:
+                        pixmap_path = source_dict["type"]
+                    pixmap_config = PixmapSourceConfig(
+                        pixmap_path,
+                        alteration_path=source_dict["alterationPath"],
+                        seek_time=source_dict["seekTime"],
+                        repeat=source_dict["repeat"],
+                        layer=i
+                    )
+                    pixmap_sources.append(pixmap_config)
             output_paths = [f"mjpeg:{self.mjpeg_port}:{self.host}"]
             if args["output"]["file"] is not None:
                 output_paths.append(args["output"]["file"])
@@ -135,32 +166,16 @@ class WebsocketServer(threading.Thread):
                 repeat=args["flowSource"]["repeat"],
                 lock_expr=args["flowSource"]["lockExpr"],
                 lock_mode=args["flowSource"]["lockMode"],
-                # Bitmap Args
-                bitmap_path=bitmap_path,
-                bitmap_seek_time=args["bitmapSource"]["seekTime"],
-                bitmap_alteration_path=args["bitmapSource"]["alterationPath"],
-                bitmap_repeat=args["bitmapSource"]["repeat"],
-                # Accumulator Args
-                acc_method=args["accumulator"]["method"],
-                reset_mode=args["accumulator"]["resetMode"],
-                reset_alpha=args["accumulator"]["resetAlpha"],
-                reset_mask_path=args["accumulator"]["resetMask"],
-                heatmap_mode=args["accumulator"]["heatmapMode"],
-                heatmap_args=args["accumulator"]["heatmapArgs"],
-                heatmap_reset_threshold=args["accumulator"]["heatmapResetThreshold"],
-                accumulator_background=args["accumulator"]["background"],
-                stack_composer=args["accumulator"]["stackComposer"],
-                initial_canvas=initial_canvas,
-                bitmap_mask_path=args["accumulator"]["bitmapMask"],
-                crumble=args["accumulator"]["crumble"],
-                bitmap_introduction_flags=args["accumulator"]["bitmapIntroductionFlags"],
+                # Pixmap Args
+                pixmap_sources=pixmap_sources,
+                # Compositor Args
+                layers=layers,
+                compositor_background=args["compositor"]["backgroundColor"],
                 # Output Args
                 output_path=output_paths,
                 vcodec=args["output"]["vcodec"],
                 # size=None,
                 output_intensity=args["output"]["outputIntensity"],
-                output_heatmap=args["output"]["outputHeatmap"],
-                output_accumulator=args["output"]["outputAccumulator"],
                 render_scale=args["output"]["renderScale"],
                 render_colors=args["output"]["renderColors"],
                 render_binary=args["output"]["renderBinary"],

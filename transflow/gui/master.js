@@ -1,7 +1,9 @@
+const VERSION = "2025w34a";
 const VIDEO_FILETYPES = "*.mp4 *.avi *.mkv *.mov *.mpg";
 const IMAGE_FILETYPES = "*.jpg *.jpeg *.png";
 
 var config = {
+    version: VERSION,
     seed: Math.floor(Math.random() * (Math.pow(2, 31) - 1)),
     previewUrl: null,
     outputUrl: null,
@@ -22,29 +24,39 @@ var config = {
         lockMode: "stay",
         lockExpr: null,
     },
-    bitmapSource: {
-        file: null,
-        type: "bwnoise",
-        color: "#cff010",
-        alterationPath: null,
-        seekTime: null,
-        repeat: 1,
-    },
-    accumulator: {
-        method: "map",
-        resetMode: "off",
-        resetAlpha: 0.1,
-        resetMask: null,
-        heatmapMode: "discrete",
-        heatmapArgs: "0:4:2:1",
-        heatmapResetThreshold: null,
-        background: "#ffffff",
-        stackComposer: "top",
-        initialCanvasFile: null,
-        initialCanvasColor: "#ffffff",
-        bitmapMask: null,
-        crumble: false,
-        bitmapIntroductionFlags: 1,
+    compositor: {
+        layerCount: 1,
+        layers: [{
+            classname: "moveref",
+            maskAlpha: null,
+            maskSource: null,
+            maskDestination: null,
+            flagMoveTransparent: false,
+            flagMoveToEmpty: true,
+            flagMoveToFilled: true,
+            flagLeaveEmpty: false,
+            maskIntroduction: null,
+            introduceEmpty: true,
+            introduceFilled: true,
+            introduceMoving: true,
+            introduceUnmoving: true,
+            introduceOnce: false,
+            resetMode: "off",
+            maskReset: null,
+            resetRandomFactor: 0.1,
+            resetConstantStep: 1,
+            resetLinearFactor: 0.1,
+            sourceCount: 1,
+            sources: [{
+                file: null,
+                type: "bwnoise",
+                color: "#cff010",
+                alterationPath: null,
+                seekTime: null,
+                repeat: 1, 
+            }]
+        }],
+        backgroundColor: "#ffffff"
     },
     output: {
         file: null,
@@ -60,6 +72,16 @@ var config = {
     }
 };
 
+const MAX_LAYERS_AND_SOURCES = 5;
+
+for (let i = 0; i <= MAX_LAYERS_AND_SOURCES; i++) {
+    config.compositor.layers[0].sources.push(JSON.parse(JSON.stringify(config.compositor.layers[0].sources[0])));
+}
+
+for (let i = 0; i <= MAX_LAYERS_AND_SOURCES; i++) {
+    config.compositor.layers.push(JSON.parse(JSON.stringify(config.compositor.layers[0])));
+}
+
 const STORAGE_KEY = "transflow-gui";
 
 function loadConfigFromStorage() {
@@ -74,7 +96,9 @@ function loadConfigFromStorage() {
                 }
             }
         }
-        mergeConfig(config, JSON.parse(localStorage.getItem(STORAGE_KEY)));
+        const storageConfig = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (storageConfig.version != VERSION) return;
+        mergeConfig(config, storageConfig);
     }
 }
 loadConfigFromStorage();
@@ -128,7 +152,7 @@ function createInputContainer(container, label) {
     return inputContainer;
 }
 
-function configGet(key) {
+function configGet(key) { //TODO: Support arrays
     const split = key.split(".");
     let o = config;
     for (let i = 0; i < split.length - 1; i++) {
@@ -137,7 +161,7 @@ function configGet(key) {
     return o[split[split.length - 1]];
 }
 
-function configSet(key, value) {
+function configSet(key, value) { //TODO: Support arrays
     const split = key.split(".");
     let o = config;
     for (let i = 0; i < split.length - 1; i++) {
@@ -299,6 +323,30 @@ function createNumberInput(container, label, key, min=null, max=null, step=1) {
     return input;
 }
 
+function createAddButton(container, label, key) {
+    const button = create(create(container, "div"), "button", "button-input");
+    button.textContent = label;
+    button.addEventListener("click", () => {
+        let value = Math.min(configGet(key) + 1, MAX_LAYERS_AND_SOURCES);
+        configSet(key, value);
+        inflateLeftPanel(leftPanel);
+    });
+}
+
+function createDeleteButton(container, label, countKey, arrayKey, arrayIndex) {
+    const button = create(create(container, "div"), "button", "button-input");
+    button.textContent = label;
+    button.addEventListener("click", () => {
+        let value = configGet(countKey);
+        for (let i = arrayIndex; i < MAX_LAYERS_AND_SOURCES; i++) {
+            configSet(`${arrayKey}.${i}`, JSON.parse(JSON.stringify(configGet(`${arrayKey}.${i+1}`))));
+        }
+        value = Math.max(0, value - 1);
+        configSet(countKey, value);
+        inflateLeftPanel(leftPanel);
+    });
+}
+
 function setWssConnectionIndicator(state) {
     if (wssConnectionIndicator == undefined) return;
     wssConnectionIndicator.textContent = state;
@@ -428,53 +476,82 @@ function inflatePaneFlowSource(container) {
     createTextInput(container, "Lock Expression", "flowSource.lockExpr", "(1,1),(4,1) (stay) t>=2 and t<=3 (skip)");
 }
 
-function inflatePaneBitmapSource(container) {
+function inflatePaneCompositor(container) {
     container.innerHTML = "";
-    const bitmapSelect = createSelect(container, "Type", "bitmapSource.type", ["file", "color", "noise", "bwnoise", "cnoise", "gradient", "first"]);
-    const bitmapInputs = create(container, "div", "input-container");
-    function onBitmapSelectChange() {
-        const value = getSelectedValue(bitmapSelect);
-        bitmapInputs.innerHTML = "";
-        if (value == "file") {
-            createFileOpenInput(bitmapInputs, "File", "bitmapSource.file", VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
-        } else if (value == "color") {
-            createColorInput(bitmapInputs, "Color", "bitmapSource.color");
+    createColorInput(container, "Background Color", "compositor.backgroundColor");
+    const layersContainer = create(container, "div", "layers");
+    for (let i = 0; i < config.compositor.layerCount; i++) {
+        const layerContainer = create(layersContainer, "div", "layer");
+        const classnameSelect = createSelect(layerContainer, "Method", `compositor.layers.${i}.classname`, ["moveref", "introduction", "sum", "static"]);
+        const layerInputs = create(layerContainer, "div", "input-container");
+        function onClassnameChange() {
+            const value = getSelectedValue(classnameSelect);
+            layerInputs.innerHTML = "";
+            createFileOpenInput(layerInputs, "Mask Alpha", `compositor.layers.${i}.maskAlpha`, IMAGE_FILETYPES);
+            if (value == "moveref" || value == "introduction") {
+                createFileOpenInput(layerInputs, "Source Mask", `compositor.layers.${i}.maskSource`, IMAGE_FILETYPES);
+                createFileOpenInput(layerInputs, "Destination Mask", `compositor.layers.${i}.maskDestination`, IMAGE_FILETYPES);
+                createBoolInput(layerInputs, "Transparent Pixels Can Move", `compositor.layers.${i}.flagMoveTransparent`);
+                createBoolInput(layerInputs, "Pixels Can Move to Empty Spots", `compositor.layers.${i}.flagMoveToEmpty`);
+                createBoolInput(layerInputs, "Pixels Can Move to Filled Spots", `compositor.layers.${i}.flagMoveToFilled`);
+                createBoolInput(layerInputs, "Moving Pixels Leave an Empty Spot", `compositor.layers.${i}.flagLeaveEmpty`);
+            }
+            if (value == "introduction") {
+                createFileOpenInput(layerInputs, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`, IMAGE_FILETYPES);
+                createBoolInput(layerInputs, "Introduce Pixels on Empty Spots", `compositor.layers.${i}.introduceEmpty`);
+                createBoolInput(layerInputs, "Introduce Pixels on Filled Spots", `compositor.layers.${i}.introduceFilled`);
+                createBoolInput(layerInputs, "Introduce Moving Pixels", `compositor.layers.${i}.introduceMoving`);
+                createBoolInput(layerInputs, "Introduce Unmoving Pixels", `compositor.layers.${i}.introduceUnmoving`);
+                createBoolInput(layerInputs, "Introduce Only Once", `compositor.layers.${i}.introduceOnce`);
+            }
+            if (value == "moveref" || value == "sum") {
+                createFileOpenInput(layerInputs, "Reset Mask", `compositor.layers.${i}.maskReset`, IMAGE_FILETYPES);
+                const resetSelect = createSelect(layerInputs, "Reset Mode", `compositor.layers.${i}.resetMode`, ["off", "random", "constant", "linear"]);
+                const resetInputs = create(layerInputs, "div", "input-container");
+                function onResetChange() {
+                    const value = getSelectedValue(resetSelect);
+                    resetInputs.innerHTML = "";
+                    if (value == "random") {
+                        createRangeInput(resetInputs, "Random Reset Factor", `compositor.layers.${i}.resetRandomFactor`);
+                    }
+                    if (value == "constant") {
+                        createNumberInput(resetInputs, "Constant Reset Step", `compositor.layers.${i}.resetConstantStep`, 0, null, 1);
+                    }
+                    if (value == "linear") {
+                        createRangeInput(resetInputs, "Linear Reset Factor", `compositor.layers.${i}.resetLinearFactor`);
+                    }
+                }
+                resetSelect.addEventListener("change", onResetChange);
+                onResetChange();
+            }
         }
-    }
-    bitmapSelect.addEventListener("change", onBitmapSelectChange);
-    onBitmapSelectChange();
-    createFileOpenInput(container, "Alteration", "bitmapSource.alterationPath", "*.png");
-    createTimestampInput(container, "Seek Time", "bitmapSource.seekTime", "00:00:00");
-    createNumberInput(container, "Repeat", "bitmapSource.repeat", 0, null, 1);
-}
-
-function inflatePaneAccumulator(container) {
-    container.innerHTML = "";
-    const methodSelect = createSelect(container, "Method", "accumulator.method", ["map", "stack", "sum", "crumble", "canvas"]);
-    const accumulatorInputs = create(container, "div", "input-container");
-    function onAccumulatorMethodChange() {
-        const value = getSelectedValue(methodSelect);
-        accumulatorInputs.innerHTML = "";
-        if (value == "stack" || value == "crumble") {
-            createColorInput(accumulatorInputs, "Background", "accumulator.background");
-        } else if (value == "stack") {
-            createSelect(accumulatorInputs, "Stack Composer", "accumulator.stackComposer", ["top", "add", "sub", "avg"]);
-        } else if (value == "canvas") {
-            createFileOpenInput(accumulatorInputs, "Initial Canvas File", "accumulator.initialCanvasFile", IMAGE_FILETYPES);
-            createColorInput(accumulatorInputs, "Initial Canvas Color", "accumulator.initialCanvasColor");
-            createFileOpenInput(accumulatorInputs, "Bitmap Mask", "accumulator.bitmapMask", IMAGE_FILETYPES);
-            createNumberInput(accumulatorInputs, "Bitmap Introduction Flags", "accumulator.bitmapIntroductionFlags", 0, null, 1);
-            createBoolInput(accumulatorInputs, "Crumble", "accumulator.crumble");
+        classnameSelect.addEventListener("change", onClassnameChange);
+        onClassnameChange();
+        const sourcesContainer = create(layerContainer, "div", "sources");
+        for (let j = 0; j < config.compositor.layers[i].sourceCount; j++) {
+            const sourceContainer = create(sourcesContainer, "div", "source");
+            const typeSelect = createSelect(sourceContainer, "Type", `compositor.layers.${i}.sources.${j}.type`, ["file", "color", "noise", "bwnoise", "cnoise", "gradient", "first"]);
+            const sourceInputs = create(sourceContainer, "div", "input-container");
+            function onBitmapSelectChange() {
+                const value = getSelectedValue(typeSelect);
+                sourceInputs.innerHTML = "";
+                if (value == "file") {
+                    createFileOpenInput(sourceInputs, "File", `compositor.layers.${i}.sources.${j}.file`, VIDEO_FILETYPES + " " + IMAGE_FILETYPES);
+                } else if (value == "color") {
+                    createColorInput(sourceInputs, "Color", `compositor.layers.${i}.sources.${j}.color`);
+                }
+            }
+            typeSelect.addEventListener("change", onBitmapSelectChange);
+            onBitmapSelectChange();
+            createFileOpenInput(sourceContainer, "Alteration", `compositor.layers.${i}.sources.${j}.alterationPath`, "*.png");
+            createTimestampInput(sourceContainer, "Seek Time", `compositor.layers.${i}.sources.${j}.seekTime`, "00:00:00");
+            createNumberInput(sourceContainer, "Repeat", `compositor.layers.${i}.sources.${j}.repeat`, 0, null, 1);    
+            createDeleteButton(sourceContainer, "Delete Source", `compositor.layers.${i}.sourceCount`, `compositor.layers.${i}.sources`, j);
         }
+        createAddButton(layerContainer, "Add Source", `compositor.layers.${i}.sourceCount`);
+        createDeleteButton(layerContainer, "Delete Layer", `compositor.layerCount`, `compositor.layers`, i);
     }
-    methodSelect.addEventListener("change", onAccumulatorMethodChange);
-    onAccumulatorMethodChange();
-    createSelect(container, "Reset Mode", "accumulator.resetMode", ["off", "random", "linear"]);
-    createRangeInput(container, "Reset Alpha", "accumulator.resetAlpha");
-    createFileOpenInput(container, "Reset Mask", "accumulator.resetMask", "*.jpg *.jpeg *.png");
-    createSelect(container, "Heatmap Mode", "accumulator.heatmapMode", ["discrete", "continuous"]);
-    createTextInput(container, "Heatmap Args", "accumulator.heatmapArgs", "min:max:add:sub (discrete) max:decay:threshold (continuous)");
-    createTextInput(container, "Heatmap Reset Threshold", "accumulator.heatmapResetThreshold"); // TODO: maybe set to null if empty or parseFloat
+    createAddButton(container, "Add Layer", "compositor.layerCount");
 }
 
 function inflatePaneOutput(container) {
@@ -482,8 +559,6 @@ function inflatePaneOutput(container) {
     createFileSaveInput(container, "File", "output.file", ".mp4", VIDEO_FILETYPES);
     createTextInput(container, "Video Codec", "output.vcodec", "h264");
     createBoolInput(container, "Output Intensity", "output.outputIntensity");
-    createBoolInput(container, "Output Heatmap", "output.outputHeatmap");
-    createBoolInput(container, "Output Accumulator", "output.outputAccumulator");
     createNumberInput(container, "Render Scale", "output.renderScale", null, null, 0.001);
     createTextInput(container, "Render Colors", "output.renderColors", "#000000,#ffffff");
     createBoolInput(container, "Render Binary", "output.renderBinary");
@@ -494,7 +569,7 @@ function inflatePaneOutput(container) {
 function inflateLeftPanel(container) {
     container.innerHTML = "";
     const tabsBar = create(container, "div", "tabsbar");
-    for (const tabName of ["Flow Source", "Bitmap Source", "Accumulator", "Output"]) {
+    for (const tabName of ["Flow Source", "Compositor", "Output"]) {
         const button = create(tabsBar, "div", "tabsbar-item");
         if (tabName == leftPanelActiveTab) {
             button.classList.add("active");
@@ -510,11 +585,8 @@ function inflateLeftPanel(container) {
         case "Flow Source":
             inflatePaneFlowSource(paneMain);
             break;
-        case "Bitmap Source":
-            inflatePaneBitmapSource(paneMain);
-            break;
-        case "Accumulator":
-            inflatePaneAccumulator(paneMain);
+        case "Compositor":
+            inflatePaneCompositor(paneMain);
             break;
         case "Output":
             inflatePaneOutput(paneMain);

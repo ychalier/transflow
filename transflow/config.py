@@ -64,8 +64,6 @@ class LayerConfig:
             moving_pixels_leave_empty_spot: bool | str | None = None,
             reset_mode: str | None = None,
             reset_mask: str | None = None,
-            reset_pixels_leave_healed_spot: bool | str | None = None,
-            reset_pixels_leave_empty_spot: bool | str | None = None,
             reset_random_factor: float | None = None,
             reset_constant_step: float | None = None,
             reset_linear_factor: float | None = None,
@@ -87,8 +85,6 @@ class LayerConfig:
         self.moving_pixels_leave_empty_spot = parse_bool_arg(moving_pixels_leave_empty_spot, False)
         self.reset_mode = "off" if reset_mode is None else reset_mode
         self.reset_mask = reset_mask
-        self.reset_pixels_leave_healed_spot = parse_bool_arg(reset_pixels_leave_healed_spot, True)
-        self.reset_pixels_leave_empty_spot = parse_bool_arg(reset_pixels_leave_empty_spot, True)
         self.reset_random_factor = 1 if reset_random_factor is None else reset_random_factor
         self.reset_constant_step = 1 if reset_constant_step is None else reset_constant_step
         self.reset_linear_factor = 0.1 if reset_linear_factor is None else reset_linear_factor
@@ -113,8 +109,6 @@ class LayerConfig:
             pixels_can_move_to_empty_spot=d.get("pixels_can_move_to_empty_spot", True),
             pixels_can_move_to_filled_spot=d.get("pixels_can_move_to_filled_spot", True),
             moving_pixels_leave_empty_spot=d.get("moving_pixels_leave_empty_spot", False),
-            reset_pixels_leave_healed_spot=d.get("reset_pixels_leave_healed_spot", True),
-            reset_pixels_leave_empty_spot=d.get("reset_pixels_leave_empty_spot", True),
             reset_random_factor=d.get("reset_random_factor", 1),
             reset_constant_step=d.get("reset_constant_step", 1),
             reset_linear_factor=d.get("reset_linear_factor", 0.1),
@@ -139,8 +133,6 @@ class LayerConfig:
             "moving_pixels_leave_empty_spot": self.moving_pixels_leave_empty_spot,
             "reset_mode": self.reset_mode,
             "reset_mask": self.reset_mask,
-            "reset_pixels_leave_healed_spot": self.reset_pixels_leave_healed_spot,
-            "reset_pixels_leave_empty_spot": self.reset_pixels_leave_empty_spot,
             "reset_random_factor": self.reset_random_factor,
             "reset_constant_step": self.reset_constant_step,
             "reset_linear_factor": self.reset_linear_factor,

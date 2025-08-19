@@ -23,16 +23,15 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
         mask = arr / 255
     elif arr.ndim == 3:
         if arr.shape[2] == 4:
-            mask = arr[:,:,3] / 255
-        else:
-            mask = numpy.mean(arr[:,:,:3], axis=2) / 255
+            warnings.warn(f"Mask {mask_path} has an alpha channel but it will be ignored")
+        mask = numpy.mean(arr[:,:,:3], axis=2) / 255
     else:
         raise ValueError(f"Image has wrong number of dimensions {arr.ndim}, expected 2 or 3")
     return cast(FloatMask, mask)
 
 
 def load_bool_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), default: bool = False) -> BoolMask:
-    return load_float_mask(mask_path, shape, float(default)).astype(numpy.bool)
+    return cast(BoolMask, numpy.round(load_float_mask(mask_path, shape, float(default))).astype(numpy.bool))
 
 
 def find_unique_path(path: str) -> str:

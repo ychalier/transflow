@@ -27,7 +27,7 @@ class Layer:
         raise NotImplementedError()
 
     def render(self) -> Rgba:
-        self.rgba[:,:,3] = 255 * self.mask_alpha
+        self.rgba[:,:,3] = self.mask_alpha * self.rgba[:,:,3]
         return cast(Rgba, numpy.clip(self.rgba, 0, 255).astype(numpy.uint8))
 
     @classmethod

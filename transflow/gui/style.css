@@ -220,7 +220,8 @@ video {
     gap: .2rem;
 }
 
-.input-container~.input-container {
+.button-input,
+.input-container~.input-container:has(*) {
     margin-top: 1rem;
 }
 
@@ -260,4 +261,32 @@ input[type=checkbox] {
     height: 100%;
     background: #ffffff;
     padding: 1rem;
+}
+
+.layers::before {
+    content: "Layers";
+}
+
+.layers,
+.sources {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    margin-top: 1rem;
+}
+
+.layer {
+    border: 1px solid black;
+    padding: .4rem;
+    background: #eeeeee;
+}
+
+.sources::before {
+    content: "Pixmap Sources";
+}
+
+.source {
+    border: 1px solid black;
+    background: #dddddd;
+    padding: .4rem;
 }

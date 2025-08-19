@@ -87,8 +87,6 @@ def main():
     parser.add_argument("-lfl", "--layer-flag-leaveempty", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
     parser.add_argument("-lr", "--layer-reset", action=SetForLastLayer, type=str, choices=["off", "random", "constant", "linear"], default="off", help="layer reset mode")
     parser.add_argument("-lmr", "--layer-mask-reset", action=SetForLastLayer, type=str)    
-    parser.add_argument("-lfh", "--layer-flag-resetleavehealed", action=SetForLastLayer, type=str, default="on", choices=["on", "off"]) # TODO: consider removing those
-    parser.add_argument("-lfr", "--layer-flag-resetleaveempty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"]) # TODO: consider removing those
     parser.add_argument("-lrr", "--layer-reset-random-factor", action=SetForLastLayer, type=float, default=0.1)
     parser.add_argument("-lrc", "--layer-reset-constant-step", action=SetForLastLayer, type=float, default=1)
     parser.add_argument("-lrl", "--layer-reset-linear-factor", action=SetForLastLayer, type=float, default=0.1)
@@ -183,8 +181,6 @@ def main():
                     moving_pixels_leave_empty_spot=d.get("layer_flag_leaveempty"),
                     reset_mode=d.get("layer_reset"),
                     reset_mask=d.get("layer_mask_reset"),
-                    reset_pixels_leave_healed_spot=d.get("layer_flag_resetleavehealed"),
-                    reset_pixels_leave_empty_spot=d.get("layer_flag_resetleaveempty"),
                     reset_random_factor=d.get("layer_reset_random_factor"),
                     reset_constant_step=d.get("layer_reset_constant_step"),
                     reset_linear_factor=d.get("layer_reset_linear_factor"),
@@ -197,6 +193,7 @@ def main():
                 )
                 for d in getattr(args, "layers", [])
             ],
+            compositor_background=args.compositor_background,
             # Output Args
             output_path=args.output,
             vcodec=args.vcodec,
