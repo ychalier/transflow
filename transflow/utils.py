@@ -10,10 +10,76 @@ import numpy
 from .types import BoolMask, FloatMask
 
 
+def parse_dimension_arg(arg_string: str, parent_size: int) -> int:
+    if arg_string.strip() == "":
+        return 0
+    if arg_string.endswith("%"):
+        return int(float(arg_string[:-1]) / 100 * parent_size)
+    return int(arg_string)
+
+
+def parse_border_args(border_string: str, height: int, width: int) -> tuple[int, int, int, int]:
+    top = right = bottom = left = 0
+    border_name, border_args = border_string.lower().split(":", 1)
+    if border_name == "border":
+        parsed_border_args = [
+            parse_dimension_arg(arg_string, height if i % 2 == 0 else width)
+            for i, arg_string in enumerate(border_args.split(":"))
+        ]
+        if len(parsed_border_args) == 1:
+            top = right = bottom = left = parsed_border_args[0]
+        elif len(parsed_border_args) == 2:
+            top = bottom = parsed_border_args[0]
+            right = left = parsed_border_args[1]
+        elif len(parsed_border_args) == 4:
+            top, right, bottom, left = parsed_border_args
+        else:
+            raise ValueError(f"Invalid number of argument {len(parsed_border_args)} for border mask")
+    elif border_name == "border-top":
+        top = parse_dimension_arg(border_args, height)
+    elif border_name == "border-right":
+        right = parse_dimension_arg(border_args, width)
+    elif border_name == "border-bottom":
+        bottom = parse_dimension_arg(border_args, height)
+    elif border_name == "border-left":
+        left = parse_dimension_arg(border_args, width)
+    else:
+        raise ValueError(f"Invalid border rule name {border_name}")
+    return top, right, bottom, left
+
+
 def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), default: float = 0) -> FloatMask:
     if mask_path is None:
         arr = numpy.zeros(shape, dtype=numpy.float32)
         arr[:,:] = default
+        return arr
+    if mask_path.lower() == "zeros":
+        return numpy.zeros(shape, dtype=numpy.float32)
+    if mask_path.lower() == "ones":
+        return numpy.ones(shape, dtype=numpy.float32)
+    if mask_path.lower() == "random":
+        return cast(FloatMask, numpy.random.rand(*shape).astype(numpy.float32))
+    if re.match(r"^border(\-(top|right|bottom|left))?:(\d+%?:|:|\d+%?$){1,4}$", mask_path, re.IGNORECASE):
+        top, right, bottom, left = parse_border_args(mask_path, *shape)
+        arr = numpy.zeros(shape, dtype=numpy.float32)
+        if top != 0: arr[:top,:] = 1
+        if right != 0: arr[:,-right:] = 1
+        if bottom != 0: arr[-bottom:,:] = 1
+        if left != 0: arr[:,:left] = 1
+        return arr
+    if re.match(r"^[hv]line:\d+%?$", mask_path, re.IGNORECASE):
+        name, arg_string = mask_path.lower().split(":")
+        arr = numpy.zeros(shape, dtype=numpy.float32)
+        if name == "hline":
+            arg = parse_dimension_arg(arg_string, shape[0])
+            i = (shape[0] - arg) // 2
+            arr[i:i+arg,:] = 1
+        elif name == "vline":
+            arg = parse_dimension_arg(arg_string, shape[1])
+            j = (shape[1] - arg) // 2
+            arr[:,j:j+arg] = 1
+        else:
+            raise ValueError(f"Invalid line rule name {name}")
         return arr
     import PIL.Image
     image = PIL.Image.open(mask_path)
