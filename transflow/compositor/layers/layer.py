@@ -12,13 +12,13 @@ class Layer:
 
     def __init__(self,
             config: LayerConfig,
-            width: int,
             height: int,
+            width: int,
             sources: list[PixmapSourceInterface],
             ):
         self.config = config
-        self.width = width
         self.height = height
+        self.width = width
         self.sources: list[PixmapSourceInterface] = sources
         self.rgba = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint8)
         self.mask_alpha: FloatMask = load_float_mask(self.config.mask_alpha, (self.height, self.width), 1)
@@ -33,10 +33,10 @@ class Layer:
     @classmethod
     def from_args(cls,
             config: LayerConfig,
-            width: int,
             height: int,
+            width: int,
             sources: list[PixmapSourceInterface]):
-        args = [config, width, height, sources]
+        args = [config, height, width, sources]
         if config.classname == "moveref":
             from .move_reference import MoveReferenceLayer
             return MoveReferenceLayer(*args)

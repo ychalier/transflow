@@ -438,8 +438,8 @@ class Pipeline:
         assert self.fs_width is not None and self.fs_height is not None
         if self.compositor is None:
             self.compositor = Compositor.from_args(
-                int(self.fs_width * self.fs_width_factor),
                 int(self.fs_height * self.fs_height_factor),
+                int(self.fs_width * self.fs_width_factor),
                 self.config.layers,
                 background_color=self.config.compositor_background)
         interfaces: dict[int, list[PixmapSourceInterface]] = {}

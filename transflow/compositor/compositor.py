@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 class Compositor:
 
-    def __init__(self, width: int, height: int, layers: Sequence[Layer], background_color: str = "#ffffff"):
-        self.width = width
+    def __init__(self, height: int, width: int, layers: Sequence[Layer], background_color: str = "#ffffff"):
         self.height = height
+        self.width = width
         self.background_color = parse_hex_color(background_color)
         self.background: Rgb = cast(Rgb, numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8))
         self.background[:,:] = self.background_color
@@ -41,12 +41,12 @@ class Compositor:
 
     @classmethod
     def from_args(cls,
-            width: int,
             height: int,
+            width: int,
             layer_configs: list[LayerConfig],
             background_color: str = "#ffffff"):
-        layers = [Layer.from_args(config, width, height, []) for config in layer_configs]
-        return cls(width, height, layers, background_color=background_color)
+        layers = [Layer.from_args(config, height, width, []) for config in layer_configs]
+        return cls(height, width, layers, background_color=background_color)
 
     def set_sources(self, pixmap_interfaces: dict[int, list[PixmapSourceInterface]]):
         for i, layer in enumerate(self.layers):
