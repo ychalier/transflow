@@ -164,6 +164,7 @@ video {
     display: flex;
     justify-content: space-between;
     background: #eee;
+    font-size: small;
 }
 
 .footer-left {
@@ -174,16 +175,20 @@ video {
 .panel {
     display: flex;
     flex-direction: column;
-    width: 100%;
     height: 100%;
 }
 
 .panel-left {
     border-right: 1px solid black;
+    width: 60%;
+}
+
+.panel-right {
+    width: 40%;
 }
 
 .pane {
-    padding: .4rem;
+    padding: 1rem;
     height: 100%;
     overflow: auto;
 }
@@ -220,12 +225,17 @@ video {
     gap: .2rem;
 }
 
-.button-input,
 .input-container~.input-container:has(*) {
     margin-top: 1rem;
 }
 
-.input-container button {
+.button-container {
+    margin-top: 1rem;
+    display: flex;
+    gap: 1rem;
+}
+
+.button-container button {
     width: fit-content;
 }
 
@@ -270,23 +280,44 @@ input[type=checkbox] {
 .layers,
 .sources {
     display: flex;
-    flex-direction: column;
-    gap: .4rem;
+    gap: 1rem;
     margin-top: 1rem;
+}
+
+.layers {
+    flex-direction: column;
 }
 
 .layer {
     border: 1px solid black;
-    padding: .4rem;
+    padding: 1rem;
     background: #eeeeee;
 }
 
 .sources::before {
     content: "Pixmap Sources";
+    width: 100%;
+}
+
+.sources {
+    flex-wrap: wrap;
 }
 
 .source {
     border: 1px solid black;
     background: #dddddd;
-    padding: .4rem;
+    padding: 1rem;
+    max-width: calc(50% - 1rem);
+}
+
+details {
+    margin-top: 1rem;
+}
+
+summary ~ * {
+    margin-top: 1rem;
+}
+
+details > *:not(summary) {
+    margin-left: .8rem;
 }

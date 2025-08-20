@@ -41,6 +41,8 @@ var config = {
             introduceMoving: true,
             introduceUnmoving: true,
             introduceOnce: false,
+            introduceAllEmpty: false,
+            introduceAllFilled: false,
             resetMode: "off",
             maskReset: null,
             resetRandomFactor: 0.1,
@@ -334,7 +336,7 @@ function createAddButton(container, label, key) {
 }
 
 function createDeleteButton(container, label, countKey, arrayKey, arrayIndex) {
-    const button = create(create(container, "div"), "button", "button-input");
+    const button = create(create(container, "div"), "button");
     button.textContent = label;
     button.addEventListener("click", () => {
         let value = configGet(countKey);
@@ -343,6 +345,25 @@ function createDeleteButton(container, label, countKey, arrayKey, arrayIndex) {
         }
         value = Math.max(0, value - 1);
         configSet(countKey, value);
+        inflateLeftPanel(leftPanel);
+    });
+}
+
+function createMoveButton(container, label, countKey, arrayKey, arrayIndex) {
+    const button = create(create(container, "div"), "button");
+    button.textContent = label;
+    button.addEventListener("click", () => {
+        const count = configGet(countKey);
+        const answer = prompt(`Move to?\nSpecify index between 0 and ${count-1}`, arrayIndex);
+        if (answer == null) return;
+        const newIndex = parseInt(answer);
+        if (newIndex < 0 || newIndex >= count) {
+            alert(`Index out of bounds.\nIndex must be between 0 and ${count-1}`);
+            return;
+        }
+        const aux = JSON.parse(JSON.stringify(configGet(`${arrayKey}.${newIndex}`)));
+        configSet(`${arrayKey}.${newIndex}`, configGet(`${arrayKey}.${arrayIndex}`));
+        configSet(`${arrayKey}.${arrayIndex}`, aux);
         inflateLeftPanel(leftPanel);
     });
 }
@@ -489,25 +510,33 @@ function inflatePaneCompositor(container) {
             layerInputs.innerHTML = "";
             createFileOpenInput(layerInputs, "Mask Alpha", `compositor.layers.${i}.maskAlpha`, IMAGE_FILETYPES);
             if (value == "moveref" || value == "introduction") {
-                createFileOpenInput(layerInputs, "Source Mask", `compositor.layers.${i}.maskSource`, IMAGE_FILETYPES);
-                createFileOpenInput(layerInputs, "Destination Mask", `compositor.layers.${i}.maskDestination`, IMAGE_FILETYPES);
-                createBoolInput(layerInputs, "Transparent Pixels Can Move", `compositor.layers.${i}.flagMoveTransparent`);
-                createBoolInput(layerInputs, "Pixels Can Move to Empty Spots", `compositor.layers.${i}.flagMoveToEmpty`);
-                createBoolInput(layerInputs, "Pixels Can Move to Filled Spots", `compositor.layers.${i}.flagMoveToFilled`);
-                createBoolInput(layerInputs, "Moving Pixels Leave an Empty Spot", `compositor.layers.${i}.flagLeaveEmpty`);
+                const details = create(layerInputs, "details");
+                create(details, "summary").textContent = "Movement Options";
+                createFileOpenInput(details, "Source Mask", `compositor.layers.${i}.maskSource`, IMAGE_FILETYPES);
+                createFileOpenInput(details, "Destination Mask", `compositor.layers.${i}.maskDestination`, IMAGE_FILETYPES);
+                createBoolInput(details, "Transparent Pixels Can Move", `compositor.layers.${i}.flagMoveTransparent`);
+                createBoolInput(details, "Pixels Can Move to Empty Spots", `compositor.layers.${i}.flagMoveToEmpty`);
+                createBoolInput(details, "Pixels Can Move to Filled Spots", `compositor.layers.${i}.flagMoveToFilled`);
+                createBoolInput(details, "Moving Pixels Leave an Empty Spot", `compositor.layers.${i}.flagLeaveEmpty`);
             }
             if (value == "introduction") {
-                createFileOpenInput(layerInputs, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`, IMAGE_FILETYPES);
-                createBoolInput(layerInputs, "Introduce Pixels on Empty Spots", `compositor.layers.${i}.introduceEmpty`);
-                createBoolInput(layerInputs, "Introduce Pixels on Filled Spots", `compositor.layers.${i}.introduceFilled`);
-                createBoolInput(layerInputs, "Introduce Moving Pixels", `compositor.layers.${i}.introduceMoving`);
-                createBoolInput(layerInputs, "Introduce Unmoving Pixels", `compositor.layers.${i}.introduceUnmoving`);
-                createBoolInput(layerInputs, "Introduce Only Once", `compositor.layers.${i}.introduceOnce`);
+                const details = create(layerInputs, "details");
+                create(details, "summary").textContent = "Introduction Options";
+                createFileOpenInput(details, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`, IMAGE_FILETYPES);
+                createBoolInput(details, "Introduce Pixels on Empty Spots", `compositor.layers.${i}.introduceEmpty`);
+                createBoolInput(details, "Introduce Pixels on Filled Spots", `compositor.layers.${i}.introduceFilled`);
+                createBoolInput(details, "Introduce Moving Pixels", `compositor.layers.${i}.introduceMoving`);
+                createBoolInput(details, "Introduce Unmoving Pixels", `compositor.layers.${i}.introduceUnmoving`);
+                createBoolInput(details, "Introduce Only Once", `compositor.layers.${i}.introduceOnce`);
+                createBoolInput(details, "Introduce On All Empty Spots", `compositor.layers.${i}.introduceAllEmpty`);
+                createBoolInput(details, "Introduce On All Filled Spots", `compositor.layers.${i}.introduceAllFilled`);
             }
             if (value == "moveref" || value == "sum") {
-                createFileOpenInput(layerInputs, "Reset Mask", `compositor.layers.${i}.maskReset`, IMAGE_FILETYPES);
-                const resetSelect = createSelect(layerInputs, "Reset Mode", `compositor.layers.${i}.resetMode`, ["off", "random", "constant", "linear"]);
-                const resetInputs = create(layerInputs, "div", "input-container");
+                const details = create(layerInputs, "details");
+                create(details, "summary").textContent = "Reset Options";
+                createFileOpenInput(details, "Reset Mask", `compositor.layers.${i}.maskReset`, IMAGE_FILETYPES);
+                const resetSelect = createSelect(details, "Reset Mode", `compositor.layers.${i}.resetMode`, ["off", "random", "constant", "linear"]);
+                const resetInputs = create(details, "div", "input-container");
                 function onResetChange() {
                     const value = getSelectedValue(resetSelect);
                     resetInputs.innerHTML = "";
@@ -546,12 +575,17 @@ function inflatePaneCompositor(container) {
             createFileOpenInput(sourceContainer, "Alteration", `compositor.layers.${i}.sources.${j}.alterationPath`, "*.png");
             createTimestampInput(sourceContainer, "Seek Time", `compositor.layers.${i}.sources.${j}.seekTime`, "00:00:00");
             createNumberInput(sourceContainer, "Repeat", `compositor.layers.${i}.sources.${j}.repeat`, 0, null, 1);    
-            createDeleteButton(sourceContainer, "Delete Source", `compositor.layers.${i}.sourceCount`, `compositor.layers.${i}.sources`, j);
+            const buttonContainer = create(sourceContainer, "div", "button-container");
+            createMoveButton(buttonContainer, "Move Source", `compositor.layers.${i}.sourceCount`, `compositor.layers.${i}.sources`, j);
+            createDeleteButton(buttonContainer, "Delete Source", `compositor.layers.${i}.sourceCount`, `compositor.layers.${i}.sources`, j);
         }
-        createAddButton(layerContainer, "Add Source", `compositor.layers.${i}.sourceCount`);
-        createDeleteButton(layerContainer, "Delete Layer", `compositor.layerCount`, `compositor.layers`, i);
+        const buttonContainer = create(layerContainer, "div", "button-container");
+        createAddButton(buttonContainer, "Add Source", `compositor.layers.${i}.sourceCount`);
+        createMoveButton(buttonContainer, "Move Layer", `compositor.layerCount`, `compositor.layers`, i);
+        createDeleteButton(buttonContainer, "Delete Layer", `compositor.layerCount`, `compositor.layers`, i);
     }
-    createAddButton(container, "Add Layer", "compositor.layerCount");
+    const buttonContainer = create(container, "div", "button-container");
+    createAddButton(buttonContainer, "Add Layer", "compositor.layerCount");
 }
 
 function inflatePaneOutput(container) {
@@ -674,10 +708,10 @@ function inflateBody(container) {
 function inflateFooter(container) {
     container.innerHTML = "";
     const footerLeft = create(container, "div", "footer-left");
-    create(footerLeft, "span").textContent = "transflow";
-    create(footerLeft, "span").innerHTML = `<a href="https://chalier.fr/transflow/">web version</a>`;
+    create(footerLeft, "span").innerHTML = `<b>transflow</b>`;
+    create(footerLeft, "span").innerHTML = `<a href="https://chalier.fr/transflow/">web</a>`;
     create(footerLeft, "span").innerHTML = `<a href="https://github.com/ychalier/transflow">github</a>`;
-    create(footerLeft, "span").innerHTML = `<a href="    https://github.com/ychalier/transflow/blob/main/USAGE.md">documentation</a>`;
+    create(footerLeft, "span").innerHTML = `<a href="https://github.com/ychalier/transflow/blob/main/USAGE.md">docs</a>`;
     create(footerLeft, "span").innerHTML = `<a href="https://chalier.fr/">author</a>`;
     const footerRight = create(container, "div", "footer-right");
     wssConnectionIndicator = create(footerRight, "span");

@@ -120,6 +120,8 @@ class WebsocketServer(threading.Thread):
                     introduce_moving_pixels=layer_dict["introduceMoving"],
                     introduce_unmoving_pixels=layer_dict["introduceUnmoving"],
                     introduce_once=layer_dict["introduceOnce"],
+                    introduce_on_all_empty_spots=layer_dict["introduceAllEmpty"],
+                    introduce_on_all_filled_spots=layer_dict["introduceAllFilled"],
                     reset_mode=layer_dict["resetMode"],
                     reset_mask=layer_dict["maskReset"],
                     reset_random_factor=layer_dict["resetRandomFactor"],
