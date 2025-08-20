@@ -16,9 +16,6 @@ class IntroductionLayer(MovementLayer):
         MovementLayer.__init__(self, *args)
         # TODO: consider using one mask per source
         self.mask_introduction: BoolMask = load_bool_mask(self.config.mask_introduction, (self.height, self.width), True)
-        # self.introduction_masks: list[BoolMask] = []
-        # for _ in self.sources:
-        #     self.introduction_masks.append(numpy.ones((self.height, self.width), dtype=numpy.bool))
         self.introduced_once: bool = False
 
     def _update_introduction(self):
@@ -26,18 +23,34 @@ class IntroductionLayer(MovementLayer):
             return
         self.introduced_once = True
         mask = numpy.ones((self.height, self.width), dtype=numpy.bool)
+
+        where_empty = numpy.where(self.data[:,:,self.POS_A_IDX]) == 0
+        where_filled = numpy.nonzero(self.data[:,:,self.POS_A_IDX])
+
         if not self.config.introduce_pixels_on_empty_spots:
-            mask[numpy.where(self.data[:,:,3]) == 0] = 0
+            mask[where_empty] = 0
         if not self.config.introduce_pixels_on_filled_spots:
-            mask[numpy.nonzero(self.data[:,:,3])] = 0
+            mask[where_filled] = 0
         if not self.config.introduce_moving_pixels:
             mask.flat[numpy.nonzero(self.flow_flat)] = 0
         if not self.config.introduce_unmoving_pixels:
             mask.flat[numpy.where(self.flow_flat) == 0] = 0
+
+        mask = numpy.multiply(mask, self.mask_introduction)
+
+        consider_flow = not (self.config.introduce_on_all_filled_spots or self.config.introduce_on_all_empty_spots)
+        if self.config.introduce_on_all_filled_spots:
+            mask[where_filled] = 1
+        if self.config.introduce_on_all_empty_spots:
+            mask[where_empty] = 1
+
         for i, source in enumerate(self.sources):
             pixmap = source.next()
-            where_target = numpy.nonzero(numpy.multiply(mask.flat, self.mask_introduction.flat))[0]
-            where_source = where_target + self.flow_flat[where_target]
+            where_target = numpy.nonzero(mask.flat)[0]
+            if consider_flow:
+                where_source = where_target + self.flow_flat[where_target]
+            else:
+                where_source = where_target
             arrays = [
                 pixmap,
                 numpy.broadcast_to(i, (self.height, self.width, 1)),

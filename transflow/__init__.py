@@ -113,6 +113,8 @@ def main():
     parser.add_argument("-lim", "--layer-introduce-moving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-liu", "--layer-introduce-unmoving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
     parser.add_argument("-lio", "--layer-introduce-once", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
+    parser.add_argument("-liaf", "--layer-introduce-all-filled", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
+    parser.add_argument("-liae", "--layer-introduce-all-empty", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
     parser.add_argument("-cb", "--compositor-background", type=str, default="#ffffff", help="compositor background color")
 
     # Output Args
@@ -147,9 +149,6 @@ def main():
     parser.add_argument("-gm", "--gui-mjpeg-port", type=int, default=8001, help="GUI MJPEG port")
 
     args = parser.parse_args()
-    if args.version:
-        print(f"Transflow v{__version__}")
-        return
     if args.flow == "gui":
         from .gui import start_gui
         start_gui()
@@ -211,6 +210,8 @@ def main():
                     introduce_moving_pixels=d.get("layer_introduce_moving"),
                     introduce_unmoving_pixels=d.get("layer_introduce_unmoving"),
                     introduce_once=d.get("layer_introduce_once"),
+                    introduce_on_all_filled_spots=d.get("layer_introduce_all_filled"),
+                    introduce_on_all_empty_spots=d.get("layer_introduce_all_empty"),
                 )
                 for d in getattr(args, "layers", [])
             ],

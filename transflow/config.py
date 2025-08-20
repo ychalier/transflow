@@ -73,6 +73,8 @@ class LayerConfig:
             introduce_moving_pixels: bool | None = None,
             introduce_unmoving_pixels: bool | None = None,
             introduce_once: bool | None = None,
+            introduce_on_all_filled_spots: bool | None = None,
+            introduce_on_all_empty_spots: bool | None = None,
             ):
         self.index: int = index
         self.classname = "moveref" if classname is None else classname
@@ -94,6 +96,8 @@ class LayerConfig:
         self.introduce_moving_pixels = parse_bool_arg(introduce_moving_pixels, True)
         self.introduce_unmoving_pixels = parse_bool_arg(introduce_unmoving_pixels, True)
         self.introduce_once = parse_bool_arg(introduce_once, False)
+        self.introduce_on_all_filled_spots = parse_bool_arg(introduce_on_all_filled_spots, False)
+        self.introduce_on_all_empty_spots = parse_bool_arg(introduce_on_all_empty_spots, False)
 
     @classmethod
     def fromdict(cls, d: dict):
@@ -118,6 +122,8 @@ class LayerConfig:
             introduce_moving_pixels=d.get("introduce_moving_pixels", True),
             introduce_unmoving_pixels=d.get("introduce_unmoving_pixels", True),
             introduce_once=d.get("introduce_once", False),
+            introduce_on_all_filled_spots=d.get("introduce_on_all_filled_spots", False),
+            introduce_on_all_empty_spots=d.get("introduce_on_all_empty_spots", False),
         )
 
     def todict(self) -> dict:
@@ -142,6 +148,8 @@ class LayerConfig:
             "introduce_moving_pixels": self.introduce_moving_pixels,
             "introduce_unmoving_pixels": self.introduce_unmoving_pixels,
             "introduce_once": self.introduce_once,
+            "introduce_on_all_filled_spots": self.introduce_on_all_filled_spots,
+            "introduce_on_all_empty_spots": self.introduce_on_all_empty_spots,
         }
 
 
