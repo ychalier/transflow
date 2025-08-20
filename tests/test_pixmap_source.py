@@ -10,7 +10,7 @@ import transflow.pixmap.cv
 import transflow.pixmap.still
 
 
-class TestBitmapSource(unittest.TestCase):
+class TestPixmapSource(unittest.TestCase):
 
     VIDEO_PATH = "assets/River.mp4"
     MASK_PATH = "assets/Mask.png"

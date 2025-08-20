@@ -12,7 +12,8 @@ import numpy
 import PIL.Image
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from transflow.pipeline import Pipeline, Config
+from transflow.pipeline import Pipeline
+from transflow.config import Config, PixmapSourceConfig, LayerConfig
 
 
 def get_video_duration(path: pathlib.Path) -> float:
@@ -59,39 +60,45 @@ def compute_image_diff(left: pathlib.Path, right: pathlib.Path) -> float:
 
 class TestPipeline(unittest.TestCase):
 
-    def _test_config(self, flow_path, bitmap_path, **kwargs):
+    def test_basic(self):
         with TestEnvironment() as env:
             output_path = env.folder / "test.mp4"
-            for status in env.run(Config(flow_path, bitmap_path=bitmap_path, output_path=output_path.as_posix(), **kwargs))[1]:
+            config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/Deer.jpg")],
+                output_path=output_path.as_posix(),
+                direction="backward",
+                duration_time=0.2)
+            for status in env.run(config)[1]:
                 self.assertIsNone(status.error)
             self.assertTrue(output_path.is_file())
 
-    def test_basic(self):
-        self._test_config(
-            "assets/River.mp4",
-            bitmap_path="assets/Deer.jpg",
-            direction="backward",
-            duration_time=.2)
-
     def test_advanced(self):
-        self._test_config(
-            "assets/River.mp4",
-            bitmap_path="assets/Frame.png",
-            direction="forward",
-            reset_mode="random",
-            reset_mask_path="assets/Mask.png",
-            heatmap_args="0:0:0:0",
-            duration_time=.2)
+        with TestEnvironment() as env:
+            output_path = env.folder / "test.mp4"
+            config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/Frame.png", layer=0)],
+                layers=[LayerConfig(0, "moveref", reset_mode="random", reset_random_factor=1, reset_mask="assets/Mask.png")],
+                output_path=output_path.as_posix(),
+                direction="forward",
+                duration_time=0.2)
+            for status in env.run(config)[1]:
+                self.assertIsNone(status.error)
+            self.assertTrue(output_path.is_file())
 
     def test_checkpoint(self):
         ckpt = 5
         framerate = 50
         with TestEnvironment() as env:
+            config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/Deer.jpg")],
+                output_path=(env.folder / "1-%d.png").as_posix(),
+                direction="forward",
+                duration_time=(ckpt + 1)/framerate)
             pipeline, _ = env.run(
-                Config("assets/River.mp4",
-                    bitmap_path="assets/Deer.jpg",
-                    output_path=(env.folder / "1-%d.png").as_posix(),
-                    duration_time=(ckpt + 1)/framerate),
+                config,
                 safe=False,
                 checkpoint_every=ckpt)
             self.assertEqual(pipeline.cursor, ckpt + 1)
@@ -112,33 +119,53 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(compute_image_diff(env.folder / f"1-{ckpt}.png", env.folder / f"2-{ckpt}.png"), 0)
 
     def test_config_io(self):
-        config = Config("assets/River.mp4", bitmap_path="assets/Deer.jpg", output_path="out/Test.mp4")
+        config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/Deer.jpg")],
+                output_path="out/Test.mp4")
         output_path = os.path.join(tempfile.gettempdir(), "test-config.json")
         with open(output_path, "w") as file:
             json.dump(config.todict(), file)
         with open(output_path, "r") as file:
             doppelganger = Config.fromdict(json.load(file))
         os.remove(output_path)
-        attrs = ["flow_path", "bitmap_path", "output_path", "extra_flow_paths",
+        attrs = ["flow_path", "output_path", "extra_flow_paths",
             "flows_merging_function", "use_mvs", "mask_path", "kernel_path",
             "cv_config", "flow_filters", "direction", "seek_time",
             "duration_time", "repeat", "lock_expr", "lock_mode",
-            "bitmap_seek_time", "bitmap_alteration_path", "bitmap_repeat",
-            "reset_mode", "reset_alpha", "reset_mask_path", "heatmap_mode",
-            "heatmap_args", "heatmap_reset_threshold", "acc_method",
-            "accumulator_background", "stack_composer", "initial_canvas",
-            "bitmap_mask_path", "crumble", "bitmap_introduction_flags",
-            "vcodec", "size", "output_intensity", "output_heatmap",
-            "output_accumulator", "render_scale", "render_colors",
+            "compositor_background",
+            "vcodec", "size", "output_intensity", "render_scale", "render_colors",
             "render_binary", "seed"]
         for attr in attrs:
             self.assertEqual(getattr(config, attr), getattr(doppelganger, attr))
+        self.assertEqual(len(config.pixmap_sources), len(doppelganger.pixmap_sources))
+        attrs = ["path", "seek_time", "alteration_path", "repeat", "layer"]
+        for a, b in zip(config.pixmap_sources, doppelganger.pixmap_sources):
+            for attr in attrs:
+                self.assertEqual(getattr(a, attr), getattr(b, attr))
+        self.assertEqual(len(config.layers), len(doppelganger.layers))
+        attrs = ["index", "classname", "mask_src", "mask_dst", "mask_alpha",
+            "transparent_pixels_can_move", "pixels_can_move_to_empty_spot",
+            "pixels_can_move_to_filled_spot", "moving_pixels_leave_empty_spot",
+            "reset_mode", "reset_mask", "reset_random_factor",
+            "reset_constant_step", "reset_linear_factor", "mask_introduction",
+            "introduce_pixels_on_empty_spots", "introduce_pixels_on_filled_spots",
+            "introduce_moving_pixels", "introduce_unmoving_pixels", "introduce_once",
+            "introduce_on_all_filled_spots", "introduce_on_all_empty_spots"]
+        for a, b in zip(config.layers, doppelganger.layers):
+            for attr in attrs:
+                self.assertEqual(getattr(a, attr), getattr(b, attr))
 
     def test_cursor(self):
         with TestEnvironment() as env:
             n = 5
             framerate = 50
-            pipeline, _ = env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "%d.png").as_posix(), duration_time=n/framerate))
+            config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/River.mp4")],
+                output_path=(env.folder / "%d.png").as_posix(),
+                duration_time=n/framerate)
+            pipeline, _ = env.run(config)
             self.assertEqual(pipeline.cursor, n)
             self.assertEqual(pipeline.expected_length, n)
 
@@ -146,7 +173,13 @@ class TestPipeline(unittest.TestCase):
         with TestEnvironment() as env:
             n = 5
             framerate = 50
-            pipeline, _ = env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "%d.png").as_posix(), seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate))
+            config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/River.mp4")],
+                output_path=(env.folder / "%d.png").as_posix(),
+                seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate,
+                duration_time=n/framerate)
+            pipeline, _ = env.run(config)
             self.assertEqual(pipeline.cursor, n - 1)
             self.assertEqual(pipeline.expected_length, n - 1)
 
@@ -155,14 +188,30 @@ class TestTimings(unittest.TestCase):
 
     def test_duration(self):
         with TestEnvironment() as env:
-            env.run(Config("assets/River.mp4", bitmap_path="assets/Deer.jpg", output_path=(env.folder / "test.mp4").as_posix(), duration_time=0.1))
-            self.assertTrue(get_video_duration(env.folder / "test.mp4"), 0.1)
+            config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/Deer.jpg")],
+                output_path=(env.folder / "test.mp4").as_posix(),
+                duration_time=0.1)
+            env.run(config)
+            self.assertEqual(get_video_duration(env.folder / "test.mp4"), 0.1)
 
     def test_seek(self):
         with TestEnvironment() as env:
-            env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "1-%d.png").as_posix(), duration_time=0.1))
+            config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/River.mp4")],
+                output_path=(env.folder / "1-%d.png").as_posix(),
+                duration_time=0.1)
+            env.run(config)
             self.assertEqual(len(list(env.folder.glob("1-*.png"))), 5)
-            env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "2-%d.png").as_posix(), seek_time=2, duration_time=0.1))
+            config = Config(
+                "assets/River.mp4",
+                pixmap_sources=[PixmapSourceConfig("assets/River.mp4")],
+                output_path=(env.folder / "2-%d.png").as_posix(),
+                seek_time=2,
+                duration_time=0.1)
+            env.run(config)
             self.assertEqual(len(list(env.folder.glob("2-*.png"))), 5)
             img_one = numpy.array(PIL.Image.open(env.folder / "1-0.png"))
             img_two = numpy.array(PIL.Image.open(env.folder / "2-0.png"))
@@ -173,7 +222,12 @@ class TestTimings(unittest.TestCase):
         framerate = 50
         for n in [1, 5, 10]:
             with TestEnvironment() as env:
-                env.run(Config("assets/River.mp4", bitmap_path="assets/River.mp4", output_path=(env.folder / "3-%d.png").as_posix(), seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate))
+                config = Config(
+                    "assets/River.mp4",
+                    pixmap_sources=[PixmapSourceConfig("assets/River.mp4")],
+                    output_path=(env.folder / "3-%d.png").as_posix(),
+                    seek_time=get_video_duration(pathlib.Path("assets/River.mp4"))-n/framerate)
+                env.run(config)
                 self.assertEqual(len(list(env.folder.glob("3-*.png"))), n - 1)
 
 

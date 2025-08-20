@@ -4,6 +4,7 @@ import asyncio
 import logging
 import threading
 import time
+import warnings
 from collections import deque
 from typing import List, Optional, Tuple, Union
 
@@ -16,7 +17,8 @@ from aiohttp.web_runner import GracefulExit
 from .video_output import VideoOutput
 from ..types import Rgb
 
-
+# aiohttp/web_urldispatcher.py:204: DeprecationWarning: Bare functions are deprecated, use async ones
+warnings.filterwarnings("ignore", message="Bare functions are deprecated, use async ones")
 logger = logging.getLogger(__name__)
 
 

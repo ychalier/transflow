@@ -189,6 +189,7 @@ class Pipeline:
         self.cancel_event = cancel_event
         self.status_queue = status_queue
         self.log_queue = multiprocessing.Queue()
+        self.log_queue.cancel_join_thread()
         self.metadata_queue: multiprocessing.Queue | None = None
         self.flow_queue: multiprocessing.Queue | None = None
         self.pixmap_queues: list[multiprocessing.Queue] = []
