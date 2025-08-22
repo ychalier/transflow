@@ -107,6 +107,22 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
         arr[:,:shape[1] // 2 - width // 2] = 0
         arr[:,shape[1] // 2 + width // 2:] = 0
         return arr
+    if re.match(r"grid:\d+:\d+:\d+?", mask_path, re.IGNORECASE):
+        arg_strings = mask_path[mask_path.index(":")+1:].split(":")
+        nrows, ncols, radius = list(map(int, arg_strings))
+        diameter = 2 * radius
+        i = numpy.arange(0, diameter)
+        j = numpy.arange(0, diameter)
+        circle = (j[numpy.newaxis,:] - radius) ** 2 + (i[:,numpy.newaxis] - radius) ** 2 < radius ** 2
+        arr = numpy.zeros(shape, dtype=numpy.float32)
+        height, width = shape
+        cell_height, cell_width = height // nrows, width // ncols
+        for i in range(nrows):
+            for j in range(ncols):
+                i0 = cell_height * i + cell_height // 2 - radius
+                j0 = cell_width * j + cell_width // 2 - radius
+                arr[i0:i0+diameter,j0:j0+diameter] = circle
+        return arr
     import PIL.Image
     image = PIL.Image.open(mask_path)
     arr = numpy.array(image).astype(numpy.float32)
