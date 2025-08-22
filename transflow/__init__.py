@@ -24,54 +24,94 @@ def main():
     import argparse
     import pathlib
 
-    class AppendAction(argparse.Action):
-
-        LISTNAME = "foo"
-        FIRSTARG = "bar"
+    class AppendPixmap(argparse.Action):
 
         def __call__(self, parser, namespace, values, option_string=None):
-            elements = getattr(namespace, self.LISTNAME, None)
+            elements = getattr(namespace, "pixmap_sources", None)
             if elements is None:
                 elements = []
-                setattr(namespace, self.LISTNAME, elements)
-            elements.append({self.FIRSTARG: values})
+                setattr(namespace, "pixmap_sources", elements)
+            elements.append({"path": values})
 
-
-    class SetForLastAction(argparse.Action):
-
-        LISTNAME = "foo"
+    class SetPixmap(argparse.Action):
 
         def __call__(self, parser, namespace, values, option_string=None):
-            elements = getattr(namespace, self.LISTNAME, None)
+            elements = getattr(namespace, "pixmap_sources", None)
             if not elements:
-                parser.error(f"{option_string} does not have a {self.LISTNAME} to attach to")
+                parser.error(f"{option_string} must follow an -p/--pixmap")
             elements[-1][self.dest] = values
 
+    class AppendLayer(argparse.Action):
 
-    class AppendPixmapSource(AppendAction):
-        LISTNAME = "pixmap_sources"
-        FIRSTARG = "path"
+        def __call__(self, parser, namespace, values, option_string=None):
+            elements = getattr(namespace, "layers", None)
+            if elements is None:
+                elements = []
+                setattr(namespace, "layers", elements)
+            elements.append({"index": values})
 
+    class SetLayer(argparse.Action):
 
-    class SetForLastPixmapSource(SetForLastAction):
-        LISTNAME = "pixmap_sources"
+        def __call__(self, parser, namespace, values, option_string=None):
+            elements = getattr(namespace, "layers", None)
+            if not elements:
+                elements = []
+                setattr(namespace, "layers", elements)
+                elements.append({"index", 0})
+            elements[-1][self.dest] = values
 
+    class ConstLayer(argparse.Action):
 
-    class AppendLayer(AppendAction):
-        LISTNAME = "layers"
-        FIRSTARG = "index"
+        def __call__(self, parser, namespace, values, option_string=None):
+            elements = getattr(namespace, "layers", None)
+            if not elements:
+                elements = []
+                setattr(namespace, "layers", elements)
+                elements.append({"index", 0})
+            elements[-1][self.dest] = self.const
 
+    class Formatter(argparse.ArgumentDefaultsHelpFormatter):
 
-    class SetForLastLayer(SetForLastAction):
-        LISTNAME = "layers"
+        def _format_args(self, action, default_metavar):
+            if action.nargs == "+" and isinstance(action.metavar, tuple) and len(action.metavar) == 2:
+                m1, m2 = self._metavar_formatter(action, default_metavar)(2)
+                if action.choices:
+                    try:
+                        choices = sorted(action.choices)
+                    except TypeError:
+                        # fall back if choices aren't sortable
+                        choices = list(action.choices)
+                    m1 = "{" + ",".join(map(str, choices)) + "}"
+                return f"{m1} [{m2}]"
+            return super()._format_args(action, default_metavar)
 
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    class AWithOptionalB(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            # enforce 1 or 2 values
+            if not (1 <= len(values) <= 2):
+                parser.error(f"{option_string} expects 1 or 2 arguments: A [B]")
+
+            # first token: A with choices (use self.choices if provided)
+            a = values[0]
+            if self.choices is not None and a not in self.choices:
+                parser.error(f"A must be one of {sorted(self.choices)} (got {a!r})")
+            setattr(namespace, self.dest, a)  # store A under dest (e.g., 'a')
+
+            # optional second token: B as float; if omitted, keep existing namespace.b
+            if len(values) == 2:
+                try:
+                    b_val = float(values[1])
+                except ValueError:
+                    parser.error("B must be a floating-point number")
+                setattr(namespace, "b", b_val)
+
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=Formatter)
     parser.add_argument("-v", "--version", action="version", version=f"Transflow v{__version__}")
 
     # Flow Args
     group = parser.add_argument_group("flow options")
     group.add_argument("flow", type=str, help="input flow: a path to either a video file or a zip archive (precomputed flow or checkpoint)")
-    group.add_argument("--flow", dest="extra_flow", type=str, nargs="*", help="path to an additionnal flow source (video file or ZIP archive)")
+    group.add_argument("--flow", type=str, nargs="*", help="path to an additionnal flow source (video file or ZIP archive)")
     group.add_argument("--merge", type=str, default="sum", choices=["first", "sum", "average", "difference", "product", "maskbin", "masklin", "absmax"], help="operations to aggregate extra flow sources")
     group.add_argument("--mv", action="store_true", help="use motion vectors to compute the optical flow instead of OpenCV's Farneback algorithm")
     group.add_argument("--mask", type=str, default=None, help="path to an image to applay a per-pixel flow scale")
@@ -89,11 +129,12 @@ def main():
 
     # Pixmap Args
     group = parser.add_argument_group("pixmap options")
-    group.add_argument("-p", "--pixmap", action=AppendPixmapSource, type=str, help="input pixmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
-    group.add_argument("-pl", "--pixmap-layer", action=SetForLastPixmapSource, type=int, default=0)
-    group.add_argument("-ps", "--pixmap-seek", action=SetForLastPixmapSource, type=str, default=None, help="start timestamp for pixmap source")
-    group.add_argument("-pa", "--pixmap-alteration", action=SetForLastPixmapSource, type=str, default=None, help="path to a PNG file containing alteration to apply to pixmap")
-    group.add_argument("-pr", "--pixmap-repeat", action=SetForLastPixmapSource, type=int, default=1, help="repeat pixmap input (0 to loop indefinitely)")
+    # TODO: same as reset param, optional second arg
+    group.add_argument("-p", "--pixmap", action=AppendPixmap, nargs="+", metavar=("path", "layer"), type=str, help="input pixmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
+    # group.add_argument("-pl", "--pixmap-layer", action=SetForLastPixmapSource, type=int, default=0)
+    group.add_argument("--alteration", action=SetPixmap, type=str, default=None, help="path to a PNG file containing alteration to apply to pixmap")
+    group.add_argument("--pixmap-seek", action=SetPixmap, type=str, default=None, help="start timestamp for pixmap source")
+    group.add_argument("--pixmap-repeat", action=SetPixmap, type=int, default=1, help="repeat pixmap input (0 to loop indefinitely)")
 
     # Compositor Args
     group = parser.add_argument_group("compositor options")
@@ -102,38 +143,36 @@ def main():
     # Layer Args
     # TODO: make it so, when no -l is specified, commands refer to layer 0
     group = parser.add_argument_group("layer options")
-    group.add_argument("-l", "--layer", action=AppendLayer, type=int, help="layer index")
-    group.add_argument("-lc", "--layer-class", action=SetForLastLayer, type=str, choices=["moveref", "introduction", "static", "sum"], default="moveref", help="layer class")
-    group.add_argument("--mask-alpha", action=SetForLastLayer, type=str, default=None)
-    group.add_argument("--mask-source", action=SetForLastLayer, type=str, default=None)
-    group.add_argument("--mask-destination", action=SetForLastLayer, type=str, default=None)
-    group.add_argument("--move-empty", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
-    group.add_argument("--move-to-empty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
-    group.add_argument("--move-to-filled", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
-    group.add_argument("-E", "--leave-empty-spot", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
-    # TODO: merge into one reset param, interpreted in multiple ways
-    group.add_argument("-r", "--reset", action=SetForLastLayer, type=str, choices=["off", "random", "constant", "linear"], default="off", help="layer reset mode")
-    group.add_argument("-R", "--reset-param", action=SetForLastLayer, type=float, default=None)
+    group.add_argument("-l", "--layer", action=AppendLayer, type=int, help="layer index") # TODO: choose the class from this argument. if not int provided, then it is zero. formatter should display this class in a specific manner.s
+    group.add_argument("-lc", "--layer-class", action=SetLayer, type=str, choices=["moveref", "introduction", "static", "sum"], default="moveref", help="layer class")
+    group.add_argument("--mask-alpha", dest="mask_alpha", action=SetLayer, type=str, default=None)
+    group.add_argument("--move-mask-source", dest="mask_src", action=SetLayer, type=str, default=None)
+    group.add_argument("--move-mask-destination", dest="mask_dst", action=SetLayer, type=str, default=None)
+    group.add_argument("--move-from-empty", dest="transparent_pixels_can_move", action=ConstLayer, const=True)
+    group.add_argument("--no-move-to-empty", dest="pixels_can_move_to_empty_spot", action=ConstLayer, const=False)
+    group.add_argument("--no-move-to-filled", dest="pixels_can_move_to_filled_spot", action=ConstLayer, const=False)
+    group.add_argument("-e", "--leave-empty-spot", dest="moving_pixels_leave_empty_spot", action=ConstLayer, const=True)
+    group.add_argument("-r", "--reset", action=SetLayer, nargs="+", metavar=("mode", "factor"), type=str, choices=["off", "random", "constant", "linear"], default="off", help="layer reset mode")
+    # group.add_argument("-R", "--reset-param", action=SetForLastLayer, type=float, default=None)
     # group.add_argument("-lrr", "--layer-reset-random-factor", action=SetForLastLayer, type=float, default=0.1)
     # group.add_argument("-lrc", "--layer-reset-constant-step", action=SetForLastLayer, type=float, default=1)
     # group.add_argument("-lrl", "--layer-reset-linear-factor", action=SetForLastLayer, type=float, default=0.1)
-    group.add_argument("--reset-mask", action=SetForLastLayer, type=str)
-    group.add_argument("--introduction-mask", action=SetForLastLayer, type=str, default=None)
-    group.add_argument("--introduce-on-empty", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
-    group.add_argument("--introduce-on-filled", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
-    group.add_argument("--introduce-moving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
-    group.add_argument("--introduce-unmoving", action=SetForLastLayer, type=str, default="on", choices=["on", "off"])
-    group.add_argument("--introduce-once", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
-    group.add_argument("--introduce-on-all-filled", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
-    group.add_argument("--introduce-on-all-empty", action=SetForLastLayer, type=str, default="off", choices=["on", "off"])
-    
+    group.add_argument("--reset-mask", action=SetLayer, type=str)
+    group.add_argument("--introduction-mask", action=SetLayer, type=str, default=None)
+    group.add_argument("--no-introduce-on-empty", dest="introduce_pixels_on_empty_spots", action=ConstLayer, const=False)
+    group.add_argument("--no-introduce-on-filled", dest="introduce_pixels_on_filled_spots", action=ConstLayer, const=False)
+    group.add_argument("--no-introduce-moving", dest="introduce_moving_pixels", action=ConstLayer, const=False)
+    group.add_argument("--no-introduce-unmoving", dest="introduce_unmoving_pixels", action=ConstLayer, const=False)
+    group.add_argument("--introduce-once", dest="introduce_once", action=ConstLayer, const=True)
+    group.add_argument("--introduce-on-all-filled", dest="introduce_on_all_filled_spots", action=ConstLayer, const=True)
+    group.add_argument("--introduce-on-all-empty", dest="introduce_on_all_empty_spots", action=ConstLayer, const=True)
 
     # Output Args
     group = parser.add_argument_group("output options")
     group.add_argument("-o", "--output", type=str, action="append", help="output path: if provided, path to export the output video (as an MP4 file) ; otherwise, opens a temporary display window")
     group.add_argument("--vcodec", type=str, default="h264", help="video codec for the output video file")
     group.add_argument("--size", type=str, default=None, help="target video size, for webcams and generated pixmaps, of the form WIDTHxHEIGHT")
-    group.add_argument("--intensity", action="store_true", help="output flow intensity as a heatmap")
+    group.add_argument("--view-flow", action="store_true", help="output flow intensity as a heatmap")
     group.add_argument("--render-scale", type=float, default=0.1, help="render scale for heatmap and accumulator output")
     group.add_argument("--render-colors", type=str, default=None, help="colors for rendering heatmap (2 colors) and accumulator (4 colors) outputs, hex format, separated by commas")
     group.add_argument("--render-binary", action="store_true", help="1d render will be binary, ie. no gradient will appear")
@@ -144,24 +183,24 @@ def main():
 
     # Pipeline Args
     group = parser.add_argument_group("processing options")
-    group.add_argument("-s", "--safe", action="store_true", help="save a checkpoint when the program gets interrupted or an error occurs")
-    group.add_argument("-ce", "--checkpoint-every", type=int, default=None, help="export checkpoint every X frame")
-    group.add_argument("-cd", "--checkpoint-end", action="store_true", help="export checkpoint at the last frame")
-    group.add_argument("-nx", "--no-execute", action="store_true", help="do not open the output video file when done")
-    group.add_argument("-re", "--replace", action="store_true", help="overwrite any existing output file (by default, a new filename is generated to avoid conflicts and overwriting)")
-    group.add_argument("-nc", "--no-export-config", action="store_true", help="disable automatic configuration export")
-    group.add_argument("-ef", "--export-flow", action="store_true", help="export computed flow to a file")
-    group.add_argument("-rf", "--round-flow", action="store_true", help="export preprocessed flow as integer values (faster and lighter, but may introduce artefacts)")
-    group.add_argument("-po", "--preview-output", action="store_true", help="preview output while exporting")
-    group.add_argument("-ll", "--log-level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Logging level", default="DEBUG")
-    group.add_argument("-lh", "--log-handler", type=str, help="Comma-separated list of log handlers (possible values are 'file', 'stream' or 'null' (default))", default="null")
-    group.add_argument("-lp", "--log-path", type=pathlib.Path, help="Path to log file (if 'file' log handler is used, see --log-handler)", default=pathlib.Path("transflow.log"))
+    group.add_argument("-S", "--safe", action="store_true", help="save a checkpoint when the program gets interrupted or an error occurs")
+    group.add_argument("--checkpoint-every", type=int, default=None, help="export checkpoint every X frame")
+    group.add_argument("--checkpoint-end", action="store_true", help="export checkpoint at the last frame")
+    group.add_argument("--disable-exec", action="store_true", help="do not open the output video file when done")
+    group.add_argument("--replace", action="store_true", help="overwrite any existing output file (by default, a new filename is generated to avoid conflicts and overwriting)")
+    group.add_argument("--disable-config-export", action="store_true", help="disable automatic configuration export")
+    group.add_argument("--enable-flow-export", action="store_true", help="export computed flow to a file")
+    group.add_argument("--export-rounded-flow", action="store_true", help="export preprocessed flow as integer values (faster and lighter, but may introduce artefacts)")
+    group.add_argument("-O", "--preview-output", action="store_true", help="preview output while exporting")
+    group.add_argument("--log-level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Logging level", default="DEBUG")
+    group.add_argument("--log-handler", type=str, help="Comma-separated list of log handlers (possible values are 'file', 'stream' or 'null' (default))", default="null")
+    group.add_argument("--log-path", type=pathlib.Path, help="Path to log file (if 'file' log handler is used, see --log-handler)", default=pathlib.Path("transflow.log"))
 
     # GUI Args
     group = parser.add_argument_group("GUI options")
-    group.add_argument("-gh", "--gui-host", type=str, default="localhost", help="GUI host address")
-    group.add_argument("-gp", "--gui-port", type=int, default=8000, help="GUI port")
-    group.add_argument("-gm", "--gui-mjpeg-port", type=int, default=8001, help="GUI MJPEG port")
+    group.add_argument("--gui-host", type=str, default="localhost", help="GUI host address")
+    group.add_argument("--gui-port", type=int, default=8000, help="GUI port")
+    group.add_argument("--gui-mjpeg-port", type=int, default=8001, help="GUI MJPEG port")
 
     args = parser.parse_args()
     if args.flow == "gui":

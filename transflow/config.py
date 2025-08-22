@@ -55,9 +55,9 @@ class LayerConfig:
     def __init__(self,
             index: int,
             classname: str | None = None,
+            mask_alpha: str | None = None,
             mask_src: str | None = None,
             mask_dst: str | None = None,
-            mask_alpha: str | None = None,
             transparent_pixels_can_move: bool | str | None = None,
             pixels_can_move_to_empty_spot: bool | str | None = None,
             pixels_can_move_to_filled_spot: bool | str | None = None,
@@ -78,9 +78,9 @@ class LayerConfig:
             ):
         self.index: int = index
         self.classname = "moveref" if classname is None else classname
+        self.mask_alpha = mask_alpha
         self.mask_src = mask_src
         self.mask_dst = mask_dst
-        self.mask_alpha = mask_alpha
         self.transparent_pixels_can_move = parse_bool_arg(transparent_pixels_can_move, False)
         self.pixels_can_move_to_empty_spot = parse_bool_arg(pixels_can_move_to_empty_spot, True)
         self.pixels_can_move_to_filled_spot = parse_bool_arg(pixels_can_move_to_filled_spot, True)
