@@ -81,6 +81,32 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
         else:
             raise ValueError(f"Invalid line rule name {name}")
         return arr
+    if re.match(r"circle:\d+%?", mask_path, re.IGNORECASE):
+        arg_string = mask_path.lower().split(":")[1]
+        radius = parse_dimension_arg(arg_string, min(shape))
+        arr = numpy.zeros(shape, dtype=numpy.float32)
+        i = numpy.arange(0, shape[0])
+        j = numpy.arange(0, shape[1])
+        ci, cj = shape[0] // 2, shape[1] // 2
+        arr = (j[numpy.newaxis,:] - cj) ** 2 + (i[:,numpy.newaxis] - ci) ** 2 < radius ** 2
+        return cast(FloatMask, arr)
+    if re.match(r"rect:\d+%?(:\d+%?)?", mask_path, re.IGNORECASE):
+        arg_strings = mask_path[mask_path.index(":")+1:].split(":")
+        width, height = 0, 0
+        if len(arg_strings) == 1:
+            width = parse_dimension_arg(arg_strings[0], shape[1])
+            height = parse_dimension_arg(arg_strings[0], shape[0])
+        elif len(arg_strings) == 2:
+            width = parse_dimension_arg(arg_strings[0], shape[1])
+            height = parse_dimension_arg(arg_strings[1], shape[0])
+        else:
+            raise ValueError(f"Invalid number of argument {len(arg_strings)} for rect mask")
+        arr = numpy.ones(shape, dtype=numpy.float32)
+        arr[:shape[0] // 2 - height // 2,:] = 0
+        arr[shape[0] // 2 + height // 2:,:] = 0
+        arr[:,:shape[1] // 2 - width // 2] = 0
+        arr[:,shape[1] // 2 + width // 2:] = 0
+        return arr
     import PIL.Image
     image = PIL.Image.open(mask_path)
     arr = numpy.array(image).astype(numpy.float32)
