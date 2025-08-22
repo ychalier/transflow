@@ -170,7 +170,7 @@ class Config:
             to_time: float | str | None = None,
             repeat: int = 1,
             lock_expr: str | None = None,
-            lock_mode: str | int | LockMode = LockMode.STAY,
+            lock_mode: str | int | LockMode | None = None,
             pixmap_sources: list[PixmapSourceConfig] = [],
             layers: list[LayerConfig] = [],
             compositor_background: str | None = None,
@@ -225,7 +225,7 @@ class Config:
             for layer_index in pixmap_config.layers:
                 if layer_index not in layer_indices:
                     self.layers.append(LayerConfig(layer_index))
-                    layer_indices.add(pixmap_config.layers)
+                    layer_indices.add(layer_index)
         self.compositor_background: str = "#FFFFFF" if compositor_background is None else compositor_background
 
         # Output Args
