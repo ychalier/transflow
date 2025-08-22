@@ -444,8 +444,8 @@ class Pipeline:
                 background_color=self.config.compositor_background)
         interfaces: dict[int, list[PixmapSourceInterface]] = {}
         for pixmap_config, pixmap_queue in zip(self.config.pixmap_sources, self.pixmap_queues):
-            interfaces.setdefault(pixmap_config.layer, [])
-            interfaces[pixmap_config.layer].append(PixmapSourceInterface(pixmap_queue))
+            interfaces.setdefault(pixmap_config.layers, [])
+            interfaces[pixmap_config.layers].append(PixmapSourceInterface(pixmap_queue))
         self.compositor.set_sources(interfaces)
 
     def _setup_output(self):

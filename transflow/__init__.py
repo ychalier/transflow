@@ -27,11 +27,21 @@ def main():
     class AppendPixmap(argparse.Action):
 
         def __call__(self, parser, namespace, values, option_string=None):
+            assert isinstance(values, list)
             elements = getattr(namespace, "pixmap_sources", None)
             if elements is None:
                 elements = []
                 setattr(namespace, "pixmap_sources", elements)
-            elements.append({"path": values})
+            if not values:
+                parser.error("too few arguments for -p, --pixmap")
+            if len(values) == 1:
+                values.append(0)
+            for i in range(1, len(values)):
+                try:
+                    values[i] = int(values[i])
+                except ValueError:
+                    parser.error(f"pixmap layer: invalid int value: '{values[i]}'")
+            elements.append({"path": values[0], "layers": values[1:]})
 
     class SetPixmap(argparse.Action):
 
@@ -43,12 +53,28 @@ def main():
 
     class AppendLayer(argparse.Action):
 
+        CLASSNAME_CHOICES = sorted(["moveref", "introduction", "static", "sum"])
+
         def __call__(self, parser, namespace, values, option_string=None):
+            assert isinstance(values, list)
             elements = getattr(namespace, "layers", None)
             if elements is None:
                 elements = []
                 setattr(namespace, "layers", elements)
-            elements.append({"index": values})
+            if len(values) == 1:
+                index, classname = values[0], "moveref"
+            elif len(values) == 2:
+                index, classname = values[0], values[1]
+            else:
+                parser.error("too many arguments for -l, --layer")
+            try:
+                index = int(index)
+            except ValueError:
+                parser.error(f"layer index: invalid int value: '{index}'")
+            if not classname in self.CLASSNAME_CHOICES:
+                choosefrom = ", ".join([f"'{cls}'" for cls in self.CLASSNAME_CHOICES])
+                parser.error(f"layer class: invalid choice: '{classname}' (choose from {choosefrom})")
+            elements.append({"index": index, "classname": classname})
 
     class SetLayer(argparse.Action):
 
@@ -81,29 +107,32 @@ def main():
                     except TypeError:
                         # fall back if choices aren't sortable
                         choices = list(action.choices)
-                    m1 = "{" + ",".join(map(str, choices)) + "}"
+                    if isinstance(action, AppendLayer):
+                        m2 = "{" + ",".join(map(str, choices)) + "}"
+                    else:
+                        m1 = "{" + ",".join(map(str, choices)) + "}"
                 return f"{m1} [{m2}]"
             return super()._format_args(action, default_metavar)
 
-    class AWithOptionalB(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            # enforce 1 or 2 values
-            if not (1 <= len(values) <= 2):
-                parser.error(f"{option_string} expects 1 or 2 arguments: A [B]")
+    # class AWithOptionalB(argparse.Action):
+    #     def __call__(self, parser, namespace, values, option_string=None):
+    #         # enforce 1 or 2 values
+    #         if not (1 <= len(values) <= 2):
+    #             parser.error(f"{option_string} expects 1 or 2 arguments: A [B]")
 
-            # first token: A with choices (use self.choices if provided)
-            a = values[0]
-            if self.choices is not None and a not in self.choices:
-                parser.error(f"A must be one of {sorted(self.choices)} (got {a!r})")
-            setattr(namespace, self.dest, a)  # store A under dest (e.g., 'a')
+    #         # first token: A with choices (use self.choices if provided)
+    #         a = values[0]
+    #         if self.choices is not None and a not in self.choices:
+    #             parser.error(f"A must be one of {sorted(self.choices)} (got {a!r})")
+    #         setattr(namespace, self.dest, a)  # store A under dest (e.g., 'a')
 
-            # optional second token: B as float; if omitted, keep existing namespace.b
-            if len(values) == 2:
-                try:
-                    b_val = float(values[1])
-                except ValueError:
-                    parser.error("B must be a floating-point number")
-                setattr(namespace, "b", b_val)
+    #         # optional second token: B as float; if omitted, keep existing namespace.b
+    #         if len(values) == 2:
+    #             try:
+    #                 b_val = float(values[1])
+    #             except ValueError:
+    #                 parser.error("B must be a floating-point number")
+    #             setattr(namespace, "b", b_val)
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=Formatter)
     parser.add_argument("-v", "--version", action="version", version=f"Transflow v{__version__}")
@@ -141,10 +170,8 @@ def main():
     group.add_argument("--background", type=str, default="#ffffff", help="compositor background color")
 
     # Layer Args
-    # TODO: make it so, when no -l is specified, commands refer to layer 0
     group = parser.add_argument_group("layer options")
-    group.add_argument("-l", "--layer", action=AppendLayer, type=int, help="layer index") # TODO: choose the class from this argument. if not int provided, then it is zero. formatter should display this class in a specific manner.s
-    group.add_argument("-lc", "--layer-class", action=SetLayer, type=str, choices=["moveref", "introduction", "static", "sum"], default="moveref", help="layer class")
+    group.add_argument("-l", "--layer", action=AppendLayer, nargs="+", metavar=("index", "class"), type=str, help="layer index")
     group.add_argument("--mask-alpha", dest="mask_alpha", action=SetLayer, type=str, default=None)
     group.add_argument("--move-mask-source", dest="mask_src", action=SetLayer, type=str, default=None)
     group.add_argument("--move-mask-destination", dest="mask_dst", action=SetLayer, type=str, default=None)
@@ -153,10 +180,6 @@ def main():
     group.add_argument("--no-move-to-filled", dest="pixels_can_move_to_filled_spot", action=ConstLayer, const=False)
     group.add_argument("-e", "--leave-empty-spot", dest="moving_pixels_leave_empty_spot", action=ConstLayer, const=True)
     group.add_argument("-r", "--reset", action=SetLayer, nargs="+", metavar=("mode", "factor"), type=str, choices=["off", "random", "constant", "linear"], default="off", help="layer reset mode")
-    # group.add_argument("-R", "--reset-param", action=SetForLastLayer, type=float, default=None)
-    # group.add_argument("-lrr", "--layer-reset-random-factor", action=SetForLastLayer, type=float, default=0.1)
-    # group.add_argument("-lrc", "--layer-reset-constant-step", action=SetForLastLayer, type=float, default=1)
-    # group.add_argument("-lrl", "--layer-reset-linear-factor", action=SetForLastLayer, type=float, default=0.1)
     group.add_argument("--reset-mask", action=SetLayer, type=str)
     group.add_argument("--introduction-mask", action=SetLayer, type=str, default=None)
     group.add_argument("--no-introduce-on-empty", dest="introduce_pixels_on_empty_spots", action=ConstLayer, const=False)
@@ -203,6 +226,10 @@ def main():
     group.add_argument("--gui-mjpeg-port", type=int, default=8001, help="GUI MJPEG port")
 
     args = parser.parse_args()
+    print(args)
+
+    return
+
     if args.flow == "gui":
         from .gui import start_gui
         start_gui()

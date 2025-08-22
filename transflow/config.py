@@ -15,12 +15,12 @@ class PixmapSourceConfig:
             seek_time: float | str | None = None,
             alteration_path: str | None = None,
             repeat: int | None = 1,
-            layer: int | None = None):
+            layers: list[int] | None = None):
         self.path: str = path
         self.seek_time: float | None = parse_timestamp(seek_time)
         self.alteration_path: str | None = alteration_path
         self.repeat: int = 1 if repeat is None else repeat
-        self.layer: int = 0 if layer is None else layer
+        self.layers: list[int] = [0] if layers is None else layers
 
     @classmethod
     def fromdict(cls, d: dict):
@@ -29,7 +29,7 @@ class PixmapSourceConfig:
             seek_time=d.get("seek_time", None),
             alteration_path=d.get("alteration_path", None),
             repeat=d.get("repeat", 1),
-            layer=d.get("layer", None),
+            layers=d.get("layers", None),
         )
 
     def todict(self) -> dict:
@@ -38,7 +38,7 @@ class PixmapSourceConfig:
             "seek_time": self.seek_time,
             "alteration_path": self.alteration_path,
             "repeat": self.repeat,
-            "layer": self.layer,
+            "layers": self.layers,
         }
 
 
@@ -222,9 +222,10 @@ class Config:
                 raise ValueError(f"Duplicate layer index {layer.index}")
             layer_indices.add(layer.index)
         for pixmap_config in self.pixmap_sources:
-            if pixmap_config.layer not in layer_indices:
-                self.layers.append(LayerConfig(pixmap_config.layer))
-                layer_indices.add(pixmap_config.layer)
+            for layer_index in pixmap_config.layers:
+                if layer_index not in layer_indices:
+                    self.layers.append(LayerConfig(layer_index))
+                    layer_indices.add(pixmap_config.layers)
         self.compositor_background: str = "#FFFFFF" if compositor_background is None else compositor_background
 
         # Output Args
