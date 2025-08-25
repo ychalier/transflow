@@ -27,14 +27,14 @@ class MovementLayer(DataLayer):
         mask_src = self.mask_src.copy()
 
         if not self.config.transparent_pixels_can_move:
-            mask_src[numpy.where(self.data[:,:,self.POS_A_IDX] == 0)] = 0
+            mask_src[numpy.where(self.data[:,:,self.INDEX_ALPHA] == 0)] = 0
         mask_src = mask_src.flat[shift].reshape((self.height, self.width))
 
         mask_dst = self.mask_dst.copy()
         if not self.config.pixels_can_move_to_empty_spot:
-            mask_dst[numpy.where(self.data[:,:,self.POS_A_IDX] == 0)] = 0
+            mask_dst[numpy.where(self.data[:,:,self.INDEX_ALPHA] == 0)] = 0
         if not self.config.pixels_can_move_to_filled_spot:
-            mask_dst[numpy.nonzero(self.data[:,:,self.POS_A_IDX])] = 0
+            mask_dst[numpy.nonzero(self.data[:,:,self.INDEX_ALPHA])] = 0
 
         mask_all_flat = numpy.multiply(mask_src.flat, mask_dst.flat)
         where_target = numpy.nonzero(numpy.multiply(self.flow_flat, mask_all_flat))[0]
@@ -43,8 +43,8 @@ class MovementLayer(DataLayer):
         aux = self.data.copy()
         putn(self.data, aux, where_target, where_source, self.DEPTH)
         if self.config.moving_pixels_leave_empty_spot:
-            putn_1d(self.data[:,:,self.POS_A_IDX], 0, where_source, 1, 0)
-        putn_1d(self.data[:,:,self.POS_A_IDX], 1, where_target, 1, 0)
+            putn_1d(self.data[:,:,self.INDEX_ALPHA], 0, where_source, 1, 0)
+        putn_1d(self.data[:,:,self.INDEX_ALPHA], 1, where_target, 1, 0)
 
     def update(self, flow: Flow):
         self._update_flow(flow)

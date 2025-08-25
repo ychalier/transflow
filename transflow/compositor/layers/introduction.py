@@ -8,9 +8,10 @@ from .movement import MovementLayer
 class IntroductionLayer(MovementLayer):
 
     DEPTH = 8 # r, g, b, alpha, source, i, j, frame
-    POS_I_IDX: int = 5
-    POS_J_IDX: int = 6
-    POS_A_IDX: int = 3
+    INDEX_I: int = 5
+    INDEX_J: int = 6
+    INDEX_ALPHA: int = 3
+    INDEX_SOURCE: int = 4
 
     def __init__(self, *args):
         MovementLayer.__init__(self, *args)
@@ -24,8 +25,8 @@ class IntroductionLayer(MovementLayer):
         self.introduced_once = True
         mask = numpy.ones((self.height, self.width), dtype=numpy.bool)
 
-        where_empty = numpy.where(self.data[:,:,self.POS_A_IDX]) == 0
-        where_filled = numpy.nonzero(self.data[:,:,self.POS_A_IDX])
+        where_empty = numpy.where(self.data[:,:,self.INDEX_ALPHA]) == 0
+        where_filled = numpy.nonzero(self.data[:,:,self.INDEX_ALPHA])
 
         if not self.config.introduce_pixels_on_empty_spots:
             mask[where_empty] = 0

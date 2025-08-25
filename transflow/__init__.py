@@ -82,7 +82,7 @@ def main():
             if not elements:
                 elements = []
                 setattr(namespace, "layers", elements)
-                elements.append({"index", 0})
+                elements.append({"index": 0})
             elements[-1][self.dest] = values
 
     class ConstLayer(argparse.Action):
@@ -92,7 +92,7 @@ def main():
             if not elements:
                 elements = []
                 setattr(namespace, "layers", elements)
-                elements.append({"index", 0})
+                elements.append({"index": 0})
             elements[-1][self.dest] = self.const
 
     class ResetAction(argparse.Action):
@@ -120,7 +120,7 @@ def main():
             if not elements:
                 elements = []
                 setattr(namespace, "layers", elements)
-                elements.append({"index", 0})
+                elements.append({"index": 0})
             elements[-1]["reset_mode"] = reset_mode
             elements[-1]["reset_factor"] = reset_factor
 
@@ -286,7 +286,7 @@ def main():
         help="mask to select where to apply the reset" + mask_help + "; "
         "if the 'random' reset mode is selected, the mask is interpreted as a "
         "pixel-wise reset probability map ('moveref' or 'sum' only)")
-    group.add_argument("--introduction-mask", dest="mask_introduction", action=SetLayer, type=str, default=None,
+    group.add_argument("-i", "--introduction-mask", dest="mask_introduction", action=SetLayer, type=str, default=None,
         help="boolean mask to select which pixels from the source to introduce"
         + bool_mask_help + " ('introduction' only)")
     group.add_argument("--no-introduce-on-empty", dest="introduce_pixels_on_empty_spots", action=ConstLayer, const=False, nargs=0,

@@ -30,7 +30,9 @@ import pygame
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from transflow.accumulator.mapping import MappingAccumulator
+from transflow.utils import parse_hex_color
+from transflow.compositor import Compositor
+from transflow.compositor.layers.data import DataLayer
 
 
 WHITE = (255, 255, 255)
@@ -93,11 +95,18 @@ def get_opposite_color(color: tuple[int, int, int]) -> tuple[int, int, int]:
 
 class Window:
 
-    def __init__(self, width: int, ckpt_path: str, bitmap_path: str | None,
-                 max_sources_display: int = 264):
+    def __init__(self,
+            width: int,
+            ckpt_path: str,
+            pixmap_path: str | None,
+            max_sources_display: int = 264,
+            layer_index: int = 0,
+            background_color: str = "#df00ff"):
 
         self.ckpt_path = ckpt_path
-        self.bitmap_path = bitmap_path
+        self.pixmap_path = pixmap_path
+        self.layer_index = layer_index
+        self.background_color = parse_hex_color(background_color)
         self.flow_path = None
         self.cursor = None
 
@@ -110,7 +119,8 @@ class Window:
         self.w = None
         self.h = None
         self.mapping = None
-        self.bitmap = None
+        self.pixmap = None
+        self.alpha = None
         self.masks = None
         self.targets: dict[tuple[int, int], list[tuple[int, int]]] = {}
         self.sources: list[tuple[int, int]] = []
@@ -136,14 +146,18 @@ class Window:
                 meta = json.load(file)
                 self.flow_path = meta["config"]["flow_path"]
                 self.cursor = meta["cursor"]
-            with archive.open("accumulator.bin") as file:
-                acc = pickle.load(file)
-        if not isinstance(acc, MappingAccumulator):
-            raise ValueError("Checkpoint must contain an accumulator of type"\
-                            f"MappingAccumulator, not {type(acc)}")
+            with archive.open("compositor.bin") as file:
+                compositor: Compositor = pickle.load(file)
+        if not compositor.layers or self.layer_index >= len(compositor.layers):
+            raise ValueError(f"Compositor does not have enough layers (wants layer index {self.layer_index}, has {len(compositor.layers)} layer(s))")
+        layer = compositor.layers[self.layer_index]
+        if not isinstance(layer, DataLayer):
+            raise ValueError(f"Layer has incorrect class {type(layer)}, must be one of 'moveref' or 'introduction'")
+        
         self.mapping = numpy.concatenate(
-            [acc.mapx[:,:,numpy.newaxis], acc.mapy[:,:,numpy.newaxis]],
+            [layer.data[:,:,layer.INDEX_J][:,:,numpy.newaxis], layer.data[:,:,layer.INDEX_I][:,:,numpy.newaxis]],
             axis=2).astype(int)
+        self.alpha = layer.data[:,:,layer.INDEX_ALPHA]
         self.h = self.mapping.shape[0]
         self.w = self.mapping.shape[1]
 
@@ -151,7 +165,10 @@ class Window:
         self.targets = {}
         for i in range(self.h):
             for j in range(self.w):
-                source = (self.mapping[i][j][1], self.mapping[i][j][0])
+                if self.alpha[i][j] != 1:
+                    source = (-1, -1)
+                else:
+                    source = (self.mapping[i][j][1], self.mapping[i][j][0])
                 self.targets.setdefault(source, [])
                 self.targets[source].append((i, j))
         if len(self.targets) > self.max_sources_display:
@@ -165,20 +182,23 @@ class Window:
         self.masks = {}
         for source in self.sources:
             targets = self.targets[source]
-            alpha = numpy.zeros((self.w, self.h), dtype=numpy.uint8)
+            self.alpha = numpy.zeros((self.w, self.h), dtype=numpy.uint8)
             for i, j in targets:
-                alpha[j,i] = 255
-            self.masks[source] = alpha
+                self.alpha[j,i] = 255
+            self.masks[source] = self.alpha
 
-        # Loading or generating bitmap
-        if self.bitmap_path is not None:
-            self.bitmap = numpy.array(PIL.Image.open(self.bitmap_path))[:,:,:3].astype(numpy.uint8)
+        # Loading or generating pixmap
+        if self.pixmap_path is not None:
+            self.pixmap = numpy.array(PIL.Image.open(self.pixmap_path))[:,:,:3].astype(numpy.uint8)
         else:
-            self.bitmap = numpy.random.randint(0, 255, (*self.mapping.shape[:2], 3), dtype=numpy.uint8)
+            self.pixmap = numpy.random.randint(0, 255, (*self.mapping.shape[:2], 3), dtype=numpy.uint8)
 
         # Collecting colors
         for source in self.sources:
-            color = tuple(self.bitmap[source[0], source[1]])
+            if source == (-1, -1):
+                color = self.background_color
+            else:
+                color = tuple(self.pixmap[source[0], source[1]])
             self.default_colors[source] = color
             self.colors[source] = color
 
@@ -234,37 +254,44 @@ class Window:
         assert self.height_sources is not None, self.height_sources
         paney = self.height_sources + 2 * self.padding
 
-        assert self.bitmap is not None
+        assert self.pixmap is not None
         # Draw Left Pane
-        altered_bitmap = numpy.copy(self.bitmap)
+        altered_pixmap = numpy.copy(self.pixmap)
         for source, color in self.colors.items():
-            altered_bitmap[*source] = color
-        bitmap_surface = pygame.transform.scale(
-            pygame.surfarray.make_surface(altered_bitmap.transpose(1, 0, 2)),
+            altered_pixmap[*source] = color
+        pixmap_surface = pygame.transform.scale(
+            pygame.surfarray.make_surface(altered_pixmap.transpose(1, 0, 2)),
             (self.surfw, self.surfh))
         self.window.fill(BORDER_COLOR, (
             self.padding - self.border_width,
             paney - self.border_width,
             self.surfw + 2 * self.border_width,
             self.surfh + 2 * self.border_width))
-        self.window.blit(bitmap_surface, (self.padding, paney))
+        self.window.blit(pixmap_surface, (self.padding, paney))
 
         # Draw Right Pane
         assert self.mapping is not None
-        output = altered_bitmap[self.mapping[:,:,1], self.mapping[:,:,0], :]
+        output = altered_pixmap[self.mapping[:,:,1], self.mapping[:,:,0], :]
         output_surface = pygame.transform.scale(
             pygame.surfarray.make_surface(output.transpose(1, 0, 2)),
             (self.surfw, self.surfh))
+        
+        assert self.w is not None, self.w
+        assert self.h is not None, self.h
+        assert self.masks is not None, self.masks        
+
         self.window.fill(BORDER_COLOR, (
             self.surfw + 2 * self.padding - self.border_width,
             paney - self.border_width,
             self.surfw + 2 * self.border_width,
             self.surfh + 2 * self.border_width))
         self.window.blit(output_surface, (self.surfw + 2 * self.padding, paney))
-
-        assert self.w is not None, self.w
-        assert self.h is not None, self.h
-        assert self.masks is not None, self.masks
+        
+        if (-1, -1) in self.colors:
+            surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            surf.fill(self.colors[(-1, -1)], (0, 0, self.w, self.h))
+            numpy.array(surf.get_view('A'), copy=False)[:,:] = self.masks[(-1, -1)]
+            self.window.blit(pygame.transform.scale(surf, (self.surfw, self.surfh)), (self.surfw + 2 * self.padding, paney))
 
         # Draw Over Panes
         if self.hovered is not None:
@@ -300,7 +327,7 @@ class Window:
                 f"Source at ({self.hovered[1]}, {self.hovered[0]}),"\
                     f" {len(self.targets[self.hovered])}px"\
                     f" ({int(100 * area)}% area),"\
-                    f" rgb{self.colors[self.hovered]}",
+                    f" rgb{tuple(map(int, self.colors[self.hovered]))}",
                 True, WHITE, BACKGROUND_COLOR)
             self.window.blit(surface, (
                 self.width - surface.get_width() - self.padding,
@@ -381,6 +408,8 @@ class Window:
         for source in self.sources:
             if not output_all\
                 and self.colors[source] == self.default_colors[source]:
+                continue
+            if source == (-1, -1):
                 continue
             array[source[0], source[1]] = (*self.colors[source], 255)
         PIL.Image.fromarray(array).save(path)
@@ -467,7 +496,7 @@ def main():
     parser.add_argument("ckpt_path",
         type=str,
         help="path to checkpoint file")
-    parser.add_argument("bitmap_path",
+    parser.add_argument("pixmap_path",
         type=str, default=None, nargs="?",
         help="path to image file")
     parser.add_argument("-m", "--max-sources-display",
@@ -476,12 +505,16 @@ def main():
     parser.add_argument("-w", "--width",
         type=int, default=1600,
         help="window width")
+    parser.add_argument("-l", "--layer-index", type=int, default=0)
+    parser.add_argument("-b", "--background-color", type=str, default="#df00ff")
     args = parser.parse_args()
     window = Window(
         args.width,
         args.ckpt_path,
-        args.bitmap_path,
-        args.max_sources_display)
+        args.pixmap_path,
+        args.max_sources_display,
+        args.layer_index,
+        args.background_color)
     with window:
         try:
             window.draw()
