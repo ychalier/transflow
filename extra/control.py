@@ -98,15 +98,17 @@ class Window:
     def __init__(self,
             width: int,
             ckpt_path: str,
-            pixmap_path: str | None,
+            pixmap_path: str | None = None,
             max_sources_display: int = 264,
             layer_index: int = 0,
-            background_color: str = "#df00ff"):
+            background_color: str = "#df00ff",
+            silent: bool = False):
 
         self.ckpt_path = ckpt_path
         self.pixmap_path = pixmap_path
         self.layer_index = layer_index
         self.background_color = parse_hex_color(background_color)
+        self.silent = silent
         self.flow_path = None
         self.cursor = None
 
@@ -171,7 +173,7 @@ class Window:
                     source = (self.mapping[i][j][1], self.mapping[i][j][0])
                 self.targets.setdefault(source, [])
                 self.targets[source].append((i, j))
-        if len(self.targets) > self.max_sources_display:
+        if not self.silent and len(self.targets) > self.max_sources_display:
             warnings.warn(f"Found too many sources! ({len(self.targets)})")
 
         # Selecting sources
@@ -389,7 +391,7 @@ class Window:
             return source
         return None
 
-    def export(self):
+    def export(self, force_export_all: bool = False):
         assert self.flow_path is not None, self.flow_path
         assert self.mapping is not None, self.mapping
         path = os.path.join(
@@ -403,7 +405,7 @@ class Window:
                 break
         output_all = True
         if has_default_color:
-            output_all = ask_export_format()
+            output_all = force_export_all or ask_export_format()
         array = numpy.zeros((*self.mapping.shape[:2], 4), dtype=numpy.uint8)
         for source in self.sources:
             if not output_all\
@@ -413,7 +415,8 @@ class Window:
                 continue
             array[source[0], source[1]] = (*self.colors[source], 255)
         PIL.Image.fromarray(array).save(path)
-        print(f"Exported to {path}")
+        if not self.silent:
+            print(f"Exported to {path}")
 
     def over_buffer(self, x: int, y: int) -> bool:
         assert self.height is not None, self.height
