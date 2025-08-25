@@ -18,7 +18,6 @@ __all__ = [
     "main",
 ]
 
-
 def main():
 
     import argparse
@@ -95,7 +94,7 @@ def main():
                 setattr(namespace, "layers", elements)
                 elements.append({"index", 0})
             elements[-1][self.dest] = self.const
-    
+
     class ResetAction(argparse.Action):
 
         RESET_CHOICES = sorted(["off", "random", "constant", "linear"])
@@ -103,7 +102,9 @@ def main():
         def __call__(self, parser, namespace, values, option_string=None):
             assert isinstance(values, list)
             if len(values) == 1:
-                reset_mode, reset_factor = values[0], 1
+                reset_mode, reset_factor = values[0], 0.1
+                if reset_mode == "constant":
+                    reset_factor = 1
             elif len(values) == 2:
                 reset_mode, reset_factor = values
             else:
@@ -122,7 +123,7 @@ def main():
                 elements.append({"index", 0})
             elements[-1]["reset_mode"] = reset_mode
             elements[-1]["reset_factor"] = reset_factor
-    
+
     class LockAction(argparse.Action):
 
         LOCKMODE_CHOICES = sorted(["stay", "skip"])
@@ -151,67 +152,183 @@ def main():
                 return "{" + ",".join(map(str, LockAction.LOCKMODE_CHOICES)) + "} LOCK_EXPR"
             return super()._format_args(action, default_metavar)
 
+        def _get_help_string(self, action: argparse.Action) -> str | None:
+            if isinstance(action, ConstLayer)\
+                or isinstance(action, argparse._StoreTrueAction)\
+                or isinstance(action, argparse._StoreFalseAction):
+                return action.help
+            return super()._get_help_string(action)
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=Formatter)
     parser.add_argument("-v", "--version", action="version", version=f"Transflow v{__version__}")
 
+    parser.add_argument("action", type=str,
+        help="main action to perform, either a path to a checkpoint (ZIP "
+        "archive), a flow source (a path to a video file or ZIP archive, a "
+        "webcam index), a path to a JSON config file or the keyword 'gui'")
+    
+    mask_help = ", either a path to a an image file "\
+        "(luminance is mapped to [0, 1]) "\
+        "or one of 'zeros', 'ones', 'random', 'border:top:left:bottom:right', "\
+        "'border-top:height', 'border-right:width', 'border-bottom:height', "\
+        "'border-left:width', 'hline:height', 'vline:width', 'circle:radius', "\
+        "'rect:width:height', 'grid:nrows:ncols:radius'; dimensions can be "\
+        "absolute values in pixels or relative using '%%' suffix"\
+    
+    bool_mask_help = mask_help.replace("[0, 1]", "{0, 1}")
+
     # Flow Args
     group = parser.add_argument_group("flow options")
-    group.add_argument("flow", type=str, help="input flow: a path to either a video file or a zip archive (precomputed flow or checkpoint)")
-    group.add_argument("--flow", dest="extra_flow_paths", type=str, nargs="*", help="path to an additionnal flow source (video file or ZIP archive)")
-    group.add_argument("--merge", dest="flows_merging_function", type=str, default="sum", choices=["first", "sum", "average", "difference", "product", "maskbin", "masklin", "absmax"], help="operations to aggregate extra flow sources")
-    group.add_argument("--mv", dest="use_mvs", action="store_true", help="use motion vectors to compute the optical flow instead of OpenCV's Farneback algorithm")
-    group.add_argument("--mask", dest="mask_path", type=str, default=None, help="path to an image to applay a per-pixel flow scale")
-    group.add_argument("--kernel", dest="kernel_path", type=str, default=None, help="path to a NPY file storing a convolution kernel to apply on the optical flow (impacts performances)")
-    group.add_argument("-c", "--cv-config", dest="cv_config", type=str, default=None, help="path to a JSON file containing settings for OpenCV's Farneback algorithm or 'window' to use a live control window; if None, a default config is used")
-    group.add_argument("-f", "--filters", dest="flow_filters", type=str, default=None, help="list of flow filters, separated by semicolons; available filters are scale, threshold and clip; all take an expression as argument which can either be a constant or a Pythonic expression based on the variable `t`, the frame timestamp in seconds")
-    group.add_argument("-d", "--direction", dest="direction", type=str, choices=["forward", "backward"], default="backward", help="direction of flow computation")
-    group.add_argument("-s", "--seek", dest="seek_time", type=str, default=None, help="start timestamp for flow source")
-    group.add_argument("-t", "--duration", dest="duration_time", type=str, default=None, help="max output duration")
-    group.add_argument("--to", dest="to_time", type=str, default=None, help="end timestamp for flow source")
-    group.add_argument("--repeat", dest="repeat", type=int, default=1, help="repeat flow inputs (0 to loop indefinitely)")
-    group.add_argument("--lock", action=LockAction, nargs=2, type=str, help="Expression to lock the flow. In lock mode 'stay', a list of couples (start_t, duration). In lock mode 'skip', an expression based on variable `t`. Timings are the output frame timestamps, in seconds. When the flow is locked, either pause the source ('stay') or continue reading it ('skip')")
+    group.add_argument("--flow", dest="extra_flow_paths", type=str, nargs="*",
+        help="path to an additionnal flow source (video file or ZIP archive)")
+    group.add_argument("--merge", dest="flows_merging_function", type=str, default="sum",
+        choices=["first", "sum", "average", "difference", "product", "maskbin", "masklin", "absmax"],
+        help="if applicable, function to merge all flow sources")
+    group.add_argument("--mv", dest="use_mvs", action="store_true",
+        help="use motion vectors to extract the optical flow from a video file "
+        "(input video must contain motion vectors)")
+    group.add_argument("--mask", dest="mask_path", type=str, default=None,
+        help="pixel wise flow scaling by a float mask" + mask_help)
+    group.add_argument("--kernel", dest="kernel_path", type=str, default=None,
+        help="path to a NPY file storing a convolution kernel to apply on the "
+        "optical flow (impacts performances)")
+    group.add_argument("-c", "--cv-config", dest="cv_config", type=str, default=None,
+        help="path to a JSON file containing settings for the optical flow "
+        "computation from the video file, or the keywork 'window' to use a live "
+        "control window")
+    group.add_argument("-f", "--filters", dest="flow_filters", type=str, default=None,
+        help="list of flow filters, separated by semicolons; available filters "
+        "are 'scale', 'threshold' and 'clip'; all take an expression as "
+        "argument which can either be a constant or any Pythonic expression "
+        "based on the variable `t`, the frame timestamp in seconds")
+    group.add_argument("-d", "--direction", dest="direction", type=str, choices=["forward", "backward"], default="backward",
+        help="direction of the computed flow; 'backward' is smoother, "
+        "'forward' is granyer")
+    group.add_argument("-s", "--seek", dest="seek_time", type=str, default=None,
+        help="start timestamp for the flow source, formatted as 'HH:MM:SS.FFFF'")
+    group.add_argument("-t", "--duration", dest="duration_time", type=str, default=None,
+        help="max output duration, formatted as 'HH:MM:SS.FFFF'")
+    group.add_argument("--to", dest="to_time", type=str, default=None,
+        help="end timestamp for flow source, formatted as 'HH:MM:SS.FFFF'")
+    group.add_argument("--repeat", dest="repeat", type=int, default=1,
+        help="repeat flow inputs (0 to loop indefinitely)")
+    group.add_argument("--lock", action=LockAction, nargs=2, type=str,
+        help="expression to lock the flow; when the flow is locked, either "
+        "pause the source ('stay') or continue reading it ('skip'); "
+        "in mode 'stay', expr must be a list of couples (start_t, duration) "
+        "for when to lock the flow; "
+        "in mode 'skip', expr must be a Pythonic expression based on variable "
+        "`t`; timings are relative to the output frame timestamps, in seconds")
 
     # Pixmap Args
-    group = parser.add_argument_group("pixmap options")
-    group.add_argument("-p", "--pixmap", action=AppendPixmap, nargs="+", metavar=("path", "layer"), type=str, help="input pixmap: either a path to a video or an image file or a still image generator (color, noise, bwnoise, cnoise, gradient, first); if None, the input flow will be preprocessed")
-    group.add_argument("--alteration", dest="pixmap_alteration", action=SetPixmap, type=str, default=None, help="path to a PNG file containing alteration to apply to pixmap")
-    group.add_argument("--pixmap-seek", action=SetPixmap, type=str, default=None, help="start timestamp for pixmap source")
-    group.add_argument("--pixmap-repeat", action=SetPixmap, type=int, default=1, help="repeat pixmap input (0 to loop indefinitely)")
+    group = parser.add_argument_group("pixmap options",
+        description="specify 0 or more pixmap sources, each with their own "
+        "options; each source must be bound to 1 or more layers (see `--layer`)")
+    group.add_argument("-p", "--pixmap", action=AppendPixmap, nargs="+", metavar=("source", "layer"), type=str,
+        help="either a path to a video or an image file or one of 'color:hex' "
+        "(static color), 'noise' (random grey noise), 'bwnoise' (random black "
+        "or white noise), 'cnoise' (random colored noise), 'gradient' (random "
+        "gradient), 'first' (use the first frame of the first flow input); "
+        "this value can be followed by one more or integers to bind to one or "
+        "more layers; if no integer is provided, the pixmap will bind to the "
+        "default layer at index 0")
+    group.add_argument("--alteration", dest="pixmap_alteration", action=SetPixmap, type=str, default=None,
+        help="path to a PNG image to overlay on the pixmap source, allowing "
+        "for more controlled outputs; see `control.py` in the extra ressources")
+    group.add_argument("--pixmap-seek", action=SetPixmap, type=str, default=None,
+        help="start timestamp for pixmap source, formatted as 'HH:MM:SS.FFFF'")
+    group.add_argument("--pixmap-repeat", action=SetPixmap, type=int, default=1,
+        help="repeat pixmap input (0 to loop indefinitely), formatted as "
+        "'HH:MM:SS.FFFF'")
 
     # Compositor Args
     group = parser.add_argument_group("compositor options")
-    group.add_argument("--background", dest="compositor_background", type=str, default="#ffffff", help="compositor background color")
+    group.add_argument("--background", dest="compositor_background", type=str, default="#ffffff",
+        help="compositor background color")
 
     # Layer Args
-    group = parser.add_argument_group("layer options")
-    group.add_argument("-l", "--layer", action=AppendLayer, nargs="+", metavar=("index", "class"), type=str, help="layer index", default="moveref")
-    group.add_argument("--mask-alpha", dest="mask_alpha", action=SetLayer, type=str, default=None)
-    group.add_argument("--move-mask-source", dest="mask_src", action=SetLayer, type=str, default=None)
-    group.add_argument("--move-mask-destination", dest="mask_dst", action=SetLayer, type=str, default=None)
-    group.add_argument("--move-from-empty", dest="transparent_pixels_can_move", action=ConstLayer, const=True)
-    group.add_argument("--no-move-to-empty", dest="pixels_can_move_to_empty_spot", action=ConstLayer, const=False)
-    group.add_argument("--no-move-to-filled", dest="pixels_can_move_to_filled_spot", action=ConstLayer, const=False)
-    group.add_argument("-e", "--leave-empty-spot", dest="moving_pixels_leave_empty_spot", action=ConstLayer, const=True)
-    group.add_argument("-r", "--reset", dest="reset", action=ResetAction, nargs="+", metavar=("mode", "factor"), type=str, default="off", help="layer reset mode")
-    group.add_argument("--reset-mask", action=SetLayer, type=str)
-    group.add_argument("--introduction-mask", dest="mask_introduction", action=SetLayer, type=str, default=None)
-    group.add_argument("--no-introduce-on-empty", dest="introduce_pixels_on_empty_spots", action=ConstLayer, const=False)
-    group.add_argument("--no-introduce-on-filled", dest="introduce_pixels_on_filled_spots", action=ConstLayer, const=False)
-    group.add_argument("--no-introduce-moving", dest="introduce_moving_pixels", action=ConstLayer, const=False)
-    group.add_argument("--no-introduce-unmoving", dest="introduce_unmoving_pixels", action=ConstLayer, const=False)
-    group.add_argument("-n", "--introduce-once", dest="introduce_once", action=ConstLayer, const=True)
-    group.add_argument("-a", "--introduce-on-all-filled", dest="introduce_on_all_filled_spots", action=ConstLayer, const=True, nargs=0)
-    group.add_argument("--introduce-on-all-empty", dest="introduce_on_all_empty_spots", action=ConstLayer, const=True)
+    group = parser.add_argument_group("layer options",
+        description="specify 0 or more layers to add to the compositor, each "
+        "with their own options; if none are specified, a default layer is "
+        "created with index 0 and default parameters")
+    group.add_argument("-l", "--layer", action=AppendLayer, nargs="+", metavar=("index", "class"), type=str, default="moveref",
+        help="layer index (integer) and class, one of 'moveref' (the flow "
+        "moves an array of coordinates refering to the pixmap), 'introduction' "
+        "(the flow moves static pixels onto a canvas where pixels can be "
+        "introduced), 'sum' (the flow is summed to an array of coordinates "
+        "refering to the pixmap) or 'static' (the flow is ignored)")
+    group.add_argument("--mask-alpha", dest="mask_alpha", action=SetLayer, type=str, default=None,
+        help="layer opacity mask, boolean" + bool_mask_help)
+    group.add_argument("--move-mask-source", dest="mask_src", action=SetLayer, type=str, default=None,
+        help="boolean mask for where to allow pixels to move from"
+        + bool_mask_help + " ('moveref' only)")
+    group.add_argument("--move-mask-destination", dest="mask_dst", action=SetLayer, type=str, default=None,
+        help="boolean mask for where to allow pixels to move to"
+        + bool_mask_help + " ('moveref' only)")
+    group.add_argument("--move-from-empty", dest="transparent_pixels_can_move", action=ConstLayer, const=True, nargs=0,
+        help="allow transparent pixels to move ('moveref' only)")
+    group.add_argument("--no-move-to-empty", dest="pixels_can_move_to_empty_spot", action=ConstLayer, const=False, nargs=0,
+        help="prevent pixels from moving to empty spots ('moveref' only)")
+    group.add_argument("--no-move-to-filled", dest="pixels_can_move_to_filled_spot", action=ConstLayer, const=False, nargs=0,
+        help="prevent pixels from moving to filled spots ('moveref' only)")
+    group.add_argument("-e", "--leave-empty-spot", dest="moving_pixels_leave_empty_spot", action=ConstLayer, const=True, nargs=0,
+        help="moving pixels leave an empty spot behind them ('moveref' only)")
+    group.add_argument("-r", "--reset", dest="reset", action=ResetAction, nargs="+", metavar=("mode", "factor"), type=str, default="off",
+        help="reset mode, one of 'off' (nothing happens), 'random' (pixels are "
+        "randomly moved back to their original position), 'constant' (pixels "
+        "move towards their original position with a constant speed) or "
+        "'linear' (pixels move towards their original position with a speed "
+        "relative to the distance from their origin); the reset factor is "
+        "either a probability ('random', default 0.1), a speed ('constant', "
+        "default 1) in pixel/frame or a interpolation factor ('linear', "
+        "default 0.1) ('moveref' or 'sum' only)")
+    group.add_argument("--reset-mask", action=SetLayer, type=str,
+        help="mask to select where to apply the reset" + mask_help + "; "
+        "if the 'random' reset mode is selected, the mask is interpreted as a "
+        "pixel-wise reset probability map ('moveref' or 'sum' only)")
+    group.add_argument("--introduction-mask", dest="mask_introduction", action=SetLayer, type=str, default=None,
+        help="boolean mask to select which pixels from the source to introduce"
+        + bool_mask_help + " ('introduction' only)")
+    group.add_argument("--no-introduce-on-empty", dest="introduce_pixels_on_empty_spots", action=ConstLayer, const=False, nargs=0,
+        help="prevent pixels from being introduced on empty spots "
+        "('introduction' only)")
+    group.add_argument("--no-introduce-on-filled", dest="introduce_pixels_on_filled_spots", action=ConstLayer, const=False, nargs=0,
+        help="prevent pixels from being introduced on filled spots "
+        "('introduction' only)")
+    group.add_argument("--no-introduce-moving", dest="introduce_moving_pixels", action=ConstLayer, const=False, nargs=0,
+        help="prevent moving pixels from being introduced ('introduction' only)")
+    group.add_argument("--no-introduce-unmoving", dest="introduce_unmoving_pixels", action=ConstLayer, const=False, nargs=0,
+        help="prevent unmoving pixels from being introduced "
+        "('introduction' only)")
+    group.add_argument("-n", "--introduce-once", dest="introduce_once", action=ConstLayer, const=True, nargs=0,
+        help="introduce pixels only once, at the first frame "
+        "('introduction' only)")
+    group.add_argument("-a", "--introduce-on-all-filled", dest="introduce_on_all_filled_spots", action=ConstLayer, const=True, nargs=0,
+        help="force introduction of pixels on all currently filled spots "
+        "('introduction' only)")
+    group.add_argument("--introduce-on-all-empty", dest="introduce_on_all_empty_spots", action=ConstLayer, const=True, nargs=0,
+        help="force introduction of pixels on all currently empty spots "
+        "('introduction' only)")
 
     # Output Args
     group = parser.add_argument_group("output options")
-    group.add_argument("-o", "--output", dest="output", type=str, action="append", help="output path: if provided, path to export the output video (as an MP4 file) ; otherwise, opens a temporary display window")
-    group.add_argument("--vcodec", dest="vcodec", type=str, default="h264", help="video codec for the output video file")
-    group.add_argument("--size", dest="size", type=str, default=None, help="target video size, for webcams and generated pixmaps, of the form WIDTHxHEIGHT")
-    group.add_argument("--view-flow", dest="output_intensity", action="store_true", help="output flow intensity as a heatmap")
-    group.add_argument("--render-scale", dest="render_scale", type=float, default=0.1, help="render scale for heatmap and accumulator output")
-    group.add_argument("--render-colors", dest="render_colors", type=str, default=None, help="colors for rendering heatmap (2 colors) and accumulator (4 colors) outputs, hex format, separated by commas")
-    group.add_argument("--render-binary", dest="render_binary", action="store_true", help="1d render will be binary, ie. no gradient will appear")
+    group.add_argument("-o", "--output", dest="output", type=str, action="append",
+        help="output path: if provided, path to export the output video (as an "
+        "MP4 file); otherwise, opens a temporary display window")
+    group.add_argument("--vcodec", dest="vcodec", type=str, default="h264",
+        help="video codec for the output video file")
+    group.add_argument("--size", dest="size", type=str, default=None,
+        help="target video size with format WIDTHxHEIGHT, "
+        "used for determining input webcam size")
+    group.add_argument("--view-flow", dest="output_intensity", action="store_true",
+        help="ignore the compositor and render the flow intensity as output")
+    group.add_argument("--render-scale", dest="render_scale", type=float, default=0.1,
+        help="render scale flow intensity")
+    group.add_argument("--render-colors", dest="render_colors", type=str, default=None,
+        help="colors for rendering flow intensity; "
+        "2 colors, hex format, separated by commas")
+    group.add_argument("--render-binary", dest="render_binary", action="store_true",
+        help="render the flow intensity with exactly two colors, no gradient")
 
     # General Args
     group = parser.add_argument_group("general options")
@@ -219,18 +336,35 @@ def main():
 
     # Pipeline Args
     group = parser.add_argument_group("processing options")
-    group.add_argument("-S", "--safe", dest="safe", action="store_true", help="save a checkpoint when the program gets interrupted or an error occurs")
-    group.add_argument("--checkpoint-every", dest="checkpoint_every", type=int, default=None, help="export checkpoint every X frame")
-    group.add_argument("--checkpoint-end", dest="checkpoint_end", action="store_true", help="export checkpoint at the last frame")
-    group.add_argument("--no-exec", dest="execute", action="store_false", help="do not open the output video file when done")
-    group.add_argument("--overwrite", dest="replace", action="store_true", help="overwrite any existing output file (by default, a new filename is generated to avoid conflicts and overwriting)")
-    group.add_argument("--no-config-export", dest="export_config", action="store_false", help="disable automatic configuration export")
-    group.add_argument("-F", "--export-flow", dest="export_flow", action="store_true", help="export computed flow to a file")
-    group.add_argument("--export-rounded-flow", dest="round_flow", action="store_true", help="export preprocessed flow as integer values (faster and lighter, but may introduce artefacts)")
-    group.add_argument("-O", "--preview-output", dest="preview_output", action="store_true", help="preview output while exporting")
-    group.add_argument("--log-level", dest="log_level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Logging level", default="DEBUG")
-    group.add_argument("--log-handler", dest="log_handler", type=str, help="Comma-separated list of log handlers (possible values are 'file', 'stream' or 'null' (default))", default="null")
-    group.add_argument("--log-path", dest="log_path", type=pathlib.Path, help="Path to log file (if 'file' log handler is used, see --log-handler)", default=pathlib.Path("transflow.log"))
+    group.add_argument("-S", "--safe", dest="safe", action="store_true",
+        help="save a checkpoint when the program gets interrupted "
+        "or an error occurs")
+    group.add_argument("--checkpoint-every", dest="checkpoint_every", type=int, default=None,
+        help="export checkpoint every N frame")
+    group.add_argument("-C", "--checkpoint-end", dest="checkpoint_end", action="store_true",
+        help="export checkpoint at the last frame")
+    group.add_argument("--no-exec", dest="execute", action="store_false",
+        help="do not open the output video file when done")
+    group.add_argument("--overwrite", dest="replace", action="store_true",
+        help="overwrite any existing output file (by default, a new filename "
+        "is generated to avoid conflicts and overwriting)")
+    group.add_argument("--no-config-export", dest="export_config", action="store_false",
+        help="disable automatic configuration export")
+    group.add_argument("-F", "--export-flow", dest="export_flow", action="store_true",
+        help="export computed flow to a file as a ZIP archive")
+    group.add_argument("--export-rounded-flow", dest="round_flow", action="store_true",
+        help="export the flow as integer values (faster and lighter, but may "
+        "introduce artefacts)")
+    group.add_argument("-O", "--preview-output", dest="preview_output", action="store_true",
+        help="preview output while exporting")
+    group.add_argument("--log-level", dest="log_level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], default="DEBUG",
+        help="logging level")
+    group.add_argument("--log-handler", dest="log_handler", type=str, default="null",
+        help="comma-separated list of log handlers, "
+        "one of 'file', 'stream' or 'null'")
+    group.add_argument("--log-path", dest="log_path", type=pathlib.Path, default=pathlib.Path("transflow.log"),
+        help="path to the log file if the 'file' log handler is used, "
+        "see --log-handler")
 
     # GUI Args
     group = parser.add_argument_group("GUI options")
@@ -240,19 +374,19 @@ def main():
 
     args = parser.parse_args()
 
-    if args.flow == "gui":
+    if args.action == "gui":
         from .gui import start_gui
         start_gui()
         return
     from .config import Config, PixmapSourceConfig, LayerConfig
-    if args.flow.endswith(".json"):
+    if args.action.endswith(".json"):
         import json
-        with open(args.flow, "r") as file:
+        with open(args.action, "r") as file:
             cfg = Config.fromdict(json.load(file))
     else:
         cfg = Config(
+            args.action,
             # Flow Args
-            args.flow,
             extra_flow_paths=args.extra_flow_paths,
             flows_merging_function=args.flows_merging_function,
             use_mvs=args.use_mvs,

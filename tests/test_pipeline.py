@@ -78,7 +78,7 @@ class TestPipeline(unittest.TestCase):
             output_path = env.folder / "test.mp4"
             config = Config(
                 "assets/River.mp4",
-                pixmap_sources=[PixmapSourceConfig("assets/Frame.png", layer=0)],
+                pixmap_sources=[PixmapSourceConfig("assets/Frame.png", layers=[0])],
                 layers=[LayerConfig(0, "moveref", reset_mode="random", reset_random_factor=1, reset_mask="assets/Mask.png")],
                 output_path=output_path.as_posix(),
                 direction="forward",
@@ -139,7 +139,7 @@ class TestPipeline(unittest.TestCase):
         for attr in attrs:
             self.assertEqual(getattr(config, attr), getattr(doppelganger, attr))
         self.assertEqual(len(config.pixmap_sources), len(doppelganger.pixmap_sources))
-        attrs = ["path", "seek_time", "alteration_path", "repeat", "layer"]
+        attrs = ["path", "seek_time", "alteration_path", "repeat", "layers"]
         for a, b in zip(config.pixmap_sources, doppelganger.pixmap_sources):
             for attr in attrs:
                 self.assertEqual(getattr(a, attr), getattr(b, attr))
