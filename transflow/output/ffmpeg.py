@@ -34,7 +34,7 @@ class FFmpegVideoOutput(VideoOutput):
             "-hide_banner",
             "-loglevel", "error",
             "-f", "rawvideo",
-            "-vcodec","rawvideo",
+            "-vcodec", "rawvideo",
             "-s", f"{self.width}x{self.height}",
             "-pix_fmt", "rgb24",
             "-r", f"{self.framerate}",

@@ -313,8 +313,12 @@ def main():
     # Output Args
     group = parser.add_argument_group("output options")
     group.add_argument("-o", "--output", dest="output", type=str, action="append",
-        help="output path: if provided, path to export the output video (as an "
-        "MP4 file); otherwise, opens a temporary display window")
+        help="zero or more output to export the output frames to: "
+        "either a path to an MP4 video (h264 encoded), "
+        "a template path to export images with the format 'foo-%%02d.png' "
+        "or to a local MJPEG server with the format 'mjpeg:host:port' "
+        "(default is localhost:8080, if not specified); "
+        "if no output is specified, a temporary window gets opened")
     group.add_argument("--vcodec", dest="vcodec", type=str, default="h264",
         help="video codec for the output video file")
     group.add_argument("--size", dest="size", type=str, default=None,
