@@ -4,7 +4,7 @@ from typing import cast
 
 import numpy
 
-from ..utils import parse_hex_color
+from ..utils import parse_color
 from ..types import Flow, Rgb
 from ..config import LayerConfig
 from .layers import Layer
@@ -19,7 +19,7 @@ class Compositor:
     def __init__(self, height: int, width: int, layers: Sequence[Layer], background_color: str = "#ffffff"):
         self.height = height
         self.width = width
-        self.background_color = parse_hex_color(background_color)
+        self.background_color = parse_color(background_color)
         self.background: Rgb = cast(Rgb, numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8))
         self.background[:,:] = self.background_color
         self.layers: Sequence[Layer] = layers

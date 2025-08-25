@@ -71,7 +71,7 @@ class PixmapSource:
     @classmethod
     def from_args(cls,
             path: str,
-            size: tuple[int, int] | None = None,
+            size: tuple[int, int],
             seek: int | None = None,
             seed: int | None = None,
             seek_time: float | None = None,
@@ -79,40 +79,39 @@ class PixmapSource:
             repeat: int = 1,
             flow_path: str | None = None):
         ext = os.path.splitext(path)[1]
-        stillm = re.match(r"(color|noise|bwnoise|cnoise|gradient|first|#?[0-9a-f]{6})(:\d+:\d+)?",
-                          path.lower().strip())
-        if stillm is not None:
-            if stillm.group(2) is not None:
-                width, height = tuple(map(int, stillm.group(2).split(":")[1:]))
-            elif size is not None:
-                width, height = size
+        still_match = re.match(
+            r"^(color:[a-z0-9\(\)#, ]+|color|#?[0-9a-f]{6}|noise|bwnoise|cnoise|gradient|first)$",
+            path.lower().strip())
+        if still_match is not None:
+            width, height = size
+            still_class = still_match.group(1)
+            if still_class == "color":
+                from .still import ColorPixmapSource
+                return ColorPixmapSource(width, height, seed=seed, alteration_path=alteration_path)
+            elif still_class.startswith("color:"):
+                from .still import ColorPixmapSource
+                return ColorPixmapSource(width, height, still_class.split(":", 1)[1], seed=seed, alteration_path=alteration_path)
+            elif re.match(r"#?[0-9a-f]{6}", still_class):
+                from .still import ColorPixmapSource
+                return ColorPixmapSource(width, height, still_class, seed=seed, alteration_path=alteration_path)
+            elif still_class == "noise":
+                from .still import NoisePixmapSource
+                return NoisePixmapSource(width, height, seed, alteration_path)
+            elif still_class == "bwnoise":
+                from .still import BwNoisePixmapSource
+                return BwNoisePixmapSource(width, height, seed, alteration_path)
+            elif still_class == "cnoise":
+                from .still import ColoredNoisePixmapSource
+                return ColoredNoisePixmapSource(width, height, seed, alteration_path)
+            elif still_class == "gradient":
+                from .still import GradientPixmapSource
+                return GradientPixmapSource(width, height, seed)
+            elif still_class == "first":
+                from .still import VideoStillPixmapSource
+                assert flow_path is not None
+                return VideoStillPixmapSource(flow_path, alteration_path)
             else:
-                raise ValueError(f"Please specify a resolution with {stillm.group(1)}:width:height")
-            match stillm.group(1):
-                case "color":
-                    from .still import ColorPixmapSource
-                    return ColorPixmapSource(width, height, seed=seed, alteration_path=alteration_path)
-                case _ if re.match(r"#?[0-9a-f]{6}", stillm.group(1)):
-                    from .still import ColorPixmapSource
-                    return ColorPixmapSource(width, height, stillm.group(1), seed=seed, alteration_path=alteration_path)
-                case "noise":
-                    from .still import NoisePixmapSource
-                    return NoisePixmapSource(width, height, seed, alteration_path)
-                case "bwnoise":
-                    from .still import BwNoisePixmapSource
-                    return BwNoisePixmapSource(width, height, seed, alteration_path)
-                case "cnoise":
-                    from .still import ColoredNoisePixmapSource
-                    return ColoredNoisePixmapSource(width, height, seed, alteration_path)
-                case "gradient":
-                    from .still import GradientPixmapSource
-                    return GradientPixmapSource(width, height, seed)
-                case "first":
-                    from .still import VideoStillPixmapSource
-                    assert flow_path is not None
-                    return VideoStillPixmapSource(flow_path, alteration_path)
-                case _:
-                    raise ValueError(f"Unknown pixmap source '{stillm.group(1)}'")
+                raise ValueError(f"Unknown pixmap source '{still_match.group(1)}'")
         elif os.path.isfile(path) and ext.lower() in PixmapSource.IMAGE_EXTS:
             from .still import ImagePixmapSource
             return ImagePixmapSource(path, alteration_path)

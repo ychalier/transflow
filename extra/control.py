@@ -30,7 +30,7 @@ import pygame
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from transflow.utils import parse_hex_color
+from transflow.utils import parse_color
 from transflow.compositor import Compositor
 from transflow.compositor.layers.data import DataLayer
 
@@ -107,7 +107,7 @@ class Window:
         self.ckpt_path = ckpt_path
         self.pixmap_path = pixmap_path
         self.layer_index = layer_index
-        self.background_color = parse_hex_color(background_color)
+        self.background_color = parse_color(background_color)
         self.silent = silent
         self.flow_path = None
         self.cursor = None

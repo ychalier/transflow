@@ -5,7 +5,7 @@ import cv2
 import numpy
 
 from .source import PixmapSource
-from ..utils import parse_hex_color
+from ..utils import parse_color
 from ..types import Rgb, Pixmap
 
 
@@ -46,7 +46,7 @@ class ColorPixmapSource(StillPixmapSource):
         if self.color is None:
             color = list(numpy.random.randint(0, 256, size=(3), dtype=numpy.uint8))
         else:
-            color = parse_hex_color(self.color)
+            color = parse_color(self.color)
         if self.width is None or self.height is None:
             raise ValueError("Width or height not initialized")
         array = numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8)

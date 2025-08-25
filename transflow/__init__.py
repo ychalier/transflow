@@ -225,7 +225,7 @@ def main():
         description="specify 0 or more pixmap sources, each with their own "
         "options; each source must be bound to 1 or more layers (see `--layer`)")
     group.add_argument("-p", "--pixmap", action=AppendPixmap, nargs="+", metavar=("source", "layer"), type=str,
-        help="either a path to a video or an image file or one of 'color:hex' "
+        help="either a path to a video or an image file or one of 'color:css-color' "
         "(static color), 'noise' (random grey noise), 'bwnoise' (random black "
         "or white noise), 'cnoise' (random colored noise), 'gradient' (random "
         "gradient), 'first' (use the first frame of the first flow input); "
@@ -244,7 +244,7 @@ def main():
     # Compositor Args
     group = parser.add_argument_group("compositor options")
     group.add_argument("--background", dest="compositor_background", type=str, default="#ffffff",
-        help="compositor background color")
+        help="compositor background color, CSS format")
 
     # Layer Args
     group = parser.add_argument_group("layer options",
@@ -330,7 +330,7 @@ def main():
         help="render scale flow intensity")
     group.add_argument("--render-colors", dest="render_colors", type=str, default=None,
         help="colors for rendering flow intensity; "
-        "2 colors, hex format, separated by commas")
+        "2 colors, CSS format, separated by commas")
     group.add_argument("--render-binary", dest="render_binary", action="store_true",
         help="render the flow intensity with exactly two colors, no gradient")
 
