@@ -122,6 +122,11 @@ var leftPanelActiveTab = "Flow Source";
 var websocket;
 var websocketRetryCount = 0;
 var leftPanel;
+var paneMainScroll = {
+    "Flow Source": 0,
+    "Compositor": 0,
+    "Output": 0
+};
 var rightPanel;
 var wssConnectionIndicator;
 var overlayInterval;
@@ -742,6 +747,9 @@ function inflateLeftPanel(container) {
         });
     }
     const paneMain = create(container, "div", "pane");
+    paneMain.addEventListener("scroll", (event) => {
+        paneMainScroll[leftPanelActiveTab] = paneMain.scrollTop;
+    });
     switch (leftPanelActiveTab) {
         case "Flow Source":
             inflatePaneFlowSource(paneMain);
@@ -753,6 +761,7 @@ function inflateLeftPanel(container) {
             inflatePaneOutput(paneMain);
             break;
     }
+    paneMain.scrollTo(0, paneMainScroll[leftPanelActiveTab]);
 }
 
 function inflateRightPanel(container) {
