@@ -818,7 +818,23 @@ function inflateRightPanel(container) {
         config.isRunning = true;
         config.previewUrl = null;
         config.outputUrl = null;
-        websocket.send(`GENERATE ${JSON.stringify(config)}`);
+        let configToSend = JSON.parse(JSON.stringify(config));
+        delete configToSend.previewUrl;
+        delete configToSend.outputUrl;
+        delete configToSend.isRunning;
+        for (let i = config.compositor.layerCount; i < config.compositor.layers.length; i++) {
+            configToSend.compositor.layers.splice(config.compositor.layerCount, 1);
+        }
+        for (let i = 0; i < config.compositor.layerCount; i++) {
+            for (let j = config.compositor.layers[i].sourceCount; j < config.compositor.layers[i].sources.length; j++) {
+                configToSend.compositor.layers[i].sources.splice(config.compositor.layers[i].sourceCount, 1);
+            }
+            delete configToSend.compositor.layers[i].movementDetailsOpen;
+            delete configToSend.compositor.layers[i].introductionDetailsOpen;
+            delete configToSend.compositor.layers[i].resetDetailsOpen;
+        }
+        console.log(configToSend);
+        websocket.send(`GENERATE ${JSON.stringify(configToSend)}`);
     });
     buttonInterrupt.addEventListener("click", () => {
         websocket.send("INTERRUPT");
