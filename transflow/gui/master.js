@@ -35,7 +35,6 @@ var config = {
             flagMoveToEmpty: true,
             flagMoveToFilled: true,
             flagLeaveEmpty: false,
-            maskIntroduction: null,
             introduceEmpty: true,
             introduceFilled: true,
             introduceMoving: true,
@@ -51,12 +50,14 @@ var config = {
             resetRandomFactor: 0.1,
             resetConstantStep: 1,
             resetLinearFactor: 0.1,
+            resetSource: false,
             sourceCount: 1,
             sources: [{
                 file: null,
                 type: "bwnoise",
                 color: "#cff010",
                 alterationPath: null,
+                maskIntroduction: null,
                 seekTime: null,
                 repeat: 1, 
             }]
@@ -652,7 +653,6 @@ function inflatePaneCompositor(container) {
             }
             if (value == "introduction") {
                 const details = createDetails(layerInputs, "Introduction Options", `compositor.layers.${i}.introductionDetailsOpen`);
-                createMaskInput(details, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`, "Boolean mask to select which pixels from the source to introduce.");
                 createBoolInput(details, "Introduce Pixels on Empty Spots", `compositor.layers.${i}.introduceEmpty`);
                 createBoolInput(details, "Introduce Pixels on Filled Spots", `compositor.layers.${i}.introduceFilled`);
                 createBoolInput(details, "Introduce Moving Pixels", `compositor.layers.${i}.introduceMoving`);
@@ -670,13 +670,14 @@ function inflatePaneCompositor(container) {
                     const value = getSelectedValue(resetSelect);
                     resetInputs.innerHTML = "";
                     if (value == "random") {
-                        createRangeInput(resetInputs, "Random Reset Factor", `compositor.layers.${i}.resetRandomFactor`, "Reset probability");
+                        createRangeInput(resetInputs, "Random Reset Factor", `compositor.layers.${i}.resetRandomFactor`, "Reset probability.");
+                        createBoolInput(resetInputs, "Reset Source", `compositor.layers.${i}.resetSource`, "Also reset the source index of the resetted cells.");
                     }
                     if (value == "constant") {
-                        createNumberInput(resetInputs, "Constant Reset Step", `compositor.layers.${i}.resetConstantStep`, 0, null, 1, "Reset speed in pixel/frame");
+                        createNumberInput(resetInputs, "Constant Reset Step", `compositor.layers.${i}.resetConstantStep`, 0, null, 1, "Reset speed in pixel/frame.");
                     }
                     if (value == "linear") {
-                        createRangeInput(resetInputs, "Linear Reset Factor", `compositor.layers.${i}.resetLinearFactor`, "Interpolation factor");
+                        createRangeInput(resetInputs, "Linear Reset Factor", `compositor.layers.${i}.resetLinearFactor`, "Interpolation factor.");
                     }
                 }
                 resetSelect.addEventListener("change", onResetChange);
@@ -702,6 +703,7 @@ function inflatePaneCompositor(container) {
             typeSelect.addEventListener("change", onBitmapSelectChange);
             onBitmapSelectChange();
             createFileOpenInput(sourceContainer, "Alteration", `compositor.layers.${i}.sources.${j}.alterationPath`, "*.png", "Path to a PNG image to overlay on the pixmap source, allowing for more controlled outputs; see `control.py` in the extra ressources.");
+            createMaskInput(sourceContainer, "Introduction Mask", `compositor.layers.${i}.sources.${j}.maskIntroduction`, "Boolean mask to select which pixels from the source to introduce.");
             createTimestampInput(sourceContainer, "Seek Time", `compositor.layers.${i}.sources.${j}.seekTime`, "00:00:00");
             createNumberInput(sourceContainer, "Repeat", `compositor.layers.${i}.sources.${j}.repeat`, 0, null, 1);    
             const buttonContainer = create(sourceContainer, "div", "button-container");

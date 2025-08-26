@@ -1,6 +1,8 @@
 from ...types import Flow
 from .layer import Layer
 
+import numpy
+
 
 class StaticLayer(Layer):
 
@@ -11,4 +13,5 @@ class StaticLayer(Layer):
     def update(self, flow: Flow):
         for source in self.sources:
             pixmap = source.next()
-            self.rgba[:,:,:pixmap.shape[2]] = pixmap
+            where = numpy.nonzero(source.introduction_mask)
+            self.rgba[:,:,:pixmap.shape[2]][where] = pixmap[where]

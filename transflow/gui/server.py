@@ -119,7 +119,6 @@ class WebsocketServer(threading.Thread):
                     pixels_can_move_to_empty_spot=layer_dict["flagMoveToEmpty"],
                     pixels_can_move_to_filled_spot=layer_dict["flagMoveToFilled"],
                     moving_pixels_leave_empty_spot=layer_dict["flagLeaveEmpty"],
-                    mask_introduction=layer_dict["maskIntroduction"],
                     introduce_pixels_on_empty_spots=layer_dict["introduceEmpty"],
                     introduce_pixels_on_filled_spots=layer_dict["introduceFilled"],
                     introduce_moving_pixels=layer_dict["introduceMoving"],
@@ -132,6 +131,7 @@ class WebsocketServer(threading.Thread):
                     reset_random_factor=layer_dict["resetRandomFactor"],
                     reset_constant_step=layer_dict["resetConstantStep"],
                     reset_linear_factor=layer_dict["resetLinearFactor"],
+                    reset_source=layer_dict["resetSource"],
                 )
                 layers.append(layer_config)
                 for source_dict in layer_dict["sources"][:layer_dict["sourceCount"]]:
@@ -145,6 +145,7 @@ class WebsocketServer(threading.Thread):
                     pixmap_config = PixmapSourceConfig(
                         pixmap_path,
                         alteration_path=source_dict["alterationPath"],
+                        introduction_path=source_dict["maskIntroduction"],
                         seek_time=source_dict["seekTime"],
                         repeat=source_dict["repeat"],
                         layers=[i]

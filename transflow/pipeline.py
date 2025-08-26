@@ -24,7 +24,7 @@ from .pixmap import PixmapSource
 from .compositor import PixmapSourceInterface, Compositor
 from .output import VideoOutput, ZipOutput, NumpyOutput
 from .output.render import render1d, render2d
-from .utils import multiply_arrays, binarize_arrays, absmax, upscale_array
+from .utils import multiply_arrays, binarize_arrays, absmax, upscale_array, load_bool_mask
 from .types import Flow
 
 
@@ -439,17 +439,19 @@ class Pipeline:
     
     def _setup_compositor(self):
         assert self.fs_width is not None and self.fs_height is not None
+        height = int(self.fs_height * self.fs_height_factor)
+        width = int(self.fs_width * self.fs_width_factor)
         if self.compositor is None:
             self.compositor = Compositor.from_args(
-                int(self.fs_height * self.fs_height_factor),
-                int(self.fs_width * self.fs_width_factor),
+                height,
+                width,
                 self.config.layers,
                 background_color=self.config.compositor_background)
         interfaces: dict[int, list[PixmapSourceInterface]] = {}
         for pixmap_config, pixmap_queue in zip(self.config.pixmap_sources, self.pixmap_queues):
             for layer_index in pixmap_config.layers:
                 interfaces.setdefault(layer_index, [])
-                interfaces[layer_index].append(PixmapSourceInterface(pixmap_queue))
+                interfaces[layer_index].append(PixmapSourceInterface(pixmap_queue, load_bool_mask(pixmap_config.introduction_path, (height, width), True)))
         self.compositor.set_sources(interfaces)
 
     def _setup_output(self):

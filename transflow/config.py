@@ -14,11 +14,13 @@ class PixmapSourceConfig:
             path: str,
             seek_time: float | str | None = None,
             alteration_path: str | None = None,
+            introduction_path: str | None = None,
             repeat: int | None = 1,
             layers: list[int] | None = None):
         self.path: str = path
         self.seek_time: float | None = parse_timestamp(seek_time)
         self.alteration_path: str | None = alteration_path
+        self.introduction_path: str | None = introduction_path
         self.repeat: int = 1 if repeat is None else repeat
         self.layers: list[int] = [0] if layers is None else layers
 
@@ -28,6 +30,7 @@ class PixmapSourceConfig:
             d["path"],
             seek_time=d.get("seek_time", None),
             alteration_path=d.get("alteration_path", None),
+            introduction_path=d.get("introduction_path", None),
             repeat=d.get("repeat", 1),
             layers=d.get("layers", None),
         )
@@ -37,6 +40,7 @@ class PixmapSourceConfig:
             "path": self.path,
             "seek_time": self.seek_time,
             "alteration_path": self.alteration_path,
+            "introduction_path": self.introduction_path,
             "repeat": self.repeat,
             "layers": self.layers,
         }
@@ -67,7 +71,7 @@ class LayerConfig:
             reset_random_factor: float | None = None,
             reset_constant_step: float | None = None,
             reset_linear_factor: float | None = None,
-            mask_introduction: str | None = None,
+            reset_source: bool | None = None,
             introduce_pixels_on_empty_spots: bool | None = None,
             introduce_pixels_on_filled_spots: bool | None = None,
             introduce_moving_pixels: bool | None = None,
@@ -90,7 +94,7 @@ class LayerConfig:
         self.reset_random_factor = 1 if reset_random_factor is None else reset_random_factor
         self.reset_constant_step = 1 if reset_constant_step is None else reset_constant_step
         self.reset_linear_factor = 0.1 if reset_linear_factor is None else reset_linear_factor
-        self.mask_introduction = mask_introduction
+        self.reset_source = parse_bool_arg(reset_source, False)
         self.introduce_pixels_on_empty_spots = parse_bool_arg(introduce_pixels_on_empty_spots, True)
         self.introduce_pixels_on_filled_spots = parse_bool_arg(introduce_pixels_on_filled_spots, True)
         self.introduce_moving_pixels = parse_bool_arg(introduce_moving_pixels, True)
@@ -116,7 +120,7 @@ class LayerConfig:
             reset_random_factor=d.get("reset_random_factor", 1),
             reset_constant_step=d.get("reset_constant_step", 1),
             reset_linear_factor=d.get("reset_linear_factor", 0.1),
-            mask_introduction=d.get("mask_introduction", None),
+            reset_source=d.get("reset_source", False),
             introduce_pixels_on_empty_spots=d.get("introduce_pixels_on_empty_spots", True),
             introduce_pixels_on_filled_spots=d.get("introduce_pixels_on_filled_spots", True),
             introduce_moving_pixels=d.get("introduce_moving_pixels", True),
@@ -142,7 +146,7 @@ class LayerConfig:
             "reset_random_factor": self.reset_random_factor,
             "reset_constant_step": self.reset_constant_step,
             "reset_linear_factor": self.reset_linear_factor,
-            "mask_introduction": self.mask_introduction,
+            "reset_source": self.reset_source,
             "introduce_pixels_on_empty_spots": self.introduce_pixels_on_empty_spots,
             "introduce_pixels_on_filled_spots": self.introduce_pixels_on_filled_spots,
             "introduce_moving_pixels": self.introduce_moving_pixels,

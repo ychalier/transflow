@@ -235,6 +235,9 @@ def main():
     group.add_argument("--alteration", dest="pixmap_alteration", action=SetPixmap, type=str, default=None,
         help="path to a PNG image to overlay on the pixmap source, allowing "
         "for more controlled outputs; see `control.py` in the extra ressources")
+    group.add_argument("-i", "--introduction", dest="introduction_path", action=SetPixmap, type=str, default=None,
+        help="boolean mask to select which pixels from the source to introduce"
+        + bool_mask_help)
     group.add_argument("--pixmap-seek", action=SetPixmap, type=str, default=None,
         help="start timestamp for pixmap source, formatted as 'HH:MM:SS.FFFF'")
     group.add_argument("--pixmap-repeat", action=SetPixmap, type=int, default=1,
@@ -286,9 +289,9 @@ def main():
         help="mask to select where to apply the reset" + mask_help + "; "
         "if the 'random' reset mode is selected, the mask is interpreted as a "
         "pixel-wise reset probability map ('moveref' or 'sum' only)")
-    group.add_argument("-i", "--introduction-mask", dest="mask_introduction", action=SetLayer, type=str, default=None,
-        help="boolean mask to select which pixels from the source to introduce"
-        + bool_mask_help + " ('introduction' only)")
+    group.add_argument("--reset-source", action=ConstLayer, const=True, nargs=0,
+        help="when in 'random' reset mode, also reset the source index "
+        "of the resetted cells ('moveref' or 'sum' only)")
     group.add_argument("--no-introduce-on-empty", dest="introduce_pixels_on_empty_spots", action=ConstLayer, const=False, nargs=0,
         help="prevent pixels from being introduced on empty spots "
         "('introduction' only)")
@@ -413,6 +416,7 @@ def main():
                     d["path"],
                     seek_time=d.get("pixmap_seek"),
                     alteration_path=d.get("pixmap_alteration"),
+                    introduction_path=d.get("introduction_path"),
                     repeat=d.get("pixmap_repeat"),
                     layers=d["layers"],
                 )
@@ -435,7 +439,7 @@ def main():
                     reset_random_factor=d.get("reset_factor"),
                     reset_constant_step=d.get("reset_factor"),
                     reset_linear_factor=d.get("reset_factor"),
-                    mask_introduction=d.get("mask_introduction"),
+                    reset_source=d.get("reset_source"),
                     introduce_pixels_on_empty_spots=d.get("introduce_pixels_on_empty_spots"),
                     introduce_pixels_on_filled_spots=d.get("introduce_pixels_on_filled_spots"),
                     introduce_moving_pixels=d.get("introduce_moving_pixels"),

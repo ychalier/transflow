@@ -15,8 +15,6 @@ class IntroductionLayer(MovementLayer):
 
     def __init__(self, *args):
         MovementLayer.__init__(self, *args)
-        # TODO: consider using one mask per source
-        self.mask_introduction: BoolMask = load_bool_mask(self.config.mask_introduction, (self.height, self.width), True)
         self.introduced_once: bool = False
 
     def _update_introduction(self):
@@ -37,8 +35,6 @@ class IntroductionLayer(MovementLayer):
         if not self.config.introduce_unmoving_pixels:
             mask.flat[numpy.where(self.flow_flat) == 0] = 0
 
-        mask = numpy.multiply(mask, self.mask_introduction)
-
         consider_flow = not (self.config.introduce_on_all_filled_spots or self.config.introduce_on_all_empty_spots)
         if self.config.introduce_on_all_filled_spots:
             mask[where_filled] = 1
@@ -47,7 +43,7 @@ class IntroductionLayer(MovementLayer):
 
         for i, source in enumerate(self.sources):
             pixmap = source.next()
-            where_target = numpy.nonzero(mask.flat)[0]
+            where_target = numpy.nonzero(numpy.multiply(mask, source.introduction_mask).flat)[0]
             if consider_flow:
                 where_source = where_target + self.flow_flat[where_target]
             else:

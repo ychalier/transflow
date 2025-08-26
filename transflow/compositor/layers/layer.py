@@ -22,6 +22,9 @@ class Layer:
         self.sources: list[PixmapSourceInterface] = sources
         self.rgba = numpy.zeros((self.height, self.width, 4), dtype=numpy.uint8)
         self.mask_alpha: FloatMask = load_float_mask(self.config.mask_alpha, (self.height, self.width), 1)
+    
+    def set_sources(self, sources: list[PixmapSourceInterface]):
+        self.sources = sources
 
     def update(self, flow: Flow):
         raise NotImplementedError()

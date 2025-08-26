@@ -305,6 +305,8 @@ Instead of outputting a transformed pixmap, you can visualize the flow. For this
 
 You can specify one or more pixmap sources with the `-p, --pixmap` argument. This argument takes a path to an image or video file, or a keyword for generating a static image (see the [Generative Pixmap Sources](#generative-pixmap-sources) section). Multiple pixmap sources can be specified by passing the argument multiple times. Each pixmap source can be assigned to one or more layers (see [Compositor](#compositor) section). By default, all pixmap sources are assigned to layer 0.
 
+By default, a pixmap spans the whole layer it belongs to. You can apply an introduction mask to select which parts of the layer is covered by the source, with the `-i, --introduction` argument. See the [Masks](#masks) section for details on how to create masks.
+
 Each pixmap source can be seeked and/or repeated independently, similarly to the flow source. See the [Seek, Duration and Repeat](#seek-duration-and-repeat) section for details.
 
 ### Generative Pixmap Sources
@@ -397,7 +399,7 @@ Argument | Description
 
 Pixels of layers that manipulates coordinates (`moveref` and `sum` types) can be reset (or "healed") overtime. This setting is off by default, but you may enable it by specifying a reset mode with the `-r, --reset [mode] [factor]` argument. Possible modes are `off` (default), `random`, `constant` or `linear`.
 
-**Random Reset.** At each frame, a random value between 0 and 1 is rolled for each pixel. If the value is below a threshold (the specified `factor`, 0.1 be default), the pixel at that place gets its original value back.
+**Random Reset.** At each frame, a random value between 0 and 1 is rolled for each pixel. If the value is below a threshold (the specified `factor`, 0.1 be default), the pixel at that place gets its original value back. In random mode, the `--reset-source` flag can be set to also reset the source index of resetted pixels (useful when multiple pixmap sources are used).
 
 **Constant Reset.** At each frame, pixels move towards their original position with a constant speed (the specified `factor`, 1 by default).
 
@@ -411,7 +413,6 @@ By default, a layer of type `introduction` starts with an empty canvas, and pixe
 
 Argument | Description
 -------- | -----------
-`-i, --introduction-mask` | Boolean mask to select which pixels from the source to introduce.
 `--no-introduce-on-empty` | Prevent pixels from being introduced on empty spots.
 `--no-introduce-on-filled` | Prevent pixels from being introduced on filled spots.
 `--no-introduce-moving` | Prevent moving pixels from being introduced.
@@ -419,6 +420,9 @@ Argument | Description
 `-n, --introduce-once` | Introduce pixels only once, at the first frame.
 `-a, --introduce-on-all-filled` | Force introduction of pixels on all currently filled spots.
 `--introduce-on-all-empty` | Force introduction of pixels on all currently empty spots.
+
+> [!NOTE]
+> The introduction mask (see the `-i, --introduction` argument in the [Pixmap Sources](#pixmap-sources) section) is used as a base to select which pixels to grab from the pixmaps.
 
 ## Webcam Sources
 

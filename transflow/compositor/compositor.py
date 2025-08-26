@@ -50,4 +50,4 @@ class Compositor:
 
     def set_sources(self, pixmap_interfaces: dict[int, list[PixmapSourceInterface]]):
         for i, layer in enumerate(self.layers):
-            layer.sources = pixmap_interfaces.get(i, [])
+            layer.set_sources(pixmap_interfaces.get(i, []))

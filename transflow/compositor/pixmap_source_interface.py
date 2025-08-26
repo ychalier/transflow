@@ -2,7 +2,7 @@ import multiprocessing
 
 import numpy
 
-from ..types import Pixmap
+from ..types import Pixmap, BoolMask
 
 
 class EndOfPixmap(StopIteration):
@@ -11,10 +11,11 @@ class EndOfPixmap(StopIteration):
 
 class PixmapSourceInterface:
 
-    def __init__(self, queue: multiprocessing.Queue):
+    def __init__(self, queue: multiprocessing.Queue, introduction_mask: BoolMask):
         self.queue = queue
         self.image: Pixmap | None = None
         self.counter: int = -1
+        self.introduction_mask: BoolMask = introduction_mask
 
     def get(self) -> Pixmap:
         assert self.image is not None

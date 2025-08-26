@@ -134,12 +134,12 @@ class TestPipeline(unittest.TestCase):
             "cv_config", "flow_filters", "direction", "seek_time",
             "duration_time", "repeat", "lock_expr", "lock_mode",
             "compositor_background",
-            "vcodec", "size", "view_flow_magnitude", "render_scale", "render_colors",
+            "vcodec", "size", "view_flow", "view_flow_magnitude", "render_scale", "render_colors",
             "render_binary", "seed"]
         for attr in attrs:
             self.assertEqual(getattr(config, attr), getattr(doppelganger, attr))
         self.assertEqual(len(config.pixmap_sources), len(doppelganger.pixmap_sources))
-        attrs = ["path", "seek_time", "alteration_path", "repeat", "layers"]
+        attrs = ["path", "seek_time", "alteration_path", "introduction_path", "repeat", "layers"]
         for a, b in zip(config.pixmap_sources, doppelganger.pixmap_sources):
             for attr in attrs:
                 self.assertEqual(getattr(a, attr), getattr(b, attr))
@@ -148,7 +148,7 @@ class TestPipeline(unittest.TestCase):
             "transparent_pixels_can_move", "pixels_can_move_to_empty_spot",
             "pixels_can_move_to_filled_spot", "moving_pixels_leave_empty_spot",
             "reset_mode", "reset_mask", "reset_random_factor",
-            "reset_constant_step", "reset_linear_factor", "mask_introduction",
+            "reset_constant_step", "reset_linear_factor", "reset_source",
             "introduce_pixels_on_empty_spots", "introduce_pixels_on_filled_spots",
             "introduce_moving_pixels", "introduce_unmoving_pixels", "introduce_once",
             "introduce_on_all_filled_spots", "introduce_on_all_empty_spots"]
