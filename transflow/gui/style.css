@@ -229,6 +229,14 @@ video {
     margin-top: 1rem;
 }
 
+.input-container.inline {
+    flex-direction: row;
+    align-items: baseline;
+    margin-top: .4rem;
+    flex-wrap: wrap;
+    gap: .4rem;
+}
+
 .button-container {
     margin-top: 1rem;
     display: flex;
@@ -320,4 +328,21 @@ summary ~ * {
 
 details > *:not(summary) {
     margin-left: .8rem;
+}
+
+.maskarg {
+    display: flex;
+    align-items: baseline;
+}
+
+.maskarg label {
+    margin-right: .2rem;
+}
+
+.maskarg select {
+    border-left: none;
+}
+
+.mask-inputs {
+    margin-top: .4rem;
 }

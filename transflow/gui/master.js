@@ -137,6 +137,12 @@ function getSelectedValue(select) {
     }
 }
 
+function setSelectedValue(select, value) {
+    for (const option of select.querySelectorAll("option")) {
+        option.selected = option.value == value;
+    }
+}
+
 function getPathSuffix(path) {
     const split = path.split(".");
     return "." + split[split.length - 1];
@@ -150,7 +156,9 @@ function getPathName(path) {
 
 function createInputContainer(container, label) {
     const inputContainer = create(container, "div", "input-container");
-    create(inputContainer, "label").textContent = label;
+    if (label != null) {
+        create(inputContainer, "label").textContent = label;
+    }
     return inputContainer;
 }
 
@@ -208,6 +216,96 @@ function createFileOpenInput(container, label, key, filetypes) {
             configSet(key, null);
             inflateLeftPanel(leftPanel);
         });
+    }
+}
+
+function createMaskInput(container, label, key) {
+    const maskContainer = createInputContainer(container, label);
+    const maskSelect = create(maskContainer, "select");
+    const maskArgs = {
+        zeros: [],
+        ones: [],
+        random: [],
+        border: ["top", "right", "bottom", "left"],
+        hline: ["height"],
+        vline: ["width"],
+        circle: ["radius"],
+        rect: ["width", "height"],
+        grid: ["nrows", "ncols", "radius"]
+    }
+    let anyOptionSelected = false;
+    const baseValue = configGet(key);
+    for (const value of ["file", ...Object.keys(maskArgs)]) {
+        const option = create(maskSelect, "option");
+        option.value = value;
+        option.textContent = value;
+        if (baseValue != null && baseValue.startsWith(value)) {
+            option.selected = true;
+            anyOptionSelected = true;
+        }
+    }
+    if (!anyOptionSelected) {
+        maskSelect.querySelector("option").selected = true; // that's file input
+    }
+    const maskInputs = create(container, "div", "mask-inputs");
+    function onArgChange() {
+        let configValue = getSelectedValue(maskSelect);
+        for (const arg of maskInputs.querySelectorAll(".maskarg")) {
+            configValue += ":" + arg.querySelector("input").value;
+            const select = arg.querySelector("select");
+            if (select != null) {
+                configValue += getSelectedValue(select);
+            }
+        }
+        configSet(key, configValue);
+    }
+    function onMaskSelectChange() {
+        const value = getSelectedValue(maskSelect);
+        maskInputs.innerHTML = "";
+        if (value == "file") {
+            createFileOpenInput(maskInputs, null, key, IMAGE_FILETYPES);
+        } else {
+            const argsContainer = createInputContainer(maskInputs, null);
+            argsContainer.classList.add("inline");
+            for (const arg of maskArgs[value]) {
+                const argContainer = create(argsContainer, "div", "maskarg");
+                const argLabel = create(argContainer, "label");
+                argLabel.textContent = arg;
+                const argInput = create(argContainer, "input");
+                argInput.type = "number";
+                argInput.value = 0;
+                argInput.size = 3;
+                argInput.min = 0;
+                argInput.step = 1;
+                argInput.addEventListener("change", onArgChange);
+                if (arg != "nrows" && arg != "ncols") {
+                    const argSelect = create(argContainer, "select");
+                    const optionPixels = create(argSelect, "option");
+                    optionPixels.value = "";
+                    optionPixels.textContent = "px";
+                    optionPixels.selected = true;
+                    const optionPercent = create(argSelect, "option");
+                    optionPercent.value = "%";
+                    optionPercent.textContent = "%";
+                    argSelect.addEventListener("change", onArgChange);
+                }
+            }
+            onArgChange();
+        }
+    }
+    maskSelect.addEventListener("change", onMaskSelectChange);
+    onMaskSelectChange();
+    if (anyOptionSelected) {
+        const baseArgValues = baseValue.slice(baseValue.indexOf(":") + 1).split(":");
+        const maskArgs =  maskInputs.querySelectorAll(".maskarg");
+        if (baseArgValues.length != maskArgs.length) {
+            console.error("Invalid number of arguments between", baseArgValues, "and", maskArgs);
+        }
+        for (let i = 0; i < maskArgs.length; i++) {
+            maskArgs[i].querySelector("input").value = baseArgValues[i].replace(/[^\d]*/g, "");
+            setSelectedValue(maskArgs[i].querySelector("select"), baseArgValues[i].replace(/\d*/g, ""));
+        }
+        onArgChange();
     }
 }
 
@@ -484,7 +582,7 @@ function inflatePaneFlowSource(container) {
     createFileOpenInput(container, "File", "flowSource.file", VIDEO_FILETYPES);
     createBoolInput(container, "Use Motion Vectors", "flowSource.useMvs");
     createSelect(container, "Direction", "flowSource.direction", ["backward", "forward"]);
-    createFileOpenInput(container, "Mask", "flowSource.maskPath", IMAGE_FILETYPES);
+    createMaskInput(container, "Mask", "flowSource.maskPath");
     createFileOpenInput(container, "Kernel", "flowSource.kernelPath", "*.npy");
     createFileOpenInput(container, "CV Config", "flowSource.cvConfig", "*.json");
     createTextInput(container, "Filters", "flowSource.flowFilters", "scale=2;clip=5;polar=r:a");
@@ -512,8 +610,8 @@ function inflatePaneCompositor(container) {
             if (value == "moveref" || value == "introduction") {
                 const details = create(layerInputs, "details");
                 create(details, "summary").textContent = "Movement Options";
-                createFileOpenInput(details, "Source Mask", `compositor.layers.${i}.maskSource`, IMAGE_FILETYPES);
-                createFileOpenInput(details, "Destination Mask", `compositor.layers.${i}.maskDestination`, IMAGE_FILETYPES);
+                createMaskInput(details, "Source Mask", `compositor.layers.${i}.maskSource`);
+                createMaskInput(details, "Destination Mask", `compositor.layers.${i}.maskDestination`);
                 createBoolInput(details, "Transparent Pixels Can Move", `compositor.layers.${i}.flagMoveTransparent`);
                 createBoolInput(details, "Pixels Can Move to Empty Spots", `compositor.layers.${i}.flagMoveToEmpty`);
                 createBoolInput(details, "Pixels Can Move to Filled Spots", `compositor.layers.${i}.flagMoveToFilled`);
@@ -522,7 +620,7 @@ function inflatePaneCompositor(container) {
             if (value == "introduction") {
                 const details = create(layerInputs, "details");
                 create(details, "summary").textContent = "Introduction Options";
-                createFileOpenInput(details, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`, IMAGE_FILETYPES);
+                createMaskInput(details, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`);
                 createBoolInput(details, "Introduce Pixels on Empty Spots", `compositor.layers.${i}.introduceEmpty`);
                 createBoolInput(details, "Introduce Pixels on Filled Spots", `compositor.layers.${i}.introduceFilled`);
                 createBoolInput(details, "Introduce Moving Pixels", `compositor.layers.${i}.introduceMoving`);
@@ -534,7 +632,7 @@ function inflatePaneCompositor(container) {
             if (value == "moveref" || value == "sum") {
                 const details = create(layerInputs, "details");
                 create(details, "summary").textContent = "Reset Options";
-                createFileOpenInput(details, "Reset Mask", `compositor.layers.${i}.maskReset`, IMAGE_FILETYPES);
+                createMaskInput(details, "Reset Mask", `compositor.layers.${i}.maskReset`);
                 const resetSelect = createSelect(details, "Reset Mode", `compositor.layers.${i}.resetMode`, ["off", "random", "constant", "linear"]);
                 const resetInputs = create(details, "div", "input-container");
                 function onResetChange() {
