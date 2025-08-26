@@ -261,18 +261,18 @@ def main():
         help="layer opacity mask, boolean" + bool_mask_help)
     group.add_argument("--move-mask-source", dest="mask_src", action=SetLayer, type=str, default=None,
         help="boolean mask for where to allow pixels to move from"
-        + bool_mask_help + " ('moveref' only)")
+        + bool_mask_help + " ('moveref' or 'introduction' only)")
     group.add_argument("--move-mask-destination", dest="mask_dst", action=SetLayer, type=str, default=None,
         help="boolean mask for where to allow pixels to move to"
-        + bool_mask_help + " ('moveref' only)")
+        + bool_mask_help + " ('moveref' or 'introduction' only)")
     group.add_argument("--move-from-empty", dest="transparent_pixels_can_move", action=ConstLayer, const=True, nargs=0,
-        help="allow transparent pixels to move ('moveref' only)")
+        help="allow transparent pixels to move ('moveref' or 'introduction' only)")
     group.add_argument("--no-move-to-empty", dest="pixels_can_move_to_empty_spot", action=ConstLayer, const=False, nargs=0,
-        help="prevent pixels from moving to empty spots ('moveref' only)")
+        help="prevent pixels from moving to empty spots ('moveref' or 'introduction' only)")
     group.add_argument("--no-move-to-filled", dest="pixels_can_move_to_filled_spot", action=ConstLayer, const=False, nargs=0,
-        help="prevent pixels from moving to filled spots ('moveref' only)")
+        help="prevent pixels from moving to filled spots ('moveref' or 'introduction' only)")
     group.add_argument("-e", "--leave-empty-spot", dest="moving_pixels_leave_empty_spot", action=ConstLayer, const=True, nargs=0,
-        help="moving pixels leave an empty spot behind them ('moveref' only)")
+        help="moving pixels leave an empty spot behind them ('moveref' or 'introduction' only)")
     group.add_argument("-r", "--reset", dest="reset", action=ResetAction, nargs="+", metavar=("mode", "factor"), type=str, default="off",
         help="reset mode, one of 'off' (nothing happens), 'random' (pixels are "
         "randomly moved back to their original position), 'constant' (pixels "
