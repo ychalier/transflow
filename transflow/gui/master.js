@@ -65,9 +65,8 @@ var config = {
     },
     output: {
         file: null,
-        outputIntensity: false,
-        outputHeatmap: false,
-        outputAccumulator: false,
+        viewFlow: false,
+        viewFlowMagnitude: false,
         renderScale: 0.1,
         renderColors: null,
         renderBinary: false,
@@ -724,10 +723,11 @@ function inflatePaneOutput(container) {
     createTextInput(container, "Video Codec", "output.vcodec", "h264");
     createBoolInput(container, "Round Flow", "flowSource.roundFlow", "Export the flow as integer values (faster and lighter, but may introduce artefacts).");
     createBoolInput(container, "Export Flow", "flowSource.exportFlow", "Export computed flow to a file as a ZIP archive.");
-    createBoolInput(container, "Output Intensity", "output.outputIntensity", "Ignore the compositor and render the flow intensity as output.");
-    createNumberInput(container, "Render Scale", "output.renderScale", null, null, 0.001, "Render scale for the flow intensity.");
-    createTextInput(container, "Render Colors", "output.renderColors", "#000000,#ffffff", "Colors for rendering the flow intensity.");
-    createBoolInput(container, "Render Binary", "output.renderBinary", "Render the flow intensity with exactly two colors, no gradient.");
+    createBoolInput(container, "View Flow", "output.viewFlow", "Ignore the compositor and render the flow as output");
+    createBoolInput(container, "View Flow Magnitude", "output.viewFlowMagnitude", "Ignore the compositor and render the flow magnitude as output.");
+    createNumberInput(container, "Render Scale", "output.renderScale", null, null, 0.001, "Render scale for the visualizing the flow or its magnitude.");
+    createTextInput(container, "Render Colors", "output.renderColors", "#000000,#ffffff", "Colors for rendering the flow or its magnitude.");
+    createBoolInput(container, "Render Binary", "output.renderBinary", "Render the flow magnitude with exactly two colors, no gradient.");
     createNumberInput(container, "Checkpoint Every", "output.checkpointEvery", 0, null, 1, "Export a checkpoint every N frame.");
     createBoolInput(container, "Checkpoint End", "output.checkpointEnd", "Export a checkpoint at the last frame.");
 }

@@ -177,7 +177,8 @@ class Config:
             output_path: str | list[str] | None = None,
             vcodec: str = "h264",
             size: str | tuple[int, int] | list[int] | None = None,
-            output_intensity: bool = False,
+            view_flow: bool = False,
+            view_flow_magnitude: bool = False,
             render_scale: float = 1,
             render_colors: str | tuple[str, ...] | list[str] | None = None,
             render_binary: bool = False,
@@ -237,7 +238,8 @@ class Config:
         if isinstance(size, list):
             size = (size[0], size[1])
         self.size: tuple[int, int] | None = size
-        self.output_intensity: bool = output_intensity
+        self.view_flow: bool = view_flow
+        self.view_flow_magnitude: bool = view_flow_magnitude
         self.render_scale: float = render_scale
         if isinstance(render_colors, str):
             render_colors = tuple(render_colors.split(","))
@@ -273,7 +275,8 @@ class Config:
             output_path=d.get("output_path", None),
             vcodec=d.get("vcodec", "h264"),
             size=d.get("size", None),
-            output_intensity=d.get("output_intensity", False),
+            view_flow=d.get("view_flow", False),
+            view_flow_magnitude=d.get("view_flow_magnitude", False),
             render_scale=d.get("render_scale", 1),
             render_colors=d.get("render_colors", None),
             render_binary=d.get("render_binary", False),
@@ -302,7 +305,8 @@ class Config:
             "output_path": self.output_path,
             "vcodec": self.vcodec,
             "size": self.size,
-            "output_intensity": self.output_intensity,
+            "view_flow": self.view_flow,
+            "view_flow_magnitude": self.view_flow_magnitude,
             "render_scale": self.render_scale,
             "render_colors": self.render_colors,
             "render_binary": self.render_binary,

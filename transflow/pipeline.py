@@ -23,7 +23,7 @@ from .flow import FlowSource
 from .pixmap import PixmapSource
 from .compositor import PixmapSourceInterface, Compositor
 from .output import VideoOutput, ZipOutput, NumpyOutput
-from .output.render import render1d
+from .output.render import render1d, render2d
 from .utils import multiply_arrays, binarize_arrays, absmax, upscale_array
 from .types import Flow
 
@@ -219,7 +219,8 @@ class Pipeline:
     @property
     def has_output(self) -> bool:
         return bool(self.config.pixmap_sources)\
-            or self.config.output_intensity
+            or self.config.view_flow\
+            or self.config.view_flow_magnitude
 
     def export_checkpoint(self):
         assert self.compositor is not None
@@ -395,6 +396,8 @@ class Pipeline:
             self.logger.debug("Started pixmap process no. %d", i)
 
     def _wait_for_pixmap_sources(self):
+        if not (self.pixmap_processes):
+            return
         pixmap_sources_to_load = len(self.pixmap_processes)
         pixmap_sources_loaded = 0
         assert self.metadata_queue is not None
@@ -476,7 +479,7 @@ class Pipeline:
             if self.export_config and output.output_path is not None:
                 with pathlib.Path(output.output_path).with_suffix(".config.json").open("w") as file:
                     json.dump(self.config.todict(), file)
-            oq = multiprocessing.Queue()
+            oq = multiprocessing.Queue(maxsize=2)
             oq.cancel_join_thread()
             self.output_queues.append(oq)
             op = OutputProcess(output, oq, self.log_queue, self.log_level)
@@ -504,9 +507,11 @@ class Pipeline:
     def _update_output(self, flow: Flow) -> bool:
         assert self.compositor is not None
         out_frame = None
-        if self.config.output_intensity:
-            flow_intensity = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
-            out_frame = render1d(flow_intensity, self.config.render_scale, self.config.render_colors, self.config.render_binary)
+        if self.config.view_flow:
+            out_frame = render2d(flow, self.config.render_scale, self.config.render_colors)
+        elif self.config.view_flow_magnitude:
+            mag = numpy.sqrt(numpy.sum(numpy.power(flow, 2), axis=2))
+            out_frame = render1d(mag, self.config.render_scale, self.config.render_colors, self.config.render_binary)
         elif self.pixmap_queues:
             out_frame = self.compositor.render()
         if out_frame is not None:

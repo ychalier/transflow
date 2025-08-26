@@ -324,15 +324,17 @@ def main():
     group.add_argument("--size", dest="size", type=str, default=None,
         help="target video size with format WIDTHxHEIGHT, "
         "used for determining input webcam size")
-    group.add_argument("--view-flow", dest="output_intensity", action="store_true",
-        help="ignore the compositor and render the flow intensity as output")
+    group.add_argument("--view-flow", dest="view_flow", action="store_true",
+        help="ignore the compositor and render the flow as output")
+    group.add_argument("--view-flow-magnitude", dest="view_flow_magnitude", action="store_true",
+        help="ignore the compositor and render the flow magnitude as output")
     group.add_argument("--render-scale", dest="render_scale", type=float, default=0.1,
-        help="render scale for the flow intensity")
+        help="scale rendering the flow (values are considered between -1 and 1)")
     group.add_argument("--render-colors", dest="render_colors", type=str, default=None,
-        help="colors for rendering the flow intensity; "
-        "2 colors, CSS format, separated by commas")
+        help="colors for rendering the flow, CSS format, separated by commas; "
+        "4 colors for the flow, 2 for the magnitude")
     group.add_argument("--render-binary", dest="render_binary", action="store_true",
-        help="render the flow intensity with exactly two colors, no gradient")
+        help="render the flow magnitude with exactly two colors, no gradient")
 
     # General Args
     group = parser.add_argument_group("general options")
@@ -449,7 +451,8 @@ def main():
             output_path=args.output,
             vcodec=args.vcodec,
             size=args.size,
-            output_intensity=args.output_intensity,
+            view_flow=args.view_flow,
+            view_flow_magnitude=args.view_flow_magnitude,
             render_scale=args.render_scale,
             render_colors=args.render_colors,
             render_binary=args.render_binary,

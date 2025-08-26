@@ -293,13 +293,13 @@ Mergin Function | Description
 
 ## Flow Visualization
 
-Instead of outputting a transformed pixmap, you can visualize the flow intensity. For this, you must NOT provide a `-p, --pixmap` argument, and instead set the following flag: `--view-flow`.
+Instead of outputting a transformed pixmap, you can visualize the flow. For this, you must NOT provide a `-p, --pixmap` argument, and instead set one of the following flag: `--view-flow` or `--view-flow-magnitude`.
 
-**Scale.** As values are absolute in length of pixels, they are scaled between 0 and 1 to be rendered. Thus, you may specify a scaling factor with the `--render-scale` argument. Default is 0.1.
+**Scale.** As values are absolute in pixels, they are should be scaled between -1 and 1 to be rendered (or 0 and 1 for the magnitude visualization). Thus, you may specify a scaling factor with the `--render-scale` argument. Default is 0.1.
 
-**Colors.** Color palettes are specified with the `--render-colors` attribute as hex values separated by commas. Black and white by default.
+**Colors.** Color palettes are specified with the `--render-colors` attribute as hex values separated by commas. For visualizing the flow, 4 colors are needed, one for each direction: by default, yellow (to the left), blue (to the right), magenta (to the top) and green (to the bottom). For visualizing the magnitude, 2 colors are needed, one for low values and one for high values: they are, by default, black and white.
 
-**Quantization.** You can force output to be binary (either one color or the other, without shades), by setting the `--render-binary` flag. This may help for some postprocessing operations.
+**Quantization.** You can force the magnitude visualization output to be binary (either one color or the other, without shades), by setting the `--render-binary` flag. This may help for some postprocessing operations.
 
 ## Pixmap Sources
 

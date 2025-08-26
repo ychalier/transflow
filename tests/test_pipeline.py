@@ -134,7 +134,7 @@ class TestPipeline(unittest.TestCase):
             "cv_config", "flow_filters", "direction", "seek_time",
             "duration_time", "repeat", "lock_expr", "lock_mode",
             "compositor_background",
-            "vcodec", "size", "output_intensity", "render_scale", "render_colors",
+            "vcodec", "size", "view_flow_magnitude", "render_scale", "render_colors",
             "render_binary", "seed"]
         for attr in attrs:
             self.assertEqual(getattr(config, attr), getattr(doppelganger, attr))
@@ -183,6 +183,25 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(pipeline.cursor, n - 1)
             self.assertEqual(pipeline.expected_length, n - 1)
 
+    def test_view_flow(self):
+        with TestEnvironment() as env:
+            config = Config(
+                "assets/River.mp4",
+                output_path=(env.folder / "out.mp4").as_posix(),
+                view_flow=True,
+                duration_time=0.1)
+            env.run(config)
+            self.assertTrue((env.folder / "out.mp4").is_file())
+    
+    def test_view_flow_magnitude(self):
+        with TestEnvironment() as env:
+            config = Config(
+                "assets/River.mp4",
+                output_path=(env.folder / "out.mp4").as_posix(),
+                view_flow_magnitude=True,
+                duration_time=0.1)
+            env.run(config)
+            self.assertTrue((env.folder / "out.mp4").is_file())
 
 class TestTimings(unittest.TestCase):
 
