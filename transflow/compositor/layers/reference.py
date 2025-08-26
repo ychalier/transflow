@@ -36,7 +36,7 @@ class ReferenceLayer(DataLayer):
     def __init__(self, *args):
         DataLayer.__init__(self, *args)
         self.data[:,:,0:2] = self.base.copy() # shape: (height, width, 2) [i, j]
-        self.data[:,:,2] = 1
+        self.data[:,:,self.INDEX_ALPHA] = 1
         self.data[:,:,self.INDEX_SOURCE] = 0
         self.reset_mode: ResetMode = ResetMode.from_string(self.config.reset_mode)
         self.reset_mask: FloatMask = load_float_mask(self.config.reset_mask, (self.height, self.width), 1)
@@ -73,12 +73,14 @@ class ReferenceLayer(DataLayer):
 
     def _update_rgba(self):
         for i, source in enumerate(self.sources):
-            where = numpy.where(self.data[:,:,self.INDEX_SOURCE] == i)
+            where = numpy.ones((self.height, self.width), dtype=numpy.bool)
+            where[numpy.where(self.data[:,:,self.INDEX_SOURCE] != i)] = 0
+            where[numpy.where(self.data[:,:,self.INDEX_ALPHA] == 0)] = 0
+            where = numpy.nonzero(where)
             pixmap = source.next()
             mapping_i = numpy.clip(numpy.round(self.data[:,:,0]), 0, self.height - 1)[where]
             mapping_j = numpy.clip(numpy.round(self.data[:,:,1]), 0, self.width - 1)[where]
             self.rgba[:,:,:pixmap.shape[2]][where] = pixmap[mapping_i, mapping_j]
-            self.rgba[:,:,3] = self.data[:,:,self.INDEX_ALPHA] # TODO: pixmap alpha channel (if any) gets overwritten
 
     def update(self, flow: Flow):
         self._update_reset()
