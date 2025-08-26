@@ -43,6 +43,9 @@ var config = {
             introduceOnce: false,
             introduceAllEmpty: false,
             introduceAllFilled: false,
+            movementDetailsOpen: false,
+            introductionDetailsOpen: false,
+            resetDetailsOpen: false,
             resetMode: "off",
             maskReset: null,
             resetRandomFactor: 0.1,
@@ -171,7 +174,7 @@ function createInputContainer(container, label, helpText=null) {
     return inputContainer;
 }
 
-function configGet(key) { //TODO: Support arrays
+function configGet(key) {
     const split = key.split(".");
     let o = config;
     for (let i = 0; i < split.length - 1; i++) {
@@ -180,7 +183,7 @@ function configGet(key) { //TODO: Support arrays
     return o[split[split.length - 1]];
 }
 
-function configSet(key, value) { //TODO: Support arrays
+function configSet(key, value) {
     const split = key.split(".");
     let o = config;
     for (let i = 0; i < split.length - 1; i++) {
@@ -610,6 +613,18 @@ function inflatePaneFlowSource(container) {
     createTextInput(container, "Lock Expression", "flowSource.lockExpr", "(1,1),(4,1) (stay) t>=2 and t<=3 (skip)", helpText="In mode 'stay', expr must be a list of couples (start_t, duration) for when to lock the flow; in mode 'skip', expr must be a Pythonic expression based on variable `t`; timings are relative to the output frame timestamps, in seconds.");
 }
 
+function createDetails(container, summaryText, key) {
+    const details = create(container, "details");
+    create(details, "summary").textContent = summaryText;
+    if (configGet(key)) {
+        details.open = true;
+    }
+    details.addEventListener("toggle", () => {
+        configSet(key, details.open);
+    });
+    return details;
+}
+
 function inflatePaneCompositor(container) {
     container.innerHTML = "";
     createColorInput(container, "Background Color", "compositor.backgroundColor");
@@ -623,8 +638,7 @@ function inflatePaneCompositor(container) {
             layerInputs.innerHTML = "";
             createFileOpenInput(layerInputs, "Mask Alpha", `compositor.layers.${i}.maskAlpha`, IMAGE_FILETYPES, "Layer opacity mask, boolean.");
             if (value == "moveref" || value == "introduction") {
-                const details = create(layerInputs, "details");
-                create(details, "summary").textContent = "Movement Options";
+                const details = createDetails(layerInputs, "Movement Options", `compositor.layers.${i}.movementDetailsOpen`);
                 createMaskInput(details, "Source Mask", `compositor.layers.${i}.maskSource`, "Boolean mask for where to allow pixels to move from.");
                 createMaskInput(details, "Destination Mask", `compositor.layers.${i}.maskDestination`, "Boolean mask for where to allow pixels to move to.");
                 createBoolInput(details, "Transparent Pixels Can Move", `compositor.layers.${i}.flagMoveTransparent`);
@@ -633,8 +647,7 @@ function inflatePaneCompositor(container) {
                 createBoolInput(details, "Moving Pixels Leave an Empty Spot", `compositor.layers.${i}.flagLeaveEmpty`);
             }
             if (value == "introduction") {
-                const details = create(layerInputs, "details");
-                create(details, "summary").textContent = "Introduction Options";
+                const details = createDetails(layerInputs, "Introduction Options", `compositor.layers.${i}.introductionDetailsOpen`);
                 createMaskInput(details, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`, "Boolean mask to select which pixels from the source to introduce.");
                 createBoolInput(details, "Introduce Pixels on Empty Spots", `compositor.layers.${i}.introduceEmpty`);
                 createBoolInput(details, "Introduce Pixels on Filled Spots", `compositor.layers.${i}.introduceFilled`);
@@ -645,8 +658,7 @@ function inflatePaneCompositor(container) {
                 createBoolInput(details, "Introduce On All Filled Spots", `compositor.layers.${i}.introduceAllFilled`);
             }
             if (value == "moveref" || value == "sum") {
-                const details = create(layerInputs, "details");
-                create(details, "summary").textContent = "Reset Options";
+                const details = createDetails(layerInputs, "Reset Options", `compositor.layers.${i}.resetDetailsOpen`);
                 createMaskInput(details, "Reset Mask", `compositor.layers.${i}.maskReset`);
                 const resetSelect = createSelect(details, "Reset Mode", `compositor.layers.${i}.resetMode`, ["off", "random", "constant", "linear"], "One of 'off' (nothing happens), 'random' (pixels are randomly moved back to their original position), 'constant' (pixels move towards their original position with a constant speed) or 'linear' (pixels move towards their original position with a speed relative to the distance from their origin).");
                 const resetInputs = create(details, "div", "input-container");
