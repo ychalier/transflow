@@ -20,6 +20,7 @@ from ..types import Rgb
 # aiohttp/web_urldispatcher.py:204: DeprecationWarning: Bare functions are deprecated, use async ones
 warnings.filterwarnings("ignore", message="Bare functions are deprecated, use async ones")
 logger = logging.getLogger(__name__)
+logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 
 class MjpegStream:

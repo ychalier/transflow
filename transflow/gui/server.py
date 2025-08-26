@@ -22,6 +22,8 @@ import websockets.exceptions
 
 logger = logging.getLogger(__name__)
 base_dir = Path(__file__).parent
+logging.getLogger("asyncio").setLevel(logging.WARNING)
+logging.getLogger("websockets.server").setLevel(logging.WARNING)
 
 
 def monitor_job(wss: "WebsocketServer", output_file: str | None, status_queue: multiprocessing.queues.Queue):
@@ -35,8 +37,13 @@ def monitor_job(wss: "WebsocketServer", output_file: str | None, status_queue: m
             continue
         except TimeoutError:
             continue
-    while not status_queue.empty():
-        status_queue.get(timeout=1)
+        except OSError:
+            break
+    try:
+        while not status_queue.empty():
+            status_queue.get(timeout=1)
+    except OSError:
+        pass
     status_queue.close()
     wss.job = None
     if output_file is not None:
@@ -253,20 +260,23 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=os.path.dirname(__file__), **kwargs)
 
     def do_GET(self):
-        parsed = urlparse(self.path)
-        if parsed.path == "/media":
-            query = parse_qs(parsed.query)
-            media_path = query.get('url', [None])[0]
-            if media_path and os.path.isfile(media_path):
-                return self.serve_file_range(media_path)
-            else:
-                return self.send_error(404, "File not found")
-        elif parsed.path == "/wss":
-            assert isinstance(self.server, WebServer)
-            return self.serve_text(f"ws://{self.server.wss.host}:{self.server.wss.port}")
-        elif parsed.path == "/ping":
-            return self.serve_text("PONG")
-        return super().do_GET()
+        try:
+            parsed = urlparse(self.path)
+            if parsed.path == "/media":
+                query = parse_qs(parsed.query)
+                media_path = query.get('url', [None])[0]
+                if media_path and os.path.isfile(media_path):
+                    return self.serve_file_range(media_path)
+                else:
+                    return self.send_error(404, "File not found")
+            elif parsed.path == "/wss":
+                assert isinstance(self.server, WebServer)
+                return self.serve_text(f"ws://{self.server.wss.host}:{self.server.wss.port}")
+            elif parsed.path == "/ping":
+                return self.serve_text("PONG")
+            return super().do_GET()
+        except ConnectionAbortedError:
+            pass
 
     def serve_text(self, text: str, encoding: str = "utf8"):
         self.send_response(200)
@@ -309,6 +319,9 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
                     if not chunk:
                         break
                     self.wfile.write(chunk)
+    
+    def log_message(self, format: str, *args):
+        logger.debug(format)
 
 
 class WebServer(http.server.HTTPServer):
@@ -323,8 +336,13 @@ def start_gui(host: str = "localhost", port: int = 8000, mjpeg_port: int = 8001)
     with WebServer(host, port, mjpeg_port) as httpd:
         url = f"http://{host}:{port}"
         logger.info(f"Listening at {url}")
+        print(f"Listening at {url}, close with ^C.")
         webbrowser.open(url)
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            pass
+            if httpd.wss.job is None or httpd.wss.job_cancel_event is None or httpd.wss.job_monitoring is None:
+                return
+            print("Interrupting…")
+            httpd.wss.job_cancel_event.set()
+            httpd.wss.job_monitoring.join()
