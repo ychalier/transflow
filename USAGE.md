@@ -21,17 +21,17 @@ This document provides details on how to use the `transflow` module for performi
   - [Applying A Mask](#applying-a-mask)
   - [Flow Convolution Kernel](#flow-convolution-kernel)
 - [Multiple Flow Sources](#multiple-flow-sources)
-- [Accumulation Methods](#accumulation-methods)
-- [Accumulator Heatmap](#accumulator-heatmap)
-- [Accumulator Visualization](#accumulator-visualization)
-- [Resetting Accumulator](#resetting-accumulator)
-- [Generative Bitmap Sources](#generative-bitmap-sources)
+- [Flow Visualization](#flow-visualization)
+- [Compositor](#compositor)
+- [Layer Reset](#layer-reset)
+- [Generative Pixmap Sources](#generative-pixmap-sources)
 - [Webcam Sources](#webcam-sources)
-- [Bitmap Alteration](#bitmap-alteration)
+- [Pixmap Alteration](#pixmap-alteration)
 - [Live Visualization](#live-visualization)
 - [Interrupting Processing](#interrupting-processing)
 - [Restart From Checkpoint](#restart-from-checkpoint)
 - [Seek, Duration and Repeat](#seek-duration-and-repeat)
+- [Masks](#masks)
 - [Logging](#logging)
 
 ## Basic Flow Transfer
@@ -39,22 +39,22 @@ This document provides details on how to use the `transflow` module for performi
 The simplest process consists in taking the motion from a video file and applying it to an image:
 
 ```console
-transflow flow.mp4 -b image.jpg -o output.mp4
+transflow flow.mp4 -p image.jpg -o output.mp4
 ```
 
-The first argument `flow.mp4` is the video to extract the optical flow from. The `-b, --bitmap` argument specifies the "bitmap" source to apply the flow to, an image in this case. The `-o, --output` argument specifies the path to the output video. The output video will match the framerate and duration of the flow source (minus the first frame, as computation requires two frames). When done, the output file is automatically opened, unless the `-nx, --no-execute` flag is passed.
+The first argument `flow.mp4` is the video to extract the optical flow from. The `-p, --pixmap` argument specifies the "pixmap" source to apply the flow to, an image in this case. The `-o, --output` argument specifies the path to the output video. The output video will match the framerate and duration of the flow source (minus the first frame, as computation requires two frames). When done, the output file is automatically opened, unless the `--no-exec` flag is passed.
 
-**Video Bitmap Source.** If the bitmap source is a video, the output will halt when the first source is exhausted. Output framerate is determined by the flow source, hence you might want to make sure both sources have matching framerates. FFmpeg's [fps filter](https://trac.ffmpeg.org/wiki/ChangingFrameRate) will help you with that.
+**Video Pixmap Source.** If the pixmap source is a video, the output will halt when the first source is exhausted. Output framerate is determined by the flow source, hence you might want to make sure both sources have matching framerates. FFmpeg's [fps filter](https://trac.ffmpeg.org/wiki/ChangingFrameRate) will help you with that.
 
-**Dimensions.** Flow and bitmap sources should have the same dimensions. Again, FFmpeg's [scale filter](https://trac.ffmpeg.org/wiki/Scaling) will help you with that. If the flow source is smaller than the bitmap source by an integer factor, it is scaled accordingly. Thus, a 320x180 video can be used as a flow source for a 1920x1080 bitmap. Non-integer scaling is not supported. The bitmap can not be smaller than the flow.
+**Dimensions.** Flow and pixmap sources should have the same dimensions. Again, FFmpeg's [scale filter](https://trac.ffmpeg.org/wiki/Scaling) will help you with that. If the flow source is smaller than the pixmap source by an integer factor, it is scaled accordingly. Thus, a 320x180 video can be used as a flow source for a 1920x1080 pixmap. Non-integer scaling is not supported. The pixmap can not be smaller than the flow.
 
-**Output Filename.** Unless the `-re, --replace` flag is passed, the program automatically generates unique filenames to output files to avoid naming conflicts, by adding a numerical suffix. Output templates such as `frames/%05d.png` can be used to directly output frames as images.
+**Output Filename.** Unless the `--overwrite` flag is passed, the program automatically generates unique filenames to output files to avoid naming conflicts, by adding a numerical suffix. Output templates such as `frames/%05d.png` can be used to directly output frames as images.
 
-**Output Format.** Output codec can be specified with the `-vc, --vcodec` argument. Default value is `h264`. Possible values can be listed with the `ffmpeg -codecs` command.
+**Output Format.** Output codec can be specified with the `--vcodec` argument. Default value is `h264`. Possible values can be listed with the `ffmpeg -codecs` command.
 
 ## Detailed Example
 
-Flow Source | Bitmap Source | Result
+Flow Source | Pixmap Source | Result
 ----------- | ------------- | ------
 [River.mp4](assets/River.mp4) | [Deer.jpg](assets/Deer.jpg) | [Output.mp4](out/ExampleDeer.mp4)
 [![River.mp4](assets/River.gif)](assets/River.mp4) | [![Deer.jpg](assets/Deer.jpg)](assets/Deer.jpg) | [![Output.mp4](out/ExampleDeer.gif)](out/ExampleDeer.mp4)
@@ -63,7 +63,7 @@ The first step is to use a graphic editor to add a white frame around the deer. 
 
 With the editor, create a new image where you cut out the deer, color it white, and color everything else black. This will create the reset mask: while all pixels will get displaced, the pixels forming the deer will get healed again and again. Applying a linear gradient can be used to make the head more resilient than the body.
 
-Modified Bitmap Source | Reset Mask
+Modified Pixmap Source | Reset Mask
 ---------------------- | ----------
 [Frame.png](assets/Frame.png) | [Mask.png](assets/Mask.png)
 [![Frame.png](assets/Frame.png)](assets/Frame.png) | [![Mask.png](assets/Mask.png)](assets/Mask.png)
@@ -71,17 +71,16 @@ Modified Bitmap Source | Reset Mask
 Then, all you need is this one command (assuming input files are in the [assets](assets) folder, as in the basic repository structure):
 
 ```console
-transflow assets/River.mp4 -d forward -b assets/Frame.png -rm random -rk assets/Mask.png -ha 0:0:0:0 -o Output.mp4
+transflow assets/River.mp4 --direction forward --pixmap assets/Frame.png --reset random 0.8 --reset-mask assets/Mask.png --output Output.mp4
 ```
 
 - The first argument is the flow source, the river video.
-- The `-d` argument switches flow direction to `forward`, for a more grainy result (see [Flow Direction](#flow-direction) section). 
-- The `-b` argument specifies the bitmap source, the deer image with the white frame.
-- The `-rm` argument specifies the reset method to random (see [Resetting Accumulator](#resetting-accumulator) section).
-- The `-rk` argument specifies the path to the mask image created: the brightest its pixels are, the more likely they will heal.
-- The `-ha` argument is required for the effect to work. It forces the heatmap to be always zero, ensuring the reset effect occurs everywhere everytime (see [Accumulator Heatmap](#accumulator-heatmap) section).
+- The `--direction` argument switches flow direction to `forward`, for a more grainy result (see [Flow Direction](#flow-direction) section). 
+- The `--pixmap` argument specifies the pixmap source, the deer image with the white frame.
+- The `--reset` argument specifies the reset method to random (see [Layer Reset](#layer-reset) section) with a reset probability of 80%.
+- The `--reset-mask` argument specifies the path to the mask image created: the brightest its pixels are, the more likely they will heal.
 
-A final detail could be to control the flow scale to ease the start and the end, and add a peak flow time. This can be achieved with the `-ff` argument (see [Flow Filters](#flow-filters) section). Simply add the following to the above command:
+A final detail could be to control the flow scale to ease the start and the end, and add a peak flow time. This can be achieved with the `-f, --filters` argument (see [Flow Filters](#flow-filters) section). Simply add the following to the above command:
 
 ```console
 -ff "scale=max(0, -.0000061191*t**5+.0003680860*t**4-.0075620960*t**3+.0609758832*t**2-.0717236701*t+.0079797631)"
@@ -93,7 +92,7 @@ The formula is based on time `t`. The river video lasts for about 30 seconds. Su
 
 ## GUI
 
-You can run Transflow with `gui` as the only argument to open a graphical user interface. This GUI allows you to set various parameters interactively. It also provides a live preview of the output. It runs as a local webserver. You may use arguments `-gh, --gui-host`, `-gp, --gui-port` and `-gm, --gui-mjpeg-port` to specify the host and ports to use. By default, it listens on `localhost:8000` for the GUI and `localhost:8001` for the MJPEG stream. Once started, your browser should automatically open the GUI. If not, you can open it manually by navigating to the URL
+You can run Transflow with `gui` as the only argument to open a graphical user interface. This GUI allows you to set various parameters interactively. It also provides a live preview of the output. It runs as a local webserver. You may use arguments `--gui-host`, `--gui-port` and `--gui-mjpeg-port` to specify the host and ports to use. By default, it listens on `localhost:8000` for the GUI and `localhost:8001` for the MJPEG stream. Once started, your browser should automatically open the GUI. If not, you can open it manually by navigating to the URL
 
 ```console
 transflow gui
@@ -105,7 +104,7 @@ Here is a screenshot of the GUI:
 
 ## Flow Estimation Methods
 
-By default, Optical flow extraction relies on [OpenCV](https://opencv.org/)'s implementation of [Gunnar Farneback's algorithm](#gunnar-farnebäck). Other methods can be used, such as [Lukas-Kanade](#lukas-kanade), [Horn-Schunck](#horn-schunck) or [LiteFlowNet](#liteflownet). To use a different method or change their parameters, the path to a JSON configuration file can be passed with the `-cc, --cv-config` argument. If the keyword `window` is passed to this argument, a [Qt](https://pypi.org/project/PySide6/) window shows up to tune parameters live, which combines nicely with [live visualization](#live-visualization).
+By default, Optical flow extraction relies on [OpenCV](https://opencv.org/)'s implementation of [Gunnar Farneback's algorithm](#gunnar-farnebäck). Other methods can be used, such as [Lukas-Kanade](#lukas-kanade), [Horn-Schunck](#horn-schunck) or [LiteFlowNet](#liteflownet). To use a different method or change their parameters, the path to a JSON configuration file can be passed with the `-c, --cv-config` argument. If the keyword `window` is passed to this argument, a [Qt](https://pypi.org/project/PySide6/) window shows up to tune parameters live, which combines nicely with [live visualization](#live-visualization).
 
 > [!NOTE]
 > On Linux, you may have to install the `libxcb-cursor0` package for the Qt window to work.
@@ -172,7 +171,7 @@ Statistical approach based on neural networks. Very accurate results, medium per
 
 ## Using Motion Vectors
 
-To fasten computation, you can use H264 motion vectors as a flow field. For this, you have to set the `-mv, --use-mvs` flag, and the video must be encoded in a specific way, to make sure frames are encoded relative to the previous frame only. Using FFmpeg, this can be achieved with the following command:
+To fasten computation, you can use H264 motion vectors as a flow field. For this, you have to set the `--mv` flag, and the video must be encoded in a specific way, to make sure frames are encoded relative to the previous frame only. Using FFmpeg, this can be achieved with the following command:
 
 ```console
 ffmpeg -i input.mp4 -refs 1 -bf 0 -g 9999 output.mp4 
@@ -201,24 +200,21 @@ This way, we compute the origin for every pixel in the next frame, solving most 
 
 You can specify the flow direction you want with `-d, --direction {forward,backward}`. If nothing is specified, `backward` is the default. If using motion vectors as flow source, then the direction will be forced to `forward`.
 
-> [!NOTE]
-> Forward direction is not compatible with the sum accumulator (see [Accumulation Methods](#accumulation-methods) section). 
-
 ## Flow Preprocessing
 
-By adding the `-ef, --export-flow` flag, the program will save the extracted optical flow to a file with the `.flow.zip` extension. This file can later be used as a flow source, instead of a video file:
+By adding the `-F, --export-flow` flag, the program will save the extracted optical flow to a file with the `.flow.zip` extension. This file can later be used as a flow source, instead of a video file:
 
 ```console
-transflow myvideo.flow.zip -b image.jpg -o output.mp4
+transflow myvideo.flow.zip -p image.jpg -o output.mp4
 ```
 
-If the `-rf, --round-flow` argument is specified, the output flow will be integers instead of floats. This greatly reduces file size and processing speed, at the cost of quantization artefacts.
+If the `--export-rounded-flow` flag is specified, the output flow will be integers instead of floats. This greatly reduces file size and processing speed, at the cost of quantization artefacts.
 
 ## Flow Transformations
 
 ### Flow Filters
 
-The flow matrix can be modified by applying several filters, with the `-ff, --flow-filters` argument. You may specify a filter with the syntax `name=arg1:arg2:arg3:…`. Mulitple filters can be specified, simply separate them with a semicolon `;`.
+The flow matrix can be modified by applying several filters, with the `-f, --filters` argument. You may specify a filter with the syntax `name=arg1:arg2:arg3:…`. Mulitple filters can be specified, simply separate them with a semicolon `;`.
 
 Filter | Arguments | Description
 ------ | --------- | -----------
@@ -231,29 +227,29 @@ Arguments can be floating constants, or Pythonic expressions based on some varia
 
 A few examples:
 
-- `-ff threshold=2` nullifies any vector with magnitude lower or equal to 2 pixels.
-- `-ff scale=2;clip=5` multiplies the flow by 2 and scales down vectors with magnitude greater than 5 pixels.
-- `-ff scale=1-math.exp(-.5*t)` fakes a slow start in the first seconds.
-- `-ff polar=r:a` does nothing.
-- `-ff polar=r:0` forces horizontal movement, to the left with backward flow, to the right with forward flow.
+- `-f threshold=2` nullifies any vector with magnitude lower or equal to 2 pixels.
+- `-f scale=2;clip=5` multiplies the flow by 2 and scales down vectors with magnitude greater than 5 pixels.
+- `-f scale=1-math.exp(-.5*t)` fakes a slow start in the first seconds.
+- `-f polar=r:a` does nothing.
+- `-f polar=r:0` forces horizontal movement, to the left with backward flow, to the right with forward flow.
 
 > [!NOTE]
 > The magnitude of flow vectors is computed as their L2 norm. Values are in pixels.
 
 ### Flow Locking
 
-You can lock the flow (to mimic the P-frames duplication effect) with the `-lo, --lock` argument. Two modes are available, which can be specified with the `-lm, --lock-mode` argument.
+You can lock the flow (to mimic the P-frames duplication effect) with the `--lock [mode] [expression]` argument. Two modes are available:
 
-- **`stay` (default):** the `-lo` argument is a list of couples of the form `(time_start, duration)`. Timings correspond to the output frame timestamp, and are all expressed in seconds. When locked, the flow source is paused. When unlocked, it resumes from where it was paused. For instance, if you want to lock the flow twice for one second, at two different moments, you may use the following argument: `-lm stay -lo "(1,1),(4,1)"`.
-- **`skip`:** the `-lo` argument is a Pythonic expression based on the variable `t`, the time in seconds. `math` and `random` modules are available during evaluation. When locked, the flow source is still iterated. When unlocked, it skips all frames encountered while locked. The output of the epxression is evaluated with Python's if statement: integer value 0 means the flow in unlocked, value 1 means the flow is locked. For instance, if you want to lock the flow after two seconds for one second, you may use the following argument: `-lm skip -lo "t>=2 and t<=3"`.
+- **`stay` (default):** the expression must be a list of couples of the form `(time_start, duration)`. Timings correspond to the output frame timestamp, and are all expressed in seconds. When locked, the flow source is paused. When unlocked, it resumes from where it was paused. For instance, if you want to lock the flow twice for one second, at two different moments, you may use the following argument: `--lock stay "(1,1),(4,1)"`.
+- **`skip`:** the expression argument must be a Pythonic expression based on the variable `t`, the time in seconds. `math` and `random` modules are available during evaluation. When locked, the flow source is still iterated. When unlocked, it skips all frames encountered while locked. The output of the epxression is evaluated with Python's if statement: integer value 0 means the flow in unlocked, value 1 means the flow is locked. For instance, if you want to lock the flow after two seconds for one second, you may use the following argument: `--lock skip "t>=2 and t<=3"`.
 
 ### Applying A Mask
 
-You can pass the path to an image file with the `-fm, --flow-mask`. The image luminance will be scaled between 0 (black) and 1 (white) and multiplied element-wise to the flow array.
+You can specify a mask with the `--mask`, which will be multiplied element-wise to the flow array. See the [Masks](#masks) section for details on how to create masks.
 
 ### Flow Convolution Kernel
 
-Flow can be filtered with convolution kernels by specifying the path to a kernel file with the `-fk, --flow-kernel` argument. A kernel file is a [NumPy export](https://numpy.org/doc/stable/reference/generated/numpy.save.html) of an [`ndarray`](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy-ndarray), in NumPy `.npy` format. For instance, the following script generates a basic blur filter:
+Flow can be filtered with convolution kernels by specifying the path to a kernel file with the `--kernel` argument. A kernel file is a [NumPy export](https://numpy.org/doc/stable/reference/generated/numpy.save.html) of an [`ndarray`](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy-ndarray), in NumPy `.npy` format. For instance, the following script generates a basic blur filter:
 
 ```python
 import numpy
@@ -264,7 +260,7 @@ The folder [assets/kernels](assets/kernels) contains a set of basic kernels. The
 
 ## Multiple Flow Sources
 
-Multiple flow sources can be specified and merged. A first source must be specified as the first positional argument, as usually, and will be used to determine defaults metrics such as output framerate. Extra flow sources can be specified using the `-f, --extra-flow` argument. You may provide one or more paths to valid flow inputs (video files, preprocessed archives, webcam indices). For each pair of frame, flows from all sources will be merged according to the operation specified with the `-sm, --flows-merging-function` argument, which, by default, is the sum.
+Multiple flow sources can be specified and merged. A first source must be specified as the first positional argument, as usually, and will be used to determine defaults metrics such as output framerate. Extra flow sources can be specified using the `--flow` argument. You may provide one or more paths to valid flow inputs (video files, preprocessed archives, webcam indices). For each pair of frame, flows from all sources will be merged according to the operation specified with the `--merge` argument, which, by default, is the sum.
 
 Mergin Function | Description
 --------------- | -----------
@@ -277,113 +273,122 @@ Mergin Function | Description
 `product`       | Product of all flows
 `sum`           | Sum of all flows (default)
 
-## Accumulation Methods
+## Flow Visualization
 
-Flow are accumulated accross time. You can specify the accumulation method with the `-m, --acc-method` argument. Possible values are `map` (default), `sum`, `stack`, `crumble` or `canvas`. The accumulator is in charge of transforming frames from the bitmap source.
+Instead of outputting a transformed pixmap, you can visualize the flow intensity. For this, you must NOT provide a `-p, --pixmap` argument, and instead set the following flag: `--view-flow`.
 
-Method | Description | Example
------- | ----------- | -------
-`map`  | Flows are applied to a quantized UV map. Looks grainy. | ![](https://drive.chalier.fr/protected/transflow/map.gif)
-`sum`  | Flows (backward only, see [Flow Direction](#flow-direction) section) are summed in a floating array. Looks smooth.| ![](https://drive.chalier.fr/protected/transflow/sum.gif)
-`stack` | Pixels are considered as particles moving on a grid. Computation is VERY slow.| ![](https://drive.chalier.fr/protected/transflow/stack.gif)
-`crumble` | Moved pixels leave an empty spot behind them.| ![](https://drive.chalier.fr/protected/transflow/crumble.gif)
-`canvas` | Paste moving pixels from the bitmap to a canvas, and applying the flow on the canvas | ![](https://drive.chalier.fr/protected/transflow/canvas.gif)
+**Scale.** As values are absolute in length of pixels, they are scaled between 0 and 1 to be rendered. Thus, you may specify a scaling factor with the `--render-scale` argument. Default is 0.1.
 
-**Background Color.** `stack` and `crumble` accumulator can contain empty spots, which are assigned a background color set with the `-ab, --accumulator-background` argument (white by default). If provided, the color must be expressed as an HEX value. For instance, for a green chroma key, one may use the `-ab 00ff00` argument.
+**Colors.** Color palettes are specified with the `--render-colors` attribute as hex values separated by commas. Black and white by default.
 
-**Stack Parameters.** An empty cell has a color defined by the . A non-empty cell has a color determined by the function passed to the `-sc, --stack-composer` argument. Possible values are:
-- `top`: color of the last arrived pixel (default)
-- `add`: all pixels in stack are summed, value is clipped
-- `sub`: subtractive composition, as in painting
-- `avg`: average all pixels in stack
+**Quantization.** You can force output to be binary (either one color or the other, without shades), by setting the `--render-binary` flag. This may help for some postprocessing operations.
 
-**Canvas Parameters.** The canvas accumulator has potential for generalizing a lot of features, though it is not ready yet. So far, you may specify the following arguments:
+## Compositor
 
-Argument | Default | Description
--------- | ------- | -----------
-`-ic, --initial-canvas` | White | Either a HEX color or a path to an image. Will define the initial canvas image.
-`-bm, --bitmap-mask` | `None` | (Optionnal) A path to a black and white image. If set, only bitmap pixels from white regions in the mask will be introduced, otherwise, every moving bitmap pixels are considered.
-`-bi, --bitmap-introduction-flags` | 5 | See below.If 1, moving bitmap pixels are pasted onto the canvas. If 2, bitmap pixels from the mask are pasted onto the canvas. If 3, the two previous effects apply.
-`-cr, --crumble` | `False` | Enable the crumbling effect: a moving pixels leaves an empty spot behind it. Moving pixels from the bitmap bypass this behavior.
+<!-- ## Accumulation Methods -->
+<!--  -->
+<!-- Flow are accumulated accross time. You can specify the accumulation method with the `-m, --acc-method` argument. Possible values are `map` (default), `sum`, `stack`, `crumble` or `canvas`. The accumulator is in charge of transforming frames from the pixmap source. -->
+<!--  -->
+<!-- Method | Description | Example -->
+<!-- ------ | ----------- | ------- -->
+<!-- `map`  | Flows are applied to a quantized UV map. Looks grainy. | ![](https://drive.chalier.fr/protected/transflow/map.gif) -->
+<!-- `sum`  | Flows (backward only, see [Flow Direction](#flow-direction) section) are summed in a floating array. Looks smooth.| ![](https://drive.chalier.fr/protected/transflow/sum.gif) -->
+<!-- `stack` | Pixels are considered as particles moving on a grid. Computation is VERY slow.| ![](https://drive.chalier.fr/protected/transflow/stack.gif) -->
+<!-- `crumble` | Moved pixels leave an empty spot behind them.| ![](https://drive.chalier.fr/protected/transflow/crumble.gif) -->
+<!-- `canvas` | Paste moving pixels from the pixmap to a canvas, and applying the flow on the canvas | ![](https://drive.chalier.fr/protected/transflow/canvas.gif) -->
+<!--  -->
+<!-- **Background Color.** `stack` and `crumble` accumulator can contain empty spots, which are assigned a background color set with the `-ab, --accumulator-background` argument (white by default). If provided, the color must be expressed as an HEX value. For instance, for a green chroma key, one may use the `-ab 00ff00` argument. -->
+<!--  -->
+<!-- **Stack Parameters.** An empty cell has a color defined by the . A non-empty cell has a color determined by the function passed to the `-sc, --stack-composer` argument. Possible values are: -->
+<!-- - `top`: color of the last arrived pixel (default) -->
+<!-- - `add`: all pixels in stack are summed, value is clipped -->
+<!-- - `sub`: subtractive composition, as in painting -->
+<!-- - `avg`: average all pixels in stack -->
+<!--  -->
+<!-- **Canvas Parameters.** The canvas accumulator has potential for generalizing a lot of features, though it is not ready yet. So far, you may specify the following arguments: -->
+<!--  -->
+<!-- Argument | Default | Description -->
+<!-- -------- | ------- | ----------- -->
+<!-- `-ic, --initial-canvas` | White | Either a HEX color or a path to an image. Will define the initial canvas image. -->
+<!-- `-bm, --pixmap-mask` | `None` | (Optionnal) A path to a black and white image. If set, only pixmap pixels from white regions in the mask will be introduced, otherwise, every moving pixmap pixels are considered. -->
+<!-- `-bi, --pixmap-introduction-flags` | 5 | See below.If 1, moving pixmap pixels are pasted onto the canvas. If 2, pixmap pixels from the mask are pasted onto the canvas. If 3, the two previous effects apply. -->
+<!-- `-cr, --crumble` | `False` | Enable the crumbling effect: a moving pixels leaves an empty spot behind it. Moving pixels from the pixmap bypass this behavior. -->
+<!--  -->
+<!-- Pixmap Introduction Flags: -->
+<!--  -->
+<!-- - `MOTION` (1): moving pixmap pixels are pasted onto the canvas. -->
+<!-- - `STATIC` (2): all pixmap pixels from the pixmap mask are pasted onto the canvas. -->
+<!-- - `NO_OVERWRITE` (4): moving pixmap pixels cannot be placed over a pixel introduced earlier, only in black space. -->
+<!-- - `OUTER_FILL` (8): fill outside of initial canvas with pixmap pixels. -->
+<!--  -->
+<!-- Default is `MOTION | NO_OVERWRITE`, ie. 5. -->
 
-Bitmap Introduction Flags:
+<!-- ## Accumulator Heatmap -->
+<!--  -->
+<!-- Accumulators performs some processing with the computed flow before applying it to the pixmap source. Most importantly, it computes a heatmap to know which parts of the image is moving or not (roughly). This can be used for visualization (see [Accumulator Visualization](#accumulator-visualization) section) or to reduce computation time for reset effects (see [Resetting Accumulator](#resetting-accumulator) section). -->
+<!--  -->
+<!-- Heatmap can either be discrete or continuous. Heatmap mode can be specified with the `-hm, --heatmap-mode {discrete,continuous}` argument. Default value is `discrete`. Depending on the mode, the value of the `-ha, --heatmap-args` is parsed differently. -->
+<!--  -->
+<!-- **Discrete Mode.** The argument follows the form `min:max:add:sub`, all with integers. Heatmap is a 2D array of integers, values are clipped between `min` and `max` (inclusive). At each frame, every pixel where the flow is non-zero increases by `add`. Then, all pixels are decreased by `sub`. Default is `0:4:2:1`. -->
+<!--  -->
+<!-- **Continuous Mode.** The argument follows the form `max:decay:threshold`. Heatmap is a 2D array of floats. At each frame, the heatmap is multiplied by `decay` (<1). Then, values below `threshold` are set to 0. Then, the magnitude of the flow is added to the heatmap, and values are clipped between 0 and `max`. -->
+<!--  -->
+<!-- ## Accumulator Visualization -->
+<!--  -->
+<!-- Instead of outputting a transformed pixmap, you can visualize several internal streams. For this, you must NOT provide a `-b, --pixmap` argument, and instead set one of the following flags: -->
+<!--  -->
+<!-- Flag | Description -->
+<!-- ---- | ----------- -->
+<!-- `-oi, --output-intensity` | Flow magnitude -->
+<!-- `-oh, --output-heatmap` | Accumulator heatmap (see [Accumulator Heatmap](#accumulator-heatmap) section)  -->
+<!-- `-oa, --output-accumulator` | Representation of accumulator internal state -->
+<!--  -->
+<!-- **Scale.** As values are absolute in length of pixels, they are scaled to be rendered. Values for `-oi` and `-oh` are expected between 0 and 1. Values for `-oa` are expected between -1 and 1. Thus, you may specify a scaling factor with the `-rs, --render-scale` argument. Default is 0.1. -->
+<!--  -->
+<!-- **Colors.** Color palettes are specified with the `-rc, --render-colors` attribute as hex values separated by commas. 1D renderings (flow magnitude and heatmap) are rendered using 2 colors, black and white by default. 2D renderings (accumulator internals) are rendered using 4 colors (think of it as north, east, south, west), that are, by default, yellow, blue, magenta and green. -->
+<!--  -->
+<!-- **Quantization.** For 1D renderings, you can force output to be binary (either one color or the other, without shades), by setting the `-rb, --render-binary` flag. This may help for some postprocessing operations. -->
 
-- `MOTION` (1): moving bitmap pixels are pasted onto the canvas.
-- `STATIC` (2): all bitmap pixels from the bitmap mask are pasted onto the canvas.
-- `NO_OVERWRITE` (4): moving bitmap pixels cannot be placed over a pixel introduced earlier, only in black space.
-- `OUTER_FILL` (8): fill outside of initial canvas with bitmap pixels.
+## Layer Reset
 
-Default is `MOTION | NO_OVERWRITE`, ie. 5.
+Pixels can be reset (or "healed") overtime. This does not work with the Introduction Layer (see [Compositor](#compositor) section). This setting is off by default, but you may enable it by specifying a reset mode with the `-r, --reset [mode] [factor]` argument. Possible modes are `off` (default), `random`, `constant` or `linear`.
 
-## Accumulator Heatmap
+**Random Reset.** At each frame, a random value between 0 and 1 is rolled for each pixel. If the value is below a threshold (the specified `factor`, 0.1 be default), the pixel at that place gets its original value back.
 
-Accumulators performs some processing with the computed flow before applying it to the bitmap source. Most importantly, it computes a heatmap to know which parts of the image is moving or not (roughly). This can be used for visualization (see [Accumulator Visualization](#accumulator-visualization) section) or to reduce computation time for reset effects (see [Resetting Accumulator](#resetting-accumulator) section).
+**Constant Reset.** At each frame, pixels move towards their original position with a constant speed (the specified `factor`, 1 by default).
 
-Heatmap can either be discrete or continuous. Heatmap mode can be specified with the `-hm, --heatmap-mode {discrete,continuous}` argument. Default value is `discrete`. Depending on the mode, the value of the `-ha, --heatmap-args` is parsed differently.
+**Linear Reset.** At each frame, the difference between the current location of a pixel and its original location is computed. Static pixels are moved back in the direction of their original location with a speed controlled by the `factor` argument.
 
-**Discrete Mode.** The argument follows the form `min:max:add:sub`, all with integers. Heatmap is a 2D array of integers, values are clipped between `min` and `max` (inclusive). At each frame, every pixel where the flow is non-zero increases by `add`. Then, all pixels are decreased by `sub`. Default is `0:4:2:1`.
+The `-m, --reset-mask` argument can be used to select where to apply the reset. If the random reset mode is selected, the mask is interpreted as a pixel-wise reset probability map. It gets multiplied by the `factor` argument. See the [Masks](#masks) section for details on how to create masks.
 
-**Continuous Mode.** The argument follows the form `max:decay:threshold`. Heatmap is a 2D array of floats. At each frame, the heatmap is multiplied by `decay` (<1). Then, values below `threshold` are set to 0. Then, the magnitude of the flow is added to the heatmap, and values are clipped between 0 and `max`.
+## Generative Pixmap Sources
 
-## Accumulator Visualization
-
-Instead of outputting a transformed bitmap, you can visualize several internal streams. For this, you must NOT provide a `-b, --bitmap` argument, and instead set one of the following flags:
-
-Flag | Description
----- | -----------
-`-oi, --output-intensity` | Flow magnitude
-`-oh, --output-heatmap` | Accumulator heatmap (see [Accumulator Heatmap](#accumulator-heatmap) section) 
-`-oa, --output-accumulator` | Representation of accumulator internal state
-
-**Scale.** As values are absolute in length of pixels, they are scaled to be rendered. Values for `-oi` and `-oh` are expected between 0 and 1. Values for `-oa` are expected between -1 and 1. Thus, you may specify a scaling factor with the `-rs, --render-scale` argument. Default is 0.1.
-
-**Colors.** Color palettes are specified with the `-rc, --render-colors` attribute as hex values separated by commas. 1D renderings (flow magnitude and heatmap) are rendered using 2 colors, black and white by default. 2D renderings (accumulator internals) are rendered using 4 colors (think of it as north, east, south, west), that are, by default, yellow, blue, magenta and green.
-
-**Quantization.** For 1D renderings, you can force output to be binary (either one color or the other, without shades), by setting the `-rb, --render-binary` flag. This may help for some postprocessing operations.
-
-## Resetting Accumulator
-
-Pixels can be reset (or healed, or reintroduced) overtime. This does not work with the stack accumulator (see [Accumulation Methods](#accumulation-methods) section). This setting is off by default, but you may enable it by specifying a reset mode with the `-rm, --reset-mode` argument. Possible values are `off` (default), `random` or `linear`. For the last two, two arguments can be specified to control their behavior:
-
-- `-ra, --reset-arg`, a float (default to 0.1)
-- `-rk, --reset-mask`, a path to an image
-
-If specified, the reset mask loads an image and converts it to an array of floats by mapping luminance between 0 (black) and 1 (white).
-
-**Random Reset.** At each frame, values where the heatmap (see [Accumulator Heatmap](#accumulator-heatmap) section) is at 0 roll a random number between 0 and 1. If the value is below a threshold (either the `-ra` argument or the corresponding value in the reset mask if passed), the pixel at that place gets its original value back.
-
-**Linear Reset.** At each frame, the difference between the current location of a pixel and its original location is computed. Static pixels are moved back in the direction of their original location with a speed controlled by the `-ra` argument or the value in the reset mask array, if passed. 0 means no reset, 1 means instant reset.
-
-> [!NOTE]
-> Linear reset will not work with the `crumble` and the `canvas` accumulators (see [Accumulation Methods](#accumulation-methods))
-
-## Generative Bitmap Sources
-
-The bitmap source argument (`-b`) can also be one of the following keywords:
+The pixmap source argument (`-p, --pixmap`) can also be one of the following keywords:
 
 Keyword | Description
 ------- | -----------
-`color` | Use a uniform random color image as bitmap
-`noise` | Use a random grey noise image as bitmap
-`bwnoise` | Use a random black or white noise image as bitmap
-`cnoise` | Use a random colored noise image as bitmap
-`gradient` | Use a random gradient of colors as bitmap
-`first` | Use the first frame of the flow input argument as a still bitmap source
+`color` | Use a uniform random color image as pixmap
+`color:some-color` | Use a uniform color image as pixmap
+`noise` | Use a random grey noise image as pixmap
+`bwnoise` | Use a random black or white noise image as pixmap
+`cnoise` | Use a random colored noise image as pixmap
+`gradient` | Use a random gradient of colors as pixmap
+`first` | Use the first frame of the flow input argument as a still pixmap source
 
 You can also pass an hex color (eg. `#00FF00`) to use a specific uniform color image.
 
-You can provide a seed with the `-sd, --seed` parameter. It expects an integer. Multiple bitmap generations with the same seed will generate the same image.
+You can provide a seed with the `--seed` parameter. It expects an integer. Multiple pixmap generations with the same seed will generate the same image.
 
 ## Webcam Sources
 
-Flow or bitmap sources can use webcams. As they do not have durations, you may have to use the Ctrl+C shortcut to interrupt the program when done. You can specify the width and height of the stream to request from the webcam with the `-sz, --size` argument, with a value of the form `WIDTHxHEIGHT`. By default, the preferred webcam option is selected.
+Flow or pixmap sources can use webcams. As they do not have durations, you may have to use the Ctrl+C shortcut to interrupt the program when done. You can specify the width and height of the stream to request from the webcam with the `--size` argument, with a value of the form `WIDTHxHEIGHT`. By default, the preferred webcam option is selected.
 
 **[OpenCV](https://opencv.org/) stream.** Simplest option is to pass an integer as the source argument. This number should be the webcam index as referenced by OpenCV. You may use the [extra/list_cv2_webcams.py](extra/list_cv2_webcams.py) script to list available webcams.
 
 **[PyAV](https://pyav.org/docs/stable/) stream.** If you want to use webcam motion vectors as a flow source, you must specify the webcam using the `avformat:name` format. `avformat` should be a webcam API, often `dshow` on Windows or `v4l2` on Linux. `name` is the webcam name as it appears in the output of the `ffmpeg -list_devices true -f {dshow,v4l2} -i dummy` command. Note that this name may require a prefix depending on the API you use. For instance, on Windows, DirectShow (dshow) requires strings of the form `video=WEBCAM_NAME`. Here is an example for viewing the intensity of the motion vectors that way:
 
 ```console
-transflow "dshow::video=Logitech Webcam C930e" -sz 1280x720 -mv -oi
+transflow "dshow::video=Logitech Webcam C930e" --size 1280x720 --mv --view-flow
 ```
 
 > [!NOTE]
@@ -410,29 +415,29 @@ transflow "dshow::video=Logitech Webcam C930e" -sz 1280x720 -mv -oi
 >    Here `/dev/video0` is the real webcam, and `/dev/video4` is the v4l2-loopback device found with the previous command.
 > 4. In another terminal, run transflow with the v4l2-loopback device:
 >    ```console
->    transflow v4l2::/dev/video4 -sz 1280x720 -mv -oi
+>    transflow v4l2::/dev/video4 --size 1280x720 --mv --view-flow
 >    ```
 
-## Bitmap Alteration
+## Pixmap Alteration
 
-Altering the bitmap is a way to control how the output will look if the flow has the *expansion property*, ie. some pixels grow into regions that eventually covers large areas of the original bitmap. For instances, a video of a body of water in motion will drastically decrease the number of independent pixels. This means that forcing the color of those pixels will impact the whole output while only imperceptibly alter the input.
+Altering the pixmap is a way to control how the output will look if the flow has the *expansion property*, ie. some pixels grow into regions that eventually covers large areas of the original pixmap. For instances, a video of a body of water in motion will drastically decrease the number of independent pixels. This means that forcing the color of those pixels will impact the whole output while only imperceptibly alter the input.
 
-You can specify an alteration image with the `-ba, --bitmap-alteration` argument. It takes a path to a PNG file. This image should be transparent (alpha channel set to 0) for pixels that should not be touched. Non-transparent pixels will be pasted onto the bitmap. For video bitmaps, the same alteration is applied on all frames.
+You can specify an alteration image with the `--alteration` argument. It takes a path to a PNG file. This image should be transparent (alpha channel set to 0) for pixels that should not be touched. Non-transparent pixels will be pasted onto the pixmap. For video pixmaps, the same alteration is applied on all frames.
 
 In order to know in advance which pixels to alter, you may use the [extra/control.py](extra/control.py) script:
 
-1. First, use Transflow with the `-cd` flag to generate a mapping checkpoint (see [Restart From Checkpoint](#restart-from-checkpoint)).
+1. First, use Transflow with the `--checkpoint-every` or `--checkpoint-end` flag to generate a mapping checkpoint (see [Restart From Checkpoint](#restart-from-checkpoint)).
     ```console
-    transflow flow.mp4 -cd
+    transflow flow.mp4 -C
     ```
-2. Then, call the [control.py](extra/control.py) script and pass the checkpoint as argument. If you already know which bitmap image you're using, you might want to pass it as well.
+2. Then, call the [control.py](extra/control.py) script and pass the checkpoint as argument. If you already know which pixmap image you're using, you might want to pass it as well.
     ```console
-    python control.py flow_12345.ckpt.zip image.jpg
+    python extra/control.py flow_12345.ckpt.zip image.jpg
     ```
 3. Edit the color of some sources and export the alteration image by hitting Ctrl+S (more details below).
-4. Use Transflow again and specify the bitmap alteration argument.
+4. Use Transflow again and specify the pixmap alteration argument.
     ```console
-    transflow flow.mp4 -b image.jpg -ba flow_12345_1730000000000.png
+    transflow flow.mp4 -p image.jpg --alteration flow_12345_1730000000000.png
     ```
 
 In the [control.py](extra/control.py) GUI, you see pixel sources in the header, ordered by their target area, decreasing: this means the first (top left) source covers the most area. Hovering on it highlights its target zone. Clicking on it opens a color picker to edit its color. Other bindings:
@@ -444,40 +449,64 @@ In the [control.py](extra/control.py) GUI, you see pixel sources in the header, 
 - Ctrl+S: export alteration input as PNG
 
 > [!NOTE]
-> Currently, this script only works with the Mapping Accumulator (see [Accumulation Methods](#accumulation-methods)). Also, if the loaded accumulator contains too many sources, the least important ones are ignored for better performances. This can be controlled with the `-m, --max-sources-display` argument.
+> If the loaded accumulator contains too many sources, the least important ones are ignored for better performances. This can be controlled with the `-m, --max-sources-display` argument.
 
 > [!WARNING]
 > This script is a hacky tool and may (will) not work in some contexts. Feel free to improve it and share your code!
 
 ## Live Visualization
 
-If the `-o` argument is omitted, ie. no output file is provided, a window will show processed frames as they are produced. The window can be closed by pressing the ESC key. This allows for checking an output before going all-in on a one hour render.
+If the `-o, --output` argument is omitted, ie. no output file is provided, a window will show processed frames as they are produced. The window can be closed by pressing the ESC key. This allows for checking an output before going all-in on a one hour render.
 
-If the `-o` argument is specified, you can still preview the output by setting the `-po, --preview-output` flag.
+If the `-o, --output` argument is specified, you can still preview the output by setting the `-O, --preview-output` flag.
 
 ## Interrupting Processing
 
 During processing, a progress bar shows how many frames were encoded, and how many remain. You can interrupt this process at any time by pressing Ctrl+C once, the output video will close nicely to produce a valid file.
 
-If you set the `-s, --safe` flag, interrupting the processing will create a checkpoint file (with `.ckpt.zip` extension) alongside the flow video, to resume computation later on (see [Restart From Checkpoint](#restart-from-checkpoint) section). The same thing occurs if an error occurs during the processing. The `-s, --safe` flags also enables an history log file that stores commands and output files, to keep track of which file is which and how was it generated.
+If you set the `-S, --safe` flag, interrupting the processing will create a checkpoint file (with `.ckpt.zip` extension) alongside the flow video, to resume computation later on (see [Restart From Checkpoint](#restart-from-checkpoint) section). The same thing occurs if an error occurs during the processing. The `-S, --safe` flags also enables an history log file that stores commands and output files, to keep track of which file is which and how was it generated.
 
 ## Restart From Checkpoint
 
 Checkpoints allows for resuming computation at a given frame. It contains the accumulator data at the frame it was exported at. This helps for lengthy processings or for handling errors. There are three ways of creating checkpoints: 
 
-- You can specify a frame interval with the `-ce, --checkpoint-every` argument at which exporting a checkpoint file (with `.ckpt.zip` extension).
-- You can export a checkpoint for the last frame by setting the `-cd, --checkpoint-end` argument. This can be used with the [control script](extra/control.py) to generate a bitmap alteration image (see [Bitmap Alteration](#bitmap-alteration) section).
-- They can be automatically created with an interruption or error occurs if the `-s, --safe` flag is set (see [Interrupint Processing](#interrupting-processing) section).
+- You can specify a frame interval with the `--checkpoint-every` argument at which exporting a checkpoint file (with `.ckpt.zip` extension).
+- You can export a checkpoint for the last frame by setting the `-C, --checkpoint-end` argument. This can be used with the [control script](extra/control.py) to generate a pixmap alteration image (see [Pixmap Alteration](#pixmap-alteration) section).
+- They can be automatically created with an interruption or error occurs if the `-S, --safe` flag is set (see [Interrupint Processing](#interrupting-processing) section).
 
 Checkpoints files be passed as flow sources, as they contain data about which flow source was used and where to restart computation. Arguments must be passed again to resume computation in the exact same settings.
 
 ## Seek, Duration and Repeat
 
-Flow source can be seeked with the `-ss, --seek` argument. Value must be of the form `HH:MM:SS` or `HH:MM:SS.FFF`. Bitmap source can be seeked in the same way, with the `-bss, --bitmap-seek` argument.
+Flow source can be seeked with the `-s, --seek` argument. Value must be of the form `HH:MM:SS` or `HH:MM:SS.FFF`. Pixmap source can be seeked in the same way, with the `--pixmap-seek` argument.
 
-A slice of the flow source can be selected with the `-t, --duration` argument, as the duration go from the starting point, with the same format as seeking timestamps. You can also specify an end timestamp instead with the `-to, --to` argument and a value of the same format. Intent is similar to FFmpeg expression of [seeking](https://trac.ffmpeg.org/wiki/Seeking).
+A slice of the flow source can be selected with the `-t, --duration` argument, as the duration go from the starting point, with the same format as seeking timestamps. You can also specify an end timestamp instead with the `--to` argument and a value of the same format. Intent is similar to FFmpeg expression of [seeking](https://trac.ffmpeg.org/wiki/Seeking).
 
-If you want to use the same flow input multiple times in a loop, you may specify the `-r, --repeat` argument with an integer value for how many times you want to use the flow. Default value is 1 (ie. no repetition). If this value is 0, the flow sources loops forever until either the bitmap source is exhausted or the user interrupts the execution. The same feature is available for the bitmap source (if a video), with the `-br, --bitmap-repeat` argument. It has the same behavior, default value is 1, 0 means infinite loop.
+If you want to use the same flow input multiple times in a loop, you may specify the `--repeat` argument with an integer value for how many times you want to use the flow. Default value is 1 (ie. no repetition). If this value is 0, the flow sources loops forever until either the pixmap source is exhausted or the user interrupts the execution. The same feature is available for the pixmap source (if a video), with the `--pixmap-repeat` argument. It has the same behavior, default value is 1, 0 means infinite loop.
+
+## Masks
+
+Multiple mask arguments can be passed: `--mask`, `--mask-alpha`, `--move-mask-source`, `--move-mask-destination`, `--reset-mask`, `--introduction-mask`. For each of them, you may provide a path to an image file and the image luminance will be scaled between 0 (black) and 1 (white), or you can use one of the following expressions:
+
+Expression | Description
+---------- | -----------
+`zeros` | A black image
+`ones` | A white image
+`random` | A random black and white image
+`border:thickness` | A border mask, with the specified thickness for all sides
+`border:width:height` | A border mask, with the specified thickness for width and height
+`border:top:left:bottom:right` | A border mask, with the specified thickness for each side
+`border-top:height` | A top border mask, with the specified thickness
+`border-right:width` | A right border mask, with the specified thickness
+`border-bottom:height` | A bottom border mask, with the specified thickness
+`border-left:width` | A left border mask, with the specified thickness
+`hline:height` | A horizontal line mask, with the specified thickness
+`vline:width` | A vertical line mask, with the specified thickness
+`circle:radius` | A circular mask, with the specified radius
+`rect:width:height` | A rectangular mask, with the specified width and height
+`grid:nrows:ncols:radius` | A grid of dots mask, with the specified number of rows and columns, and the radius of each dot
+
+Dimensions can be specified in absolute values of pixels or in percentages of the image size, by adding a `%` sign after the number. For instance, `border-top:10%` will create a top border with a height of 10% of the image height.
 
 ## Logging
 
@@ -485,12 +514,12 @@ Transflow does not log its activity by default. You can change this behavior wit
 
 Argument | Description 
 -------- | -----------
-`-ll, --log-level` | Log level, one of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Default is `DEBUG`.
-`-lh, --log-handler` | Log handler, one of `file`, `stream`, or `null`. Default is `null`. Multiple handlers can be specified, separated by commas.
-`-lp, --log-path` | Path to a log file. The default is `transflow.log`. If the log handler `file` is not set, this argument is ignored.
+`--log-level` | Log level, one of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Default is `DEBUG`.
+`--log-handler` | Log handler, one of `file`, `stream`, or `null`. Default is `null`. Multiple handlers can be specified, separated by commas.
+`--log-path` | Path to a log file. The default is `transflow.log`. If the log handler `file` is not set, this argument is ignored.
 
 For example, to enable logging to a file and see debugging information, you can use the following command:
 
 ```console
-transflow flow.mp4 -b image.jpg -o output.mp4 -lh file
+transflow flow.mp4 -p image.jpg -o output.mp4 --log-handler file
 ```

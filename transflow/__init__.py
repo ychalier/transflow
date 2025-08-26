@@ -3,7 +3,7 @@
 Set of tools for transferring optical flow from one media to another.
 """
 
-__version__ = "1.10.0"
+__version__ = "1.11.0"
 __author__ = "Yohan Chalier"
 __license__ = "GNU GPLv3"
 __maintainer__ = "Yohan Chalier"
@@ -282,7 +282,7 @@ def main():
         "either a probability ('random', default 0.1), a speed ('constant', "
         "default 1) in pixel/frame or a interpolation factor ('linear', "
         "default 0.1) ('moveref' or 'sum' only)")
-    group.add_argument("--reset-mask", action=SetLayer, type=str,
+    group.add_argument("-m", "--reset-mask", action=SetLayer, type=str,
         help="mask to select where to apply the reset" + mask_help + "; "
         "if the 'random' reset mode is selected, the mask is interpreted as a "
         "pixel-wise reset probability map ('moveref' or 'sum' only)")

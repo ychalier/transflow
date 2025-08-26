@@ -52,9 +52,13 @@ draft
 !assets/configs/blurred.json
 !assets/configs/default.json
 !assets/configs/fast.json
-!assets/configs/minimal.json
 !assets/configs/horn-schunck.json
+!assets/configs/horn-schunck-diverge.json
+!assets/configs/horn-schunck-smooth_inertia.json
+!assets/configs/liteflownet.json
+!assets/configs/lk16.json
 !assets/configs/lukas-kanade.json
+!assets/configs/minimal.json
 
 !assets/kernels
 !assets/kernels/3x3/blur-box.npy

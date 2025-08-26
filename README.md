@@ -26,7 +26,7 @@ The process should be straightforward.
 1. Download the [latest release](https://github.com/ychalier/transflow/releases)
 2. Install it with `pip`:
    ```console
-   pip install ~/Downloads/transflow-1.8.0.tar.gz
+   pip install ~/Downloads/transflow-1.11.0.tar.gz
    ```
 3. Test installation:
    ```console
@@ -56,7 +56,7 @@ If you want to access the code.
 The simplest process consists in taking the motion from a video file and applying it to an image:
 
 ```console
-transflow flow.mp4 -b image.jpg -o output.mp4
+transflow flow.mp4 -p image.jpg -o output.mp4
 ```
 
 If your are not too familiar with the command line, you can use the graphical user interface (GUI) to set parameters interactively. You can run the GUI with (see [USAGE.md](USAGE.md#gui) for more details):
@@ -80,7 +80,7 @@ This repository also contains two other versions of this program:
 There are also other modules (in the [extra](extra) folder):
 
 - [viewflow](extra/viewflow), for visualizing and inspecting optical flow in a video player setting,
-- [control](extra/control.py), for generating alteration images (see [Bitmap Alteration](USAGE.md#bitmap-alteration)). 
+- [control](extra/control.py), for generating alteration images (see [Pixmap Alteration](USAGE.md#pixmap-alteration)). 
 
 ## Contributing
 
