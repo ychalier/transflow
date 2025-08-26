@@ -43,6 +43,7 @@ class TestControl(unittest.TestCase):
             with window:
                 window.draw()
                 window.export(force_export_all=True)
+            
 
 
 if __name__ == "__main__":

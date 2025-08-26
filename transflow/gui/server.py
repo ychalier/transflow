@@ -99,8 +99,6 @@ class WebsocketServer(threading.Thread):
         elif cmd == "GENERATE":
             from ..pipeline import Pipeline
             from ..config import Config, PixmapSourceConfig, LayerConfig
-            print("Job args:")
-            print(args)
             pixmap_sources = []
             layers = []
             for i, layer_dict in enumerate(args["compositor"]["layers"][:args["compositor"]["layerCount"]]):
@@ -142,7 +140,7 @@ class WebsocketServer(threading.Thread):
                         alteration_path=source_dict["alterationPath"],
                         seek_time=source_dict["seekTime"],
                         repeat=source_dict["repeat"],
-                        layer=i
+                        layers=[i]
                     )
                     pixmap_sources.append(pixmap_config)
             output_paths = [f"mjpeg:{self.mjpeg_port}:{self.host}"]
@@ -266,6 +264,8 @@ class WebHandler(http.server.SimpleHTTPRequestHandler):
         elif parsed.path == "/wss":
             assert isinstance(self.server, WebServer)
             return self.serve_text(f"ws://{self.server.wss.host}:{self.server.wss.port}")
+        elif parsed.path == "/ping":
+            return self.serve_text("PONG")
         return super().do_GET()
 
     def serve_text(self, text: str, encoding: str = "utf8"):

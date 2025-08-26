@@ -155,7 +155,7 @@ class Window:
         layer = compositor.layers[self.layer_index]
         if not isinstance(layer, DataLayer):
             raise ValueError(f"Layer has incorrect class {type(layer)}, must be one of 'moveref' or 'introduction'")
-        
+
         self.mapping = numpy.concatenate(
             [layer.data[:,:,layer.INDEX_J][:,:,numpy.newaxis], layer.data[:,:,layer.INDEX_I][:,:,numpy.newaxis]],
             axis=2).astype(int)
@@ -277,10 +277,10 @@ class Window:
         output_surface = pygame.transform.scale(
             pygame.surfarray.make_surface(output.transpose(1, 0, 2)),
             (self.surfw, self.surfh))
-        
+
         assert self.w is not None, self.w
         assert self.h is not None, self.h
-        assert self.masks is not None, self.masks        
+        assert self.masks is not None, self.masks
 
         self.window.fill(BORDER_COLOR, (
             self.surfw + 2 * self.padding - self.border_width,
@@ -288,7 +288,7 @@ class Window:
             self.surfw + 2 * self.border_width,
             self.surfh + 2 * self.border_width))
         self.window.blit(output_surface, (self.surfw + 2 * self.padding, paney))
-        
+
         if (-1, -1) in self.colors:
             surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
             surf.fill(self.colors[(-1, -1)], (0, 0, self.w, self.h))
@@ -491,7 +491,7 @@ class Window:
         return True
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        pass
+        pygame.quit()
 
 
 def main():
