@@ -110,6 +110,11 @@ function saveConfigToStorage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 }
 
+function clearConfig() {
+    localStorage.removeItem(STORAGE_KEY);
+    window.location.reload();
+}
+
 var leftPanelActiveTab = "Flow Source";
 var websocket;
 var websocketRetryCount = 0;
@@ -154,10 +159,14 @@ function getPathName(path) {
     return split[split.length - 1];
 }
 
-function createInputContainer(container, label) {
+function createInputContainer(container, label, helpText=null) {
     const inputContainer = create(container, "div", "input-container");
     if (label != null) {
         create(inputContainer, "label").textContent = label;
+    }
+    if (helpText != null) {
+        inputContainer.title = helpText;
+        create(inputContainer, "p", "help").innerHTML = helpText;
     }
     return inputContainer;
 }
@@ -189,8 +198,8 @@ function onConfigChange(key) {
     saveConfigToStorage();
 }
 
-function createFileOpenInput(container, label, key, filetypes) {
-    const inputContainer = createInputContainer(container, label);
+function createFileOpenInput(container, label, key, filetypes, helpText=null) {
+    const inputContainer = createInputContainer(container, label, helpText);
     const inputButtons = create(inputContainer, "div", "row");
     const input = create(inputButtons, "button");
     input.textContent = "Select file";
@@ -219,8 +228,8 @@ function createFileOpenInput(container, label, key, filetypes) {
     }
 }
 
-function createMaskInput(container, label, key) {
-    const maskContainer = createInputContainer(container, label);
+function createMaskInput(container, label, key, helpText=null) {
+    const maskContainer = createInputContainer(container, label, helpText);
     const maskSelect = create(maskContainer, "select");
     const maskArgs = {
         zeros: [],
@@ -296,7 +305,10 @@ function createMaskInput(container, label, key) {
     maskSelect.addEventListener("change", onMaskSelectChange);
     onMaskSelectChange();
     if (anyOptionSelected) {
-        const baseArgValues = baseValue.slice(baseValue.indexOf(":") + 1).split(":");
+        let baseArgValues = [];
+        if (baseValue.includes(":")) {
+            baseArgValues = baseValue.slice(baseValue.indexOf(":") + 1).split(":");
+        };
         const maskArgs =  maskInputs.querySelectorAll(".maskarg");
         if (baseArgValues.length != maskArgs.length) {
             console.error("Invalid number of arguments between", baseArgValues, "and", maskArgs);
@@ -330,8 +342,8 @@ function createFileSaveInput(container, label, key, defaultextension, filetypes)
     }
 }
 
-function createBoolInput(container, label, key) {
-    const inputContainer = createInputContainer(container, label);
+function createBoolInput(container, label, key, helpText=null) {
+    const inputContainer = createInputContainer(container, label, helpText);
     inputContainer.classList.add("input-container-bool");
     const input = create(inputContainer, "input");
     input.type = "checkbox";
@@ -341,6 +353,11 @@ function createBoolInput(container, label, key) {
     input.addEventListener("change", () => {
         configSet(key, input.checked);
     });
+    if (helpText != null) {
+        const p = inputContainer.querySelector("p");
+        inputContainer.removeChild(p);
+        container.appendChild(p);
+    }
 }
 
 function inflateSelect(select, values, initialValue) {
@@ -353,8 +370,8 @@ function inflateSelect(select, values, initialValue) {
     }
 }
 
-function createSelect(container, label, key, values) {
-    const selectContainer = createInputContainer(container, label);
+function createSelect(container, label, key, values, helpText=null) {
+    const selectContainer = createInputContainer(container, label, helpText);
     const select = create(selectContainer, "select");
     inflateSelect(select, values, configGet(key));
     select.addEventListener("change", () => {
@@ -363,8 +380,8 @@ function createSelect(container, label, key, values) {
     return select;
 }
 
-function createTextInput(container, label, key, placeholder=undefined) {
-    const inputContainer = createInputContainer(container, label);
+function createTextInput(container, label, key, placeholder=undefined, helpText=null) {
+    const inputContainer = createInputContainer(container, label, helpText);
     const input = create(inputContainer, "input");
     input.value = configGet(key);
     if (placeholder != undefined) {
@@ -379,8 +396,8 @@ function createTextInput(container, label, key, placeholder=undefined) {
 
 const createTimestampInput = createTextInput; //TODO: custom input
 
-function createColorInput(container, label, key) {
-    const inputContainer = createInputContainer(container, label);
+function createColorInput(container, label, key, helpText=null) {
+    const inputContainer = createInputContainer(container, label, helpText);
     const input = create(inputContainer, "input");
     input.type = "color";
     input.value = configGet(key);
@@ -389,8 +406,8 @@ function createColorInput(container, label, key) {
     });
 }
 
-function createRangeInput(container, label, key, min=0, max=1, decimals=3) {
-    const inputContainer = createInputContainer(container, label);
+function createRangeInput(container, label, key, min=0, max=1, decimals=3, helpText=null) {
+    const inputContainer = createInputContainer(container, label, helpText);
     const input = create(inputContainer, "input");
     input.type = "range";
     input.min = min;
@@ -407,8 +424,8 @@ function createRangeInput(container, label, key, min=0, max=1, decimals=3) {
     });
 }
 
-function createNumberInput(container, label, key, min=null, max=null, step=1) {
-    const inputContainer = createInputContainer(container, label);
+function createNumberInput(container, label, key, min=null, max=null, step=1, helpText=null) {
+    const inputContainer = createInputContainer(container, label, helpText);
     const input = create(inputContainer, "input");
     input.type = "number";
     if (min != null) input.min = min;
@@ -580,19 +597,17 @@ function openWssConnection() {
 function inflatePaneFlowSource(container) {
     container.innerHTML = "";
     createFileOpenInput(container, "File", "flowSource.file", VIDEO_FILETYPES);
-    createBoolInput(container, "Use Motion Vectors", "flowSource.useMvs");
-    createSelect(container, "Direction", "flowSource.direction", ["backward", "forward"]);
-    createMaskInput(container, "Mask", "flowSource.maskPath");
-    createFileOpenInput(container, "Kernel", "flowSource.kernelPath", "*.npy");
-    createFileOpenInput(container, "CV Config", "flowSource.cvConfig", "*.json");
-    createTextInput(container, "Filters", "flowSource.flowFilters", "scale=2;clip=5;polar=r:a");
-    createBoolInput(container, "Round Flow", "flowSource.roundFlow");
-    createBoolInput(container, "Export Flow", "flowSource.exportFlow");
+    createBoolInput(container, "Use Motion Vectors", "flowSource.useMvs", "Use motion vectors to extract the optical flow from a video file (input video must contain motion vectors).");
+    createSelect(container, "Direction", "flowSource.direction", ["backward", "forward"], "Direction of the computed flow; 'backward' is smoother 'forward' is granyer.");
+    createMaskInput(container, "Mask", "flowSource.maskPath", "Pixel wise flow scaling by a float mask.");
+    createFileOpenInput(container, "Kernel", "flowSource.kernelPath", "*.npy", "NPY file storing a convolution kernel to apply on the optical flow (impacts performances).");
+    createFileOpenInput(container, "CV Config", "flowSource.cvConfig", "*.json", "JSON file containing settings for the optical flow computation from the video file.");
+    createTextInput(container, "Filters", "flowSource.flowFilters", "scale=2;clip=5;polar=r:a", helpText="List of flow filters, separated by semicolons; available filters are 'scale', 'threshold' and 'clip'; all take an expression as argument which can either be a constant or any Pythonic expression based on the variable `t`, the frame timestamp in seconds.");
     createTimestampInput(container, "Seek Time", "flowSource.seekTime", "00:00:00");
     createTimestampInput(container, "Duration Time", "flowSource.durationTime", "00:00:00");
-    createNumberInput(container, "Repeat", "flowSource.repeat", 0, null, 1);
-    createSelect(container, "Lock Mode", "flowSource.lockMode", ["stay", "skip"]);
-    createTextInput(container, "Lock Expression", "flowSource.lockExpr", "(1,1),(4,1) (stay) t>=2 and t<=3 (skip)");
+    createNumberInput(container, "Repeat", "flowSource.repeat", 0, null, 1, "Repeat flow input (0 to loop indefinitely).");
+    createSelect(container, "Lock Mode", "flowSource.lockMode", ["stay", "skip"], "When the flow is locked, either pause the source ('stay') or continue reading it ('skip').");
+    createTextInput(container, "Lock Expression", "flowSource.lockExpr", "(1,1),(4,1) (stay) t>=2 and t<=3 (skip)", helpText="In mode 'stay', expr must be a list of couples (start_t, duration) for when to lock the flow; in mode 'skip', expr must be a Pythonic expression based on variable `t`; timings are relative to the output frame timestamps, in seconds.");
 }
 
 function inflatePaneCompositor(container) {
@@ -601,17 +616,17 @@ function inflatePaneCompositor(container) {
     const layersContainer = create(container, "div", "layers");
     for (let i = 0; i < config.compositor.layerCount; i++) {
         const layerContainer = create(layersContainer, "div", "layer");
-        const classnameSelect = createSelect(layerContainer, "Method", `compositor.layers.${i}.classname`, ["moveref", "introduction", "sum", "static"]);
+        const classnameSelect = createSelect(layerContainer, "Method", `compositor.layers.${i}.classname`, ["moveref", "introduction", "sum", "static"], "One of 'moveref' (the flow moves an array of coordinates refering to the pixmap), 'introduction' (the flow moves static pixels onto a canvas where pixels can be introduced), 'sum' (the flow is summed to an array of coordinates refering to the pixmap) or 'static' (the flow is ignored).");
         const layerInputs = create(layerContainer, "div", "input-container");
         function onClassnameChange() {
             const value = getSelectedValue(classnameSelect);
             layerInputs.innerHTML = "";
-            createFileOpenInput(layerInputs, "Mask Alpha", `compositor.layers.${i}.maskAlpha`, IMAGE_FILETYPES);
+            createFileOpenInput(layerInputs, "Mask Alpha", `compositor.layers.${i}.maskAlpha`, IMAGE_FILETYPES, "Layer opacity mask, boolean.");
             if (value == "moveref" || value == "introduction") {
                 const details = create(layerInputs, "details");
                 create(details, "summary").textContent = "Movement Options";
-                createMaskInput(details, "Source Mask", `compositor.layers.${i}.maskSource`);
-                createMaskInput(details, "Destination Mask", `compositor.layers.${i}.maskDestination`);
+                createMaskInput(details, "Source Mask", `compositor.layers.${i}.maskSource`, "Boolean mask for where to allow pixels to move from.");
+                createMaskInput(details, "Destination Mask", `compositor.layers.${i}.maskDestination`, "Boolean mask for where to allow pixels to move to.");
                 createBoolInput(details, "Transparent Pixels Can Move", `compositor.layers.${i}.flagMoveTransparent`);
                 createBoolInput(details, "Pixels Can Move to Empty Spots", `compositor.layers.${i}.flagMoveToEmpty`);
                 createBoolInput(details, "Pixels Can Move to Filled Spots", `compositor.layers.${i}.flagMoveToFilled`);
@@ -620,7 +635,7 @@ function inflatePaneCompositor(container) {
             if (value == "introduction") {
                 const details = create(layerInputs, "details");
                 create(details, "summary").textContent = "Introduction Options";
-                createMaskInput(details, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`);
+                createMaskInput(details, "Introduction Mask", `compositor.layers.${i}.maskIntroduction`, "Boolean mask to select which pixels from the source to introduce.");
                 createBoolInput(details, "Introduce Pixels on Empty Spots", `compositor.layers.${i}.introduceEmpty`);
                 createBoolInput(details, "Introduce Pixels on Filled Spots", `compositor.layers.${i}.introduceFilled`);
                 createBoolInput(details, "Introduce Moving Pixels", `compositor.layers.${i}.introduceMoving`);
@@ -633,19 +648,19 @@ function inflatePaneCompositor(container) {
                 const details = create(layerInputs, "details");
                 create(details, "summary").textContent = "Reset Options";
                 createMaskInput(details, "Reset Mask", `compositor.layers.${i}.maskReset`);
-                const resetSelect = createSelect(details, "Reset Mode", `compositor.layers.${i}.resetMode`, ["off", "random", "constant", "linear"]);
+                const resetSelect = createSelect(details, "Reset Mode", `compositor.layers.${i}.resetMode`, ["off", "random", "constant", "linear"], "One of 'off' (nothing happens), 'random' (pixels are randomly moved back to their original position), 'constant' (pixels move towards their original position with a constant speed) or 'linear' (pixels move towards their original position with a speed relative to the distance from their origin).");
                 const resetInputs = create(details, "div", "input-container");
                 function onResetChange() {
                     const value = getSelectedValue(resetSelect);
                     resetInputs.innerHTML = "";
                     if (value == "random") {
-                        createRangeInput(resetInputs, "Random Reset Factor", `compositor.layers.${i}.resetRandomFactor`);
+                        createRangeInput(resetInputs, "Random Reset Factor", `compositor.layers.${i}.resetRandomFactor`, "Reset probability");
                     }
                     if (value == "constant") {
-                        createNumberInput(resetInputs, "Constant Reset Step", `compositor.layers.${i}.resetConstantStep`, 0, null, 1);
+                        createNumberInput(resetInputs, "Constant Reset Step", `compositor.layers.${i}.resetConstantStep`, 0, null, 1, "Reset speed in pixel/frame");
                     }
                     if (value == "linear") {
-                        createRangeInput(resetInputs, "Linear Reset Factor", `compositor.layers.${i}.resetLinearFactor`);
+                        createRangeInput(resetInputs, "Linear Reset Factor", `compositor.layers.${i}.resetLinearFactor`, "Interpolation factor");
                     }
                 }
                 resetSelect.addEventListener("change", onResetChange);
@@ -670,7 +685,7 @@ function inflatePaneCompositor(container) {
             }
             typeSelect.addEventListener("change", onBitmapSelectChange);
             onBitmapSelectChange();
-            createFileOpenInput(sourceContainer, "Alteration", `compositor.layers.${i}.sources.${j}.alterationPath`, "*.png");
+            createFileOpenInput(sourceContainer, "Alteration", `compositor.layers.${i}.sources.${j}.alterationPath`, "*.png", "Path to a PNG image to overlay on the pixmap source, allowing for more controlled outputs; see `control.py` in the extra ressources.");
             createTimestampInput(sourceContainer, "Seek Time", `compositor.layers.${i}.sources.${j}.seekTime`, "00:00:00");
             createNumberInput(sourceContainer, "Repeat", `compositor.layers.${i}.sources.${j}.repeat`, 0, null, 1);    
             const buttonContainer = create(sourceContainer, "div", "button-container");
@@ -690,12 +705,14 @@ function inflatePaneOutput(container) {
     container.innerHTML = "";
     createFileSaveInput(container, "File", "output.file", ".mp4", VIDEO_FILETYPES);
     createTextInput(container, "Video Codec", "output.vcodec", "h264");
-    createBoolInput(container, "Output Intensity", "output.outputIntensity");
-    createNumberInput(container, "Render Scale", "output.renderScale", null, null, 0.001);
-    createTextInput(container, "Render Colors", "output.renderColors", "#000000,#ffffff");
-    createBoolInput(container, "Render Binary", "output.renderBinary");
-    createNumberInput(container, "Checkpoint Every", "output.checkpointEvery", 0, null, 1);
-    createBoolInput(container, "Checkpoint End", "output.checkpointEnd");
+    createBoolInput(container, "Round Flow", "flowSource.roundFlow", "Export the flow as integer values (faster and lighter, but may introduce artefacts).");
+    createBoolInput(container, "Export Flow", "flowSource.exportFlow", "Export computed flow to a file as a ZIP archive.");
+    createBoolInput(container, "Output Intensity", "output.outputIntensity", "Ignore the compositor and render the flow intensity as output.");
+    createNumberInput(container, "Render Scale", "output.renderScale", null, null, 0.001, "Render scale for the flow intensity.");
+    createTextInput(container, "Render Colors", "output.renderColors", "#000000,#ffffff", "Colors for rendering the flow intensity.");
+    createBoolInput(container, "Render Binary", "output.renderBinary", "Render the flow intensity with exactly two colors, no gradient.");
+    createNumberInput(container, "Checkpoint Every", "output.checkpointEvery", 0, null, 1, "Export a checkpoint every N frame.");
+    createBoolInput(container, "Checkpoint End", "output.checkpointEnd", "Export a checkpoint at the last frame.");
 }
 
 function inflateLeftPanel(container) {
@@ -769,6 +786,10 @@ function inflateRightPanel(container) {
     buttonInterrupt.setAttribute("id", "button-interrupt");
     if (!config.isRunning) buttonInterrupt.setAttribute("disabled", true);
     buttonInterrupt.textContent = "Interrupt";
+
+    const buttonClear = create(buttonRow, "button");
+    buttonClear.setAttribute("id", "button-clear");
+    buttonClear.textContent = "Clear";
     
     buttonGenerate.addEventListener("click", () => {
         buttonGenerate.setAttribute("disabled", true);
@@ -780,6 +801,9 @@ function inflateRightPanel(container) {
     });
     buttonInterrupt.addEventListener("click", () => {
         websocket.send("INTERRUPT");
+    });
+    buttonClear.addEventListener("click", () => {
+        clearConfig();
     });
 
     const paneFooter = create(container, "div", "pane pane-shrink");

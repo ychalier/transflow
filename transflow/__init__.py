@@ -327,9 +327,9 @@ def main():
     group.add_argument("--view-flow", dest="output_intensity", action="store_true",
         help="ignore the compositor and render the flow intensity as output")
     group.add_argument("--render-scale", dest="render_scale", type=float, default=0.1,
-        help="render scale flow intensity")
+        help="render scale for the flow intensity")
     group.add_argument("--render-colors", dest="render_colors", type=str, default=None,
-        help="colors for rendering flow intensity; "
+        help="colors for rendering the flow intensity; "
         "2 colors, CSS format, separated by commas")
     group.add_argument("--render-binary", dest="render_binary", action="store_true",
         help="render the flow intensity with exactly two colors, no gradient")

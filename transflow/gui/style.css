@@ -237,6 +237,13 @@ video {
     gap: .4rem;
 }
 
+p.help {
+    margin-top: 0;
+    margin-bottom: .4rem;
+    font-size: small;
+    color: #888;
+}
+
 .button-container {
     margin-top: 1rem;
     display: flex;
