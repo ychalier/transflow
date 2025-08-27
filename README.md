@@ -81,7 +81,7 @@ transflow assets/Train.mp4 -p assets/Train.mp4 -i border-right:1 -l 0 introducti
 
 ![](out/ExampleIntroduction.gif)
 
-#### [Sticky Texture](USAGE.md#sticky-texture)
+### [Sticky Texture](USAGE.md#sticky-texture)
 
 ```console
 transflow assets/Train.mp4 -p assets/Train.mp4 -p assets/Frame.png 1 -l 0 static -l1 -e -Oo out/ExampleStickyTexture.mp4
