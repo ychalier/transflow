@@ -6,8 +6,10 @@ This document provides details on how to use the `transflow` module for performi
 
 - [Basic Flow Transfer](#basic-flow-transfer)
 - [Examples](#examples)
-  - [Basic Example](#basic-example)
-  - [Detailed Example](#detailed-example)
+  - [Basic Transfer](#basic-transfer)
+  - [Random Reset](#random-reset)
+  - [Progressive Introduction](#progressive-introduction)
+  - [Sticky Texture](#sticky-texture)
 - [GUI](#gui)
 - [Flow Estimation Methods](#flow-estimation-methods)
   - [Gunnar Farnebäck](#gunnar-farnebäck)
@@ -60,24 +62,26 @@ The first argument `flow.mp4` is the video to extract the optical flow from. The
 
 ## Examples
 
-### Basic Example
+### Basic Transfer
 
 Some assets are provided in the [assets](assets) folder. Here is a basic example using the river video as flow source and the deer image as pixmap source:
 
 ```console
-transflow assets/River.mp4 -p assets/Deer.jpg
+transflow assets/River.mp4 -p assets/Deer.jpg -Oo out/ExampleBasic.mp4
 ```
 
-You can add the `-o Output.mp4` argument to specify an output filename. Without it, a temporary window will open to display the result. See [Live Visualization](#live-visualization) section for details.
+The `-O` flag allows for visualizing the output while processing. See the [Live Visualization](#live-visualization) section for details. If the `-o, --output` argument is not specified, the temporary visualization is active by default.
 
-### Detailed Example
+![](out/ExampleBasic.gif)
 
-Flow Source | Pixmap Source | Result
------------ | ------------- | ------
-[River.mp4](assets/River.mp4) | [Deer.jpg](assets/Deer.jpg) | [Output.mp4](out/ExampleDeer.mp4)
-[![River.mp4](assets/River.gif)](assets/River.mp4) | [![Deer.jpg](assets/Deer.jpg)](assets/Deer.jpg) | [![Output.mp4](out/ExampleDeer.gif)](out/ExampleDeer.mp4)
+### Random Reset
 
-The first step is to use a graphic editor to add a white frame around the deer. This creates the erasing effect when the white pixels move onto the colored ones.
+Flow Source | Pixmap Source
+----------- | -------------
+[River.mp4](assets/River.mp4) | [Deer.jpg](assets/Deer.jpg)
+[![River.mp4](assets/River.gif)](assets/River.mp4) | [![Deer.jpg](assets/Deer.jpg)](assets/Deer.jpg)
+
+The first step is to use a graphic editor to add a blank frame around the deer. This creates the erasing effect when the transparent pixels move onto the colored ones.
 
 With the editor, create a new image where you cut out the deer, color it white, and color everything else black. This will create the reset mask: while all pixels will get displaced, the pixels forming the deer will get healed again and again. Applying a linear gradient can be used to make the head more resilient than the body.
 
@@ -89,24 +93,59 @@ Modified Pixmap Source | Reset Mask
 Then, all you need is this one command (assuming input files are in the [assets](assets) folder, as in the basic repository structure):
 
 ```console
-transflow assets/River.mp4 --direction forward --pixmap assets/Frame.png --reset random 0.8 --reset-mask assets/Mask.png --output Output.mp4
+transflow assets/River.mp4 -d forward -p assets/Frame.png -r random 0.5 -m assets/Mask.png -Oo ExampleResetRandom.mp4
 ```
 
 - The first argument is the flow source, the river video.
-- The `--direction` argument switches flow direction to `forward`, for a more grainy result (see [Flow Direction](#flow-direction) section). 
-- The `--pixmap` argument specifies the pixmap source, the deer image with the white frame.
-- The `--reset` argument specifies the reset method to random (see [Layer Reset](#layer-reset) section) with a reset probability of 80%.
-- The `--reset-mask` argument specifies the path to the mask image created: the brightest its pixels are, the more likely they will heal.
+- The `-d, --direction` argument switches flow direction to `forward`, for a more grainy result (see [Flow Direction](#flow-direction) section). 
+- The `-p, --pixmap` argument specifies the pixmap source, the deer image with the white frame.
+- The `-r, --reset` argument specifies the reset method to random (see [Layer Reset](#layer-reset) section) with a reset probability of 50%.
+- The `-r, --reset-mask` argument specifies the path to the mask image created: the brightest its pixels are, the more likely they will heal.
 
 A final detail could be to control the flow scale to ease the start and the end, and add a peak flow time. This can be achieved with the `-f, --filters` argument (see [Flow Filters](#flow-filters) section). Simply add the following to the above command:
 
 ```console
--ff "scale=max(0, -.0000061191*t**5+.0003680860*t**4-.0075620960*t**3+.0609758832*t**2-.0717236701*t+.0079797631)"
+-f "scale=max(0, -.0000061191*t**5+.0003680860*t**4-.0075620960*t**3+.0609758832*t**2-.0717236701*t+.0079797631)"
 ```
 
-The formula is based on time `t`. The river video lasts for about 30 seconds. Such formulas can be obtained via [Lagrange interpolation](https://en.wikipedia.org/wiki/Lagrange_polynomial), I published a hacky tool for that, the [Online Lagrange Polynomial Editor](https://chalier.fr/lagrange/):
+The formula is based on time `t`. The river video lasts for about 30 seconds. Such formulas can be obtained via [Lagrange interpolation](https://en.wikipedia.org/wiki/Lagrange_polynomial), I published a hacky tool for that, the [Online Lagrange Polynomial Editor](https://chalier.fr/lagrange/).
 
-[![](https://drive.chalier.fr/protected/transflow/lagrange-polynomial.png)](https://chalier.fr/lagrange/)
+![](out/ExampleResetRandom.gif)
+
+### Progressive Introduction
+
+This example shows how pixels can be progressively introduced from one side of the frame on an empty background.
+
+```console
+transflow assets/Train.mp4 -p assets/Train.mp4 -i border-right:1 -l 0 introduction --background black -Oo out/ExampleIntroduction.mp4"
+```
+
+- The first argument is the flow source, the train video.
+- The second argument, `-p, --pixmap` is the pixmap source, the same train video. Without any specification, the source is assigned to layer 0.
+- Pixels will be introduced progressively from the right border. For this, we add an introduction mask with the `-i, --introduction` with a right border of 1 pixel (see [Masks](#masks) section for details on how to create masks). 
+- The `-l, --layer` argument specifies that the layer 0 has the `introduction` type (see [Compositor](#compositor) section for details on layers).
+- The `--background` argument specifies the background color for the compositor, black in this case. RGB or HEX values can be passed as well.
+
+![](out/ExampleIntroduction.gif)
+
+### Sticky Texture
+
+This example shows how one may replicate the "sticky texture" effect often seen in datamoshed videos, by combining a static layer with an introduction layer.
+
+```console
+transflow assets/Train.mp4 -p assets/Train.mp4 -p assets/Frame.png 1 -l 0 static -l1 -e -Oo out/ExampleStickyTexture.mp4
+```
+
+- The first argument is the flow source, the train video.
+- The second argument `-p, --pixmap` is the first pixmap source, the same train video. Without any specification, the source is assigned to layer 0.
+- The second argument `-p, --pixmap` is the second pixmap source, the deer frame image that will *stick* onto the image train. It is manually assigned to layer 1.
+- The first `-l, --layer` argument specifies that layer 0 has the `static` type (see [Compositor](#compositor) section for details on layers). It will simply render the original train video as a background.
+- On top of it, the second `-l, --layer` argument selects the layer 1 for further layer arguments. Without specifying the layer type, the default `moveref` is used. We simply want to move pixels around.
+- The `-e, --leave-empty-spot` flag specifies that pixels that move leave an empty spot behind them, to prevent its duplication. It applies to layer 1 only, as it is the last selected layer.
+
+We can see the bottom layer with the train video, and the top layer with the deer frame that gets pulled and teared apart by the motion of the train video.
+
+![](out/ExampleStickyTexture.gif)
 
 ## GUI
 

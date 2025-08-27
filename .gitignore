@@ -43,8 +43,12 @@ dist
 !assets/Mask.png
 !assets/River.gif
 !assets/River.mp4
-!out/ExampleDeer.gif
-!out/ExampleDeer.mp4
+!assets/Train.mp4
+!out/ExampleBasic.gif
+!out/ExampleIntroduction.gif
+!out/ExampleResetRandom.gif
+!out/ExampleResetRandom.mp4
+!out/ExampleStickyTexture.gif
 !www/assets/*
 
 draft
