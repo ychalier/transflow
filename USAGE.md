@@ -517,6 +517,8 @@ Expression | Description
 
 Dimensions can be specified in absolute values of pixels or in percentages of the image size, by adding a `%` sign after the number. For instance, `border-top:10%` will create a top border with a height of 10% of the image height.
 
+You may add the `:inv` suffix to invert the mask, whether it is loaded from a file or generated with an expression.
+
 ## Logging
 
 Transflow does not log its activity by default. You can change this behavior with the following arguments:

@@ -53,21 +53,24 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
         arr = numpy.zeros(shape, dtype=numpy.float32)
         arr[:,:] = default
         return arr
+    inverse = False
+    if mask_path is not None and mask_path.endswith(":inv"):
+        inverse = True
+        mask_path = mask_path[:-4]
     if mask_path.lower() == "zeros":
-        return numpy.zeros(shape, dtype=numpy.float32)
-    if mask_path.lower() == "ones":
-        return numpy.ones(shape, dtype=numpy.float32)
-    if mask_path.lower() == "random":
-        return cast(FloatMask, numpy.random.rand(*shape).astype(numpy.float32))
-    if re.match(r"^border(\-(top|right|bottom|left))?:(\d+%?:|:|\d+%?$){1,4}$", mask_path, re.IGNORECASE):
+        arr = numpy.zeros(shape, dtype=numpy.float32)
+    elif mask_path.lower() == "ones":
+        arr = numpy.ones(shape, dtype=numpy.float32)
+    elif mask_path.lower() == "random":
+        arr = cast(FloatMask, numpy.random.rand(*shape).astype(numpy.float32))
+    elif re.match(r"^border(\-(top|right|bottom|left))?:(\d+%?:|:|\d+%?$){1,4}$", mask_path, re.IGNORECASE):
         top, right, bottom, left = parse_border_args(mask_path, *shape)
         arr = numpy.zeros(shape, dtype=numpy.float32)
         if top != 0: arr[:top,:] = 1
         if right != 0: arr[:,-right:] = 1
         if bottom != 0: arr[-bottom:,:] = 1
         if left != 0: arr[:,:left] = 1
-        return arr
-    if re.match(r"^[hv]line:\d+%?$", mask_path, re.IGNORECASE):
+    elif re.match(r"^[hv]line:\d+%?$", mask_path, re.IGNORECASE):
         name, arg_string = mask_path.lower().split(":")
         arr = numpy.zeros(shape, dtype=numpy.float32)
         if name == "hline":
@@ -80,8 +83,7 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
             arr[:,j:j+arg] = 1
         else:
             raise ValueError(f"Invalid line rule name {name}")
-        return arr
-    if re.match(r"circle:\d+%?", mask_path, re.IGNORECASE):
+    elif re.match(r"circle:\d+%?", mask_path, re.IGNORECASE):
         arg_string = mask_path.lower().split(":")[1]
         radius = parse_dimension_arg(arg_string, min(shape))
         arr = numpy.zeros(shape, dtype=numpy.float32)
@@ -89,8 +91,7 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
         j = numpy.arange(0, shape[1])
         ci, cj = shape[0] // 2, shape[1] // 2
         arr = (j[numpy.newaxis,:] - cj) ** 2 + (i[:,numpy.newaxis] - ci) ** 2 < radius ** 2
-        return cast(FloatMask, arr)
-    if re.match(r"rect:\d+%?(:\d+%?)?", mask_path, re.IGNORECASE):
+    elif re.match(r"rect:\d+%?(:\d+%?)?", mask_path, re.IGNORECASE):
         arg_strings = mask_path[mask_path.index(":")+1:].split(":")
         width, height = 0, 0
         if len(arg_strings) == 1:
@@ -106,8 +107,7 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
         arr[shape[0] // 2 + height // 2:,:] = 0
         arr[:,:shape[1] // 2 - width // 2] = 0
         arr[:,shape[1] // 2 + width // 2:] = 0
-        return arr
-    if re.match(r"grid:\d+:\d+:\d+?", mask_path, re.IGNORECASE):
+    elif re.match(r"grid:\d+:\d+:\d+?", mask_path, re.IGNORECASE):
         arg_strings = mask_path[mask_path.index(":")+1:].split(":")
         nrows, ncols, radius = list(map(int, arg_strings))
         diameter = 2 * radius
@@ -122,20 +122,22 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
                 i0 = cell_height * i + cell_height // 2 - radius
                 j0 = cell_width * j + cell_width // 2 - radius
                 arr[i0:i0+diameter,j0:j0+diameter] = circle
-        return arr
-    import PIL.Image
-    image = PIL.Image.open(mask_path)
-    arr = numpy.array(image).astype(numpy.float32)
-    image.close()
-    if arr.ndim == 2:
-        mask = arr / 255
-    elif arr.ndim == 3:
-        if arr.shape[2] == 4:
-            warnings.warn(f"Mask {mask_path} has an alpha channel but it will be ignored")
-        mask = numpy.mean(arr[:,:,:3], axis=2) / 255
     else:
-        raise ValueError(f"Image has wrong number of dimensions {arr.ndim}, expected 2 or 3")
-    return cast(FloatMask, mask)
+        import PIL.Image
+        image = PIL.Image.open(mask_path)
+        arr = numpy.array(image).astype(numpy.float32)
+        image.close()
+        if arr.ndim == 2:
+            arr /= 255
+        elif arr.ndim == 3:
+            if arr.shape[2] == 4:
+                warnings.warn(f"Mask {mask_path} has an alpha channel but it will be ignored")
+            arr = numpy.mean(arr[:,:,:3], axis=2) / 255
+        else:
+            raise ValueError(f"Image has wrong number of dimensions {arr.ndim}, expected 2 or 3")
+    if inverse:
+        arr = 1.0 - arr
+    return cast(FloatMask, arr)
 
 
 def load_bool_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), default: bool = False) -> BoolMask:

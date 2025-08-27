@@ -67,13 +67,16 @@ class ReferenceLayer(DataLayer):
             self._set_base_source_indices(reset_mask)
 
     def _update_reset_constant(self):
-        dij = (self.base - self.data[:,:,(self.INDEX_I, self.INDEX_J)]).astype(numpy.float32)
-        dij_norm = numpy.linalg.norm(dij, ord=float("inf"), axis=2)
-        dij_norm[numpy.where(dij_norm > self.config.reset_constant_step)] /= self.config.reset_constant_step
-        where = numpy.nonzero(dij_norm)
-        dij_scaled = numpy.multiply(self.reset_mask.reshape((self.height, self.width, 1)), dij.copy())
-        dij_scaled[where] = dij[where] / dij_norm.reshape((self.height, self.width, 1))[where]
-        self.data[:,:,[self.INDEX_I, self.INDEX_J]] += numpy.round(dij_scaled).astype(numpy.int32)
+        dij_base = (self.base - self.data[:,:,(self.INDEX_I, self.INDEX_J)]).astype(numpy.float32)
+        dij = dij_base.copy()
+        norm_base = numpy.linalg.norm(dij, ord=float("inf"), axis=2)
+        where = numpy.nonzero(norm_base)
+        dij[where] /= norm_base.reshape((self.height, self.width, 1))[where]
+        dij *= self.config.reset_constant_step * self.reset_mask.reshape((self.height, self.width, 1))
+        norm_scaled = numpy.linalg.norm(dij, ord=float("inf"), axis=2)
+        where = numpy.where(norm_scaled > norm_base)
+        dij[where] = dij_base[where]
+        self.data[:,:,[self.INDEX_I, self.INDEX_J]] += numpy.round(dij).astype(numpy.int32)
 
     def _update_reset_linear(self):
         dij = self.config.reset_linear_factor * (self.base - self.data[:,:,(self.INDEX_I, self.INDEX_J)])

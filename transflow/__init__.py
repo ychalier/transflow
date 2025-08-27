@@ -173,7 +173,8 @@ def main():
         "'border-top:height', 'border-right:width', 'border-bottom:height', "\
         "'border-left:width', 'hline:height', 'vline:width', 'circle:radius', "\
         "'rect:width:height', 'grid:nrows:ncols:radius'; dimensions can be "\
-        "absolute values in pixels or relative using '%%' suffix"\
+        "absolute values in pixels or relative using '%%' suffix; "\
+        "add the ':inv' suffix to invert the mask"
     
     bool_mask_help = mask_help.replace("[0, 1]", "{0, 1}")
 
