@@ -1,1 +1,6 @@
-prune tests
+include LICENSE
+include README.md
+recursive-include transflow *
+prune */__pycache__
+prune */*/__pycache__
+prune */*/*/__pycache__
