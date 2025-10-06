@@ -3,7 +3,7 @@
 Set of tools for transferring optical flow from one media to another.
 """
 
-__version__ = "1.11.0"
+__version__ = "1.11.1"
 __author__ = "Yohan Chalier"
 __license__ = "GNU GPLv3"
 __maintainer__ = "Yohan Chalier"

@@ -101,6 +101,7 @@ class ReferenceLayer(DataLayer):
             mapping_j = numpy.clip(numpy.round(self.data[:,:,1]), 0, self.width - 1)[where]
             self.rgba[:,:,:pixmap.shape[2]][where] = pixmap[mapping_i, mapping_j]
             if pixmap.shape[2] == 3:
+                self.rgba[:,:,3] = 0
                 self.rgba[:,:,3][where] = 1
 
     def update(self, flow: Flow):
