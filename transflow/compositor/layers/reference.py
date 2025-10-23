@@ -57,7 +57,7 @@ class ReferenceLayer(DataLayer):
 
     def _update_reset_random(self):
         random = numpy.random.random(size=(self.height, self.width))
-        reset_mask = numpy.zeros((self.height, self.width), dtype=numpy.bool)
+        reset_mask = numpy.zeros((self.height, self.width), dtype=bool)
         reset_mask[numpy.where(random < self.config.reset_random_factor * self.reset_mask)] = 1
         where = numpy.nonzero(reset_mask)
         self.data[:,:,self.INDEX_I][where] = self.base[:,:,0][where]
@@ -92,7 +92,7 @@ class ReferenceLayer(DataLayer):
 
     def _update_rgba(self):
         for i, source in enumerate(self.sources):
-            where = numpy.ones((self.height, self.width), dtype=numpy.bool)
+            where = numpy.ones((self.height, self.width), dtype=bool)
             where[numpy.where(self.data[:,:,self.INDEX_SOURCE] != i)] = 0
             where[numpy.where(self.data[:,:,self.INDEX_ALPHA] == 0)] = 0
             where = numpy.nonzero(where)

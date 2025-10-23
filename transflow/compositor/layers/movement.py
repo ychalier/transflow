@@ -28,7 +28,7 @@ class MovementLayer(DataLayer):
         
         mask_src_filled = None
         if self.config.transparent_pixels_can_move:
-            mask_src_filled = numpy.ones((self.height, self.width), dtype=numpy.bool)
+            mask_src_filled = numpy.ones((self.height, self.width), dtype=bool)
             mask_src_filled[numpy.where(self.data[:,:,self.INDEX_ALPHA] == 0)] = 0
             mask_src_filled = mask_src_filled.flat[shift].reshape((self.height, self.width))
         else:

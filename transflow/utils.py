@@ -141,7 +141,7 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
 
 
 def load_bool_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), default: bool = False) -> BoolMask:
-    return cast(BoolMask, numpy.round(load_float_mask(mask_path, shape, float(default))).astype(numpy.bool))
+    return cast(BoolMask, numpy.round(load_float_mask(mask_path, shape, float(default))).astype(bool))
 
 
 def find_unique_path(path: str) -> str:

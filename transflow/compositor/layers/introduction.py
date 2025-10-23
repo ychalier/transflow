@@ -21,7 +21,7 @@ class IntroductionLayer(MovementLayer):
         if self.config.introduce_once and self.introduced_once:
             return
         self.introduced_once = True
-        mask = numpy.ones((self.height, self.width), dtype=numpy.bool)
+        mask = numpy.ones((self.height, self.width), dtype=bool)
 
         where_empty = numpy.where(self.data[:,:,self.INDEX_ALPHA]) == 0
         where_filled = numpy.nonzero(self.data[:,:,self.INDEX_ALPHA])
