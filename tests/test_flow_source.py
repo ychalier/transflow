@@ -20,6 +20,7 @@ class TestFlowSource(unittest.TestCase):
     FPS = 50
     LENGTH = 1500
     ARCHIVE_LENGTH = 2
+    INTERPOLATION_STEPS = 2
 
     def _test_fs(self, fs: transflow.flow.FlowSource.Builder, length: int | None = None):
         if length is None:
@@ -132,7 +133,17 @@ class TestFlowSource(unittest.TestCase):
             self.assertEqual(len(fs.flow_filters), 4)
         self._test_fs(fs)
 
-    # TODO: add interpolation test
+    def test_interpolation(self):
+        with transflow.flow.FlowSource.from_args(self.VIDEO_PATH, direction=transflow.flow.Direction.BACKWARD) as source:
+            self.assertEqual(source.length, self.LENGTH - 1)
+            flow_a = numpy.round(next(source))
+        with transflow.flow.FlowSource.from_args(self.VIDEO_PATH, interpolation_steps=self.INTERPOLATION_STEPS, direction=transflow.flow.Direction.BACKWARD) as source:
+            self.assertEqual(source.length, self.INTERPOLATION_STEPS * (self.LENGTH - 1))
+            flow_b = numpy.zeros((self.HEIGHT, self.WIDTH, 2), dtype=numpy.float32)
+            for _ in range(self.INTERPOLATION_STEPS):
+                flow_b += next(source)
+        diff = numpy.sum(numpy.abs(flow_a - flow_b)) / self.WIDTH / self.HEIGHT
+        self.assertAlmostEqual(diff, 0, 2)
 
 
 if __name__ == "__main__":

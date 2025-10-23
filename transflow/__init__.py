@@ -221,7 +221,10 @@ def main():
         "in mode 'skip', expr must be a Pythonic expression based on variable "
         "`t`; timings are relative to the output frame timestamps, in seconds")
     group.add_argument("--interp", dest="interpolation_steps", type=int, default=1,
-        help="") # TODO
+        help="number of interpolation step for each flow output; if 1, no "
+        "interpolation is performed; if n>1, each flow is yielded in n steps "
+        "as rounded integer values, so the sum of the interpolations roughly "
+        "equals the rounded flow; makes flow look smoother, slower.")
 
     # Pixmap Args
     group = parser.add_argument_group("pixmap options",

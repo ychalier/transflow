@@ -174,6 +174,7 @@ class WebsocketServer(threading.Thread):
                 repeat=args["flowSource"]["repeat"],
                 lock_expr=args["flowSource"]["lockExpr"],
                 lock_mode=args["flowSource"]["lockMode"],
+                interpolation_steps=args["flowSource"]["interpolationSteps"],
                 # Pixmap Args
                 pixmap_sources=pixmap_sources,
                 # Compositor Args

@@ -22,6 +22,7 @@ This document provides details on how to use the `transflow` module for performi
 - [Flow Transformations](#flow-transformations)
   - [Flow Filters](#flow-filters)
   - [Flow Locking](#flow-locking)
+  - [Flow Interpolation](#flow-interpolation)
   - [Applying A Mask](#applying-a-mask)
   - [Flow Convolution Kernel](#flow-convolution-kernel)
 - [Multiple Flow Sources](#multiple-flow-sources)
@@ -299,6 +300,10 @@ You can lock the flow (to mimic the P-frames duplication effect) with the `--loc
 
 - **`stay` (default):** the expression must be a list of couples of the form `(time_start, duration)`. Timings correspond to the output frame timestamp, and are all expressed in seconds. When locked, the flow source is paused. When unlocked, it resumes from where it was paused. For instance, if you want to lock the flow twice for one second, at two different moments, you may use the following argument: `--lock stay "(1,1),(4,1)"`.
 - **`skip`:** the expression argument must be a Pythonic expression based on the variable `t`, the time in seconds. `math` and `random` modules are available during evaluation. When locked, the flow source is still iterated. When unlocked, it skips all frames encountered while locked. The output of the epxression is evaluated with Python's if statement: integer value 0 means the flow in unlocked, value 1 means the flow is locked. For instance, if you want to lock the flow after two seconds for one second, you may use the following argument: `--lock skip "t>=2 and t<=3"`.
+
+### Flow Interpolation
+
+You can make the flow smoother and slower by interpolating it over time with the `--interp [steps]` argument. The `steps` parameter specifies how many intermediate frames to generate for each flow frames. For instance, if `steps` is set to 2, then each flow frame is split into 2 intermediates frames, which are rounded so their sum roughly equals the rounded original flow frame. This has the effect of slowing down the flow by a factor of `steps`, while making it smoother.
 
 ### Applying A Mask
 

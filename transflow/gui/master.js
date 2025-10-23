@@ -1,4 +1,4 @@
-const VERSION = "2025w34a";
+const VERSION = "2025w43a";
 const VIDEO_FILETYPES = "*.mp4 *.avi *.mkv *.mov *.mpg";
 const IMAGE_FILETYPES = "*.jpg *.jpeg *.png";
 
@@ -23,6 +23,7 @@ var config = {
         repeat: 1,
         lockMode: "stay",
         lockExpr: null,
+        interpolationSteps: 1,
     },
     compositor: {
         layerCount: 1,
@@ -616,6 +617,7 @@ function inflatePaneFlowSource(container) {
     createNumberInput(container, "Repeat", "flowSource.repeat", 0, null, 1, "Repeat flow input (0 to loop indefinitely).");
     createSelect(container, "Lock Mode", "flowSource.lockMode", ["stay", "skip"], "When the flow is locked, either pause the source ('stay') or continue reading it ('skip').");
     createTextInput(container, "Lock Expression", "flowSource.lockExpr", "(1,1),(4,1) (stay) t>=2 and t<=3 (skip)", helpText="In mode 'stay', expr must be a list of couples (start_t, duration) for when to lock the flow; in mode 'skip', expr must be a Pythonic expression based on variable `t`; timings are relative to the output frame timestamps, in seconds.");
+    createNumberInput(container, "Interpolation Steps", "flowSource.interpolationSteps", 1, null, 1, "number of interpolation step for each flow output; if 1, no interpolation is performed; if n>1, each flow is yielded in n steps as rounded integer values, so the sum of the interpolations roughly equals the rounded flow; makes flow look smoother, slower.")
 }
 
 function createDetails(container, summaryText, key) {

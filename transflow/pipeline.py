@@ -459,10 +459,13 @@ class Pipeline:
         if not self.has_output:
             return
         assert self.fs_width is not None and self.fs_height is not None
+        out_framerate = self.bs_framerate if self.bs_framerate is not None else self.fs_framerate
+        if out_framerate is not None:
+            out_framerate *= self.config.interpolation_steps
         vout_args = (
             int(self.fs_width * self.fs_width_factor),
             int(self.fs_height * self.fs_height_factor),
-            self.bs_framerate if self.bs_framerate is not None else self.fs_framerate,
+            out_framerate,
             self.config.vcodec,
             self.execute,
             self.replace,

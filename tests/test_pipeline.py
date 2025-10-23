@@ -133,9 +133,10 @@ class TestPipeline(unittest.TestCase):
             "flows_merging_function", "use_mvs", "mask_path", "kernel_path",
             "cv_config", "flow_filters", "direction", "seek_time",
             "duration_time", "repeat", "lock_expr", "lock_mode",
+            "interpolation_steps",
             "compositor_background",
-            "vcodec", "size", "view_flow", "view_flow_magnitude", "render_scale", "render_colors",
-            "render_binary", "seed"]
+            "vcodec", "size", "view_flow", "view_flow_magnitude", "render_scale",
+            "render_colors", "render_binary", "seed"]
         for attr in attrs:
             self.assertEqual(getattr(config, attr), getattr(doppelganger, attr))
         self.assertEqual(len(config.pixmap_sources), len(doppelganger.pixmap_sources))

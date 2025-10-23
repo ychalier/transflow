@@ -52,6 +52,7 @@ class TestGui(unittest.TestCase):
                 "repeat": 1,
                 "lockMode": "stay",
                 "lockExpr": None,
+                "interpolationSteps": 1,
             },
             "compositor": {
                 "layerCount": 1,
