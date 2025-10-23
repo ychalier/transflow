@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import transflow.flow
 import transflow.flow.sources.av
 import transflow.flow.sources.cv
+import transflow.flow.sources.archive
 
 
 class TestFlowSource(unittest.TestCase):
@@ -18,6 +19,7 @@ class TestFlowSource(unittest.TestCase):
     HEIGHT = 480
     FPS = 50
     LENGTH = 1500
+    ARCHIVE_LENGTH = 2
 
     def _test_fs(self, fs: transflow.flow.FlowSource.Builder, length: int | None = None):
         if length is None:
@@ -37,18 +39,41 @@ class TestFlowSource(unittest.TestCase):
             direction=transflow.flow.Direction.FORWARD)
         self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource.Builder)
         self._test_fs(fs)
-    
+
     def test_cv_backward(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH,
             direction=transflow.flow.Direction.BACKWARD)
         self.assertIsInstance(fs, transflow.flow.sources.cv.CvFlowSource.Builder)
         self._test_fs(fs)
-    
+
     def test_av(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH, use_mvs=True)
         self.assertIsInstance(fs, transflow.flow.sources.av.AvFlowSource.Builder)
         self._test_fs(fs)
-    
+
+    def test_archive(self):
+        from transflow.output import NumpyOutput
+        from .test_pipeline import TestEnvironment
+        with TestEnvironment() as env:
+            with transflow.flow.FlowSource.from_args(self.VIDEO_PATH, direction=transflow.flow.Direction.FORWARD) as source:
+                archive_path = (env.folder / f"foo.flow.zip").as_posix()
+                flow_output = NumpyOutput(archive_path, replace=True)
+                flow_output.write_meta({
+                    "path": self.VIDEO_PATH,
+                    "width": source.width,
+                    "height": source.height,
+                    "framerate": source.framerate,
+                    "direction": source.direction.value,
+                    "seek_time": 0,
+                })
+                for _ in range(self.ARCHIVE_LENGTH):
+                    flow = next(source)
+                    flow_output.write_array(numpy.round(flow))
+                flow_output.close()
+            fs = transflow.flow.FlowSource.from_args(archive_path)
+            self.assertIsInstance(fs, transflow.flow.sources.archive.ArchiveFlowSource.Builder)
+            self._test_fs(fs, self.ARCHIVE_LENGTH)
+
     def test_cv_av_timings(self):
         for use_mvs in [True, False]:
             seek_time = 1
@@ -58,7 +83,7 @@ class TestFlowSource(unittest.TestCase):
             self._test_fs(fs, (self.LENGTH - self.FPS * seek_time - 1) * repeats)
             fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH, use_mvs=use_mvs, repeat=repeats, duration_time=duration_time)
             self._test_fs(fs, self.FPS * duration_time * repeats)
-    
+
     def test_cv_lock(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH, lock_expr="t >= 1", lock_mode=transflow.flow.LockMode.SKIP)
         self._test_fs(fs)
@@ -74,10 +99,10 @@ class TestFlowSource(unittest.TestCase):
 
     def test_blurred(self):
         self._test_fs(transflow.flow.FlowSource.from_args(self.VIDEO_PATH, cv_config="configs/blurred.json"))
-    
+
     def test_horn_schunck(self):
         self._test_fs(transflow.flow.FlowSource.from_args(self.VIDEO_PATH, cv_config="configs/horn-schunck.json"))
-    
+
     def test_lukas_kanade(self):
         self._test_fs(transflow.flow.FlowSource.from_args(self.VIDEO_PATH, cv_config="configs/lukas-kanade.json"))
 
@@ -87,7 +112,7 @@ class TestFlowSource(unittest.TestCase):
     #     except ImportError:
     #         return
     #     self._test_fs(transflow.flow.FlowSource.from_args(self.VIDEO_PATH, cv_config="configs/liteflownet.json"))
-    
+
     # def test_webcam(self):
     #     fs = transflow.flow.FlowSource.from_args("0", size=(1280, 720))
     #     with fs:
@@ -100,7 +125,7 @@ class TestFlowSource(unittest.TestCase):
     def test_kernels(self):
         if os.path.isfile("kernels/gradxy.npy"):
             self._test_fs(transflow.flow.FlowSource.from_args(self.VIDEO_PATH, kernel_path="kernels/gradxy.npy"))
-    
+
     def test_filters(self):
         fs = transflow.flow.FlowSource.from_args(self.VIDEO_PATH, flow_filters="scale=2*t;threshold=2*t;clip=2*t;polar=r:a")
         with fs:
@@ -108,5 +133,5 @@ class TestFlowSource(unittest.TestCase):
         self._test_fs(fs)
 
 
-if __name__ == "__main__":   
+if __name__ == "__main__":
     unittest.main()

@@ -79,3 +79,4 @@ draft
 !assets/kernels/5x5/unsharp.npy
 
 last-config.json
+*.ps1

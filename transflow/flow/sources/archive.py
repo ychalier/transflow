@@ -30,6 +30,7 @@ class ArchiveFlowSource(FlowSource):
             self.height = data["height"]
             self.framerate = data["framerate"]
             self.base_length = len(self.archive.infolist()) - 1
+            super().build()
 
         def args(self):
             return [self.archive, *FlowSource.Builder.args(self)]
