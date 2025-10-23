@@ -220,6 +220,8 @@ def main():
         "for when to lock the flow; "
         "in mode 'skip', expr must be a Pythonic expression based on variable "
         "`t`; timings are relative to the output frame timestamps, in seconds")
+    group.add_argument("--interp", dest="interpolation_steps", type=int, default=1,
+        help="") # TODO
 
     # Pixmap Args
     group = parser.add_argument_group("pixmap options",
@@ -411,6 +413,7 @@ def main():
             repeat=args.repeat,
             lock_expr=getattr(args, "lock_expr", None),
             lock_mode=getattr(args, "lock_mode", None),
+            interpolation_steps=args.interpolation_steps,
             # Pixmap Args
             pixmap_sources=[
                 PixmapSourceConfig(

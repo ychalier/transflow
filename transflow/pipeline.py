@@ -320,7 +320,8 @@ class Pipeline:
             "duration_time": self.config.duration_time,
             "repeat": self.config.repeat,
             "lock_expr": self.config.lock_expr,
-            "lock_mode": self.config.lock_mode
+            "lock_mode": self.config.lock_mode,
+            "interpolation_steps": self.config.interpolation_steps,
         }
         self.flow_source = FlowSource.from_args(self.config.flow_path, **fs_args)
         self.flow_queue = multiprocessing.Queue(maxsize=1)

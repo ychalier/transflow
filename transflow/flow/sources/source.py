@@ -67,7 +67,8 @@ class FlowSource:
                 duration_time: float | None = None,
                 repeat: int = 1,
                 lock_expr: str | None = None,
-                lock_mode: "str | FlowSource.LockMode | None" = "stay"):
+                lock_mode: "str | FlowSource.LockMode | None" = "stay",
+                interpolation_steps: int = 1):
             self.direction: FlowSource.Direction = FlowSource.Direction.from_arg(direction)
             self.width: int | None = None
             self.height: int | None = None
@@ -94,6 +95,7 @@ class FlowSource:
             self.lock_expr_skip: Callable[[float], bool] | None = None
             self.lock_mode: FlowSource.LockMode = FlowSource.LockMode.from_arg(lock_mode)
             self.lock_start: float | None = None
+            self.interpolation_steps: int = interpolation_steps
             self.source: FlowSource | None = None
 
         @property
@@ -120,6 +122,7 @@ class FlowSource:
                 "lock_mode": self.lock_mode,
                 "lock_expr_stay": self.lock_expr_stay,
                 "lock_expr_skip": self.lock_expr_skip,
+                "interpolation_steps": self.interpolation_steps
             }
 
         def build(self):
@@ -184,6 +187,9 @@ class FlowSource:
                 self.length = self.repeat * (self.end_frame - self.start_frame)
             logger.debug("Flow source Length: %s", self.length)
 
+            if self.length is not None:
+                self.length *= self.interpolation_steps
+
             if self.length is not None and self.lock_mode == FlowSource.LockMode.STAY and self.lock_expr_stay is not None:
                 for _, lock_duration in self.lock_expr_stay:
                     self.length += int(lock_duration * self.framerate)
@@ -223,6 +229,7 @@ class FlowSource:
             lock_mode: LockMode = LockMode.STAY,
             lock_expr_stay: tuple[tuple[float, float]] | None = None,
             lock_expr_skip: Callable[[float], bool] | None = None,
+            interpolation_steps: int = 1,
             ):
         self.direction = direction
         self.width = width
@@ -242,6 +249,10 @@ class FlowSource:
         self.prev_flow: Flow | None = None
         self.lock_start: float | None = None
         self.lock_expr_stay_index: int = 0
+        self.interpolation_steps: int = interpolation_steps
+        self.interpolation_cursor: int = self.interpolation_steps
+        self.interpolation_flow: Flow | None = None
+        self.interpolation_acc: Flow = cast(Flow, numpy.zeros((self.height, self.width, 2), dtype=numpy.float32))
 
         self.start_frame = ckpt_start_frame
         self.rewind()
@@ -282,17 +293,33 @@ class FlowSource:
         self.assert_type("flow_filters", list)
         self.assert_type("lock_mode", FlowSource.LockMode)
         self.assert_type("lock_expr_stay", tuple, type(None))
+        self.assert_type("interpolation_steps", int)
 
     def read_next_flow(self) -> Flow:
-        if self.input_frame_index == self.end_frame:
-            self.rewind()
-        flow = self.next()
-        self.input_frame_index += 1
+        if self.interpolation_steps > 1:
+            if self.interpolation_cursor == self.interpolation_steps:
+                if self.input_frame_index == self.end_frame:
+                    self.rewind()    
+                self.interpolation_flow = self.next()
+                self.interpolation_cursor = 0
+                self.input_frame_index += 1
+                self.interpolation_acc = cast(Flow, numpy.zeros((self.height, self.width, 2), dtype=numpy.float32))
+            assert self.interpolation_flow is not None
+            flow_prev = numpy.round(self.interpolation_acc)
+            self.interpolation_acc += self.interpolation_flow / self.interpolation_steps
+            flow_next = numpy.round(self.interpolation_acc)
+            flow = cast(Flow, flow_next - flow_prev)
+            self.interpolation_cursor += 1
+        else:
+            if self.input_frame_index == self.end_frame:
+                self.rewind()
+            flow = self.next()
+            self.input_frame_index += 1
         return flow
-
-    def __next__(self) -> Flow:
-        if self.length is not None and self.output_frame_index >= self.length:
-            raise StopIteration
+    
+    def check_if_locked(self) -> bool:
+        """NOTE: also sets lock_start timestamp attribute
+        """
         locked = False
         if self.lock_mode == FlowSource.LockMode.STAY and self.lock_expr_stay is not None:
             was_locked = self.lock_start is not None
@@ -308,6 +335,12 @@ class FlowSource:
                     self.lock_start = self.t
         elif self.lock_mode == FlowSource.LockMode.SKIP and self.lock_expr_skip is not None:
             locked = self.lock_expr_skip(self.t)
+        return locked
+
+    def __next__(self) -> Flow:
+        if self.length is not None and self.output_frame_index >= self.length:
+            raise StopIteration
+        locked = self.check_if_locked()
         if locked:
             if self.prev_flow is None:
                 raise RuntimeError("Flow is locked but has not been initialized. Maybe lock the flow later?")
@@ -377,7 +410,8 @@ class FlowSource:
             duration_time: float | None = None,
             repeat: int = 1,
             lock_expr: str | None = None,
-            lock_mode: str | LockMode = LockMode.STAY):
+            lock_mode: str | LockMode = LockMode.STAY,
+            interpolation_steps: int = 1):
         if "::" in flow_path:
             avformat, file = flow_path.split("::")
         else:
@@ -392,7 +426,8 @@ class FlowSource:
             "duration_time": duration_time,
             "repeat": repeat,
             "lock_expr": lock_expr,
-            "lock_mode": lock_mode
+            "lock_mode": lock_mode,
+            "interpolation_steps": interpolation_steps,
         }
         if file.endswith(".flow.zip"):
             from .archive import ArchiveFlowSource
