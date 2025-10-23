@@ -107,6 +107,8 @@ class TestFlowSource(unittest.TestCase):
             self.assertEqual(len(fs.flow_filters), 4)
         self._test_fs(fs)
 
+    # TODO: add interpolation test
+
 
 if __name__ == "__main__":   
     unittest.main()

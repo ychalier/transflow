@@ -175,6 +175,7 @@ class Config:
             repeat: int = 1,
             lock_expr: str | None = None,
             lock_mode: str | int | LockMode | None = None,
+            interpolation_steps: int = 1,
             pixmap_sources: list[PixmapSourceConfig] = [],
             layers: list[LayerConfig] = [],
             compositor_background: str | None = None,
@@ -215,6 +216,7 @@ class Config:
         self.repeat: int = repeat
         self.lock_expr: str | None = lock_expr
         self.lock_mode: LockMode = LockMode.from_arg(lock_mode)
+        self.interpolation_steps: int = interpolation_steps
 
         # Pixmap Args
         self.pixmap_sources = pixmap_sources
@@ -273,6 +275,7 @@ class Config:
             repeat=d.get("repeat", 1),
             lock_expr=d.get("lock_expr", None),
             lock_mode=d.get("lock_mode", LockMode.STAY),
+            interpolation_steps=d.get("interpolation_steps", 1),
             pixmap_sources=[PixmapSourceConfig.fromdict(dd) for dd in d.get("pixmap_sources", [])],
             layers=[LayerConfig.fromdict(dd) for dd in d.get("layers", [])],
             compositor_background=d.get("compositor_background", "#ffffff"),
@@ -303,6 +306,7 @@ class Config:
             "repeat": self.repeat,
             "lock_expr": self.lock_expr,
             "lock_mode": self.lock_mode.value,
+            "interpolation_steps": self.interpolation_steps,
             "pixmap_sources": [x.todict() for x in self.pixmap_sources],
             "layers": [x.todict() for x in self.layers],
             "compositor_background": self.compositor_background,
