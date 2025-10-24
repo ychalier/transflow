@@ -15,6 +15,14 @@ import typing
 import warnings
 import zipfile
 
+
+def simple_warning_format(message, category, filename, lineno, line=None):
+    return f"Warning: {message}\n"
+
+warnings.formatwarning = simple_warning_format
+logging.getLogger("PIL").setLevel(logging.WARNING)
+
+
 import numpy
 import tqdm
 

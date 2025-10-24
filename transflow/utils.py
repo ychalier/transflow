@@ -131,7 +131,7 @@ def load_float_mask(mask_path: str | None, shape: tuple[int, int] = (0, 0), defa
             arr /= 255
         elif arr.ndim == 3:
             if arr.shape[2] == 4:
-                warnings.warn(f"Mask {mask_path} has an alpha channel but it will be ignored")
+                warnings.warn(f"Mask '{os.path.basename(mask_path)}' has an alpha channel but it will be ignored, only luminance will be used")
             arr = numpy.mean(arr[:,:,:3], axis=2) / 255
         else:
             raise ValueError(f"Image has wrong number of dimensions {arr.ndim}, expected 2 or 3")
