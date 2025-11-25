@@ -223,6 +223,10 @@ class Pipeline:
         self.fs_width_factor: int = 1
         self.fs_height_factor: int = 1
         self.cursor: int = 0
+        self._fx_min: numpy.ndarray | None = None
+        self._fx_max: numpy.ndarray | None = None
+        self._fy_min: numpy.ndarray | None = None
+        self._fy_max: numpy.ndarray | None = None
 
     @property
     def has_output(self) -> bool:
@@ -501,6 +505,20 @@ class Pipeline:
             self.logger.debug("Started output process to %s", path)
             self.output_processes.append(op)
 
+    def _clip(self, flow: Flow):
+        if self._fx_min is None or self._fx_max is None or self._fy_min is None or self._fy_max is None:
+            if self.fs_width is None or self.fs_height is None:
+                raise ValueError("Flow source shape not initialized")
+            j = numpy.arange(self.fs_width)
+            i = numpy.arange(self.fs_height)
+            J, I = numpy.meshgrid(j, i)
+            self._fx_min = -J.astype(numpy.int32)
+            self._fx_max = self.fs_width - J.astype(numpy.int32) - 1
+            self._fy_min = -I.astype(numpy.int32)
+            self._fy_max = self.fs_height - I.astype(numpy.int32) - 1
+        numpy.clip(flow[:,:,0], self._fx_min, self._fx_max, flow[:,:,0])
+        numpy.clip(flow[:,:,1], self._fy_min, self._fy_max, flow[:,:,1])
+
     def _update_flow(self) -> Flow | None:
         assert self.flow_queue is not None
         flows = []
@@ -512,6 +530,8 @@ class Pipeline:
         if not flows:
             return None
         flow = self.merge_flows(flows)
+        if len(flows) > 1:
+            self._clip(flow)
         if self.fs_width_factor != 1 or self.fs_height_factor != 1:
             flow = upscale_array(flow, self.fs_width_factor, self.fs_height_factor)
         if self.flow_output is not None:
@@ -659,7 +679,10 @@ class Pipeline:
             self._setup()
             self._mainloop()
         except Exception as err:
-            self.logger.error("Pipeline encountered an error: %s", err)
+            try:
+                self.logger.error("Pipeline encountered an error: %s", err)
+            except AttributeError:
+                print(err)
             traceback.print_exc()
         finally:
             self._close()

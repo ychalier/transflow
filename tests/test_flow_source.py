@@ -9,6 +9,7 @@ import transflow.flow
 import transflow.flow.sources.av
 import transflow.flow.sources.cv
 import transflow.flow.sources.archive
+import transflow.flow.sources.dummy
 
 
 class TestFlowSource(unittest.TestCase):
@@ -144,6 +145,11 @@ class TestFlowSource(unittest.TestCase):
                 flow_b += next(source)
         diff = numpy.sum(numpy.abs(flow_a - flow_b)) / self.WIDTH / self.HEIGHT
         self.assertAlmostEqual(diff, 0, 2)
+    
+    def test_dummy(self):
+        fs = transflow.flow.FlowSource.from_args(f"dummy:{self.WIDTH}:{self.HEIGHT}:42:{self.FPS}:{self.LENGTH - 1}")
+        self.assertIsInstance(fs, transflow.flow.sources.dummy.DummyFlowSource.Builder)
+        self._test_fs(fs)
 
 
 if __name__ == "__main__":

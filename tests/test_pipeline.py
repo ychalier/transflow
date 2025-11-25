@@ -203,6 +203,19 @@ class TestPipeline(unittest.TestCase):
                 duration_time=0.1)
             env.run(config)
             self.assertTrue((env.folder / "out.mp4").is_file())
+    
+    def test_extra_flow(self):
+        with TestEnvironment() as env:
+            config = Config(
+                "dummy:854:480:1",
+                extra_flow_paths=["dummy:854:480:1"],
+                flows_merging_function="sum",
+                pixmap_sources=[PixmapSourceConfig("bwnoise")],
+                output_path=(env.folder / "out.mp4").as_posix(),
+                duration_time=0.1)
+            env.run(config)
+            self.assertTrue((env.folder / "out.mp4").is_file())
+
 
 class TestTimings(unittest.TestCase):
 
