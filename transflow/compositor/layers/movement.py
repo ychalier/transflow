@@ -25,7 +25,7 @@ class MovementLayer(DataLayer):
     def _update_move(self):
         shift = numpy.arange(self.height * self.width) + self.flow_flat
         mask_src = self.mask_src.copy()
-        
+
         mask_src_filled = None
         if self.config.transparent_pixels_can_move:
             mask_src_filled = numpy.ones((self.height, self.width), dtype=bool)
@@ -36,6 +36,17 @@ class MovementLayer(DataLayer):
 
         if not self.config.transparent_pixels_can_move:
             mask_src[numpy.where(self.data[:,:,self.INDEX_ALPHA] == 0)] = 0
+
+        # TODO
+        import cv2
+        hsv_noise_level = 0.1
+        rgb = self.compositor.last_render[:,:,:3].astype(numpy.float32) / 255.0
+        noise = numpy.random.random((rgb.shape))
+        noise[:,:,0] *= 360
+        hsv = (1 - hsv_noise_level) * cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV) + hsv_noise_level * noise
+        hsv_mask = numpy.where(hsv[:,:,2] > .3)
+        mask_src[hsv_mask] = 0
+
         mask_src = mask_src.flat[shift].reshape((self.height, self.width))
 
         mask_dst = self.mask_dst.copy()

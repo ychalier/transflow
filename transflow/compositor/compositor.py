@@ -21,6 +21,7 @@ class Compositor:
         self.width = width
         self.background_color = parse_color(background_color)
         self.background: Rgb = cast(Rgb, numpy.zeros((self.height, self.width, 3), dtype=numpy.uint8))
+        self.last_render: Rgb = self.background.copy()
         self.background[:,:] = self.background_color
         self.layers: Sequence[Layer] = layers
 
@@ -37,6 +38,7 @@ class Compositor:
             layer_image = layer.render()
             where_opaque = numpy.nonzero(layer_image[:,:,3])
             image[where_opaque] = layer_image[:,:,:3][where_opaque]
+        self.last_render = image.copy()
         return cast(Rgb, image)
 
     @classmethod
@@ -45,8 +47,9 @@ class Compositor:
             width: int,
             layer_configs: list[LayerConfig],
             background_color: str = "#ffffff"):
-        layers = [Layer.from_args(config, height, width, []) for config in layer_configs]
-        return cls(height, width, layers, background_color=background_color)
+        compositor = cls(height, width, [], background_color=background_color)
+        compositor.layers = [Layer.from_args(compositor, config, height, width, []) for config in layer_configs]
+        return compositor
 
     def set_sources(self, pixmap_interfaces: dict[int, list[PixmapSourceInterface]]):
         for i, layer in enumerate(self.layers):

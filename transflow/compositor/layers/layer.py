@@ -1,4 +1,4 @@
-from typing import cast
+from typing import cast, TYPE_CHECKING
 
 import numpy
 
@@ -6,16 +6,20 @@ from ...config import LayerConfig
 from ...utils import load_float_mask
 from ...types import Flow, Rgba, FloatMask
 from ..pixmap_source_interface import PixmapSourceInterface
+if TYPE_CHECKING:
+    from ..compositor import Compositor
 
 
 class Layer:
 
     def __init__(self,
+            compositor: 'Compositor',
             config: LayerConfig,
             height: int,
             width: int,
             sources: list[PixmapSourceInterface],
             ):
+        self.compositor = compositor
         self.config = config
         self.height = height
         self.width = width
@@ -35,11 +39,12 @@ class Layer:
 
     @classmethod
     def from_args(cls,
+            compositor: 'Compositor',
             config: LayerConfig,
             height: int,
             width: int,
             sources: list[PixmapSourceInterface]):
-        args = [config, height, width, sources]
+        args = [compositor, config, height, width, sources]
         if config.classname == "moveref":
             from .move_reference import MoveReferenceLayer
             return MoveReferenceLayer(*args)
