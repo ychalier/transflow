@@ -282,7 +282,7 @@ class FlowSource:
         self.assert_type("direction", FlowSource.Direction)
         self.assert_type("width", int)
         self.assert_type("height", int)
-        self.assert_type("framerate", float)
+        # self.assert_type("framerate", float)
         self.assert_type("length", int, type(None))
         self.assert_type("start_frame", int)
         self.assert_type("end_frame", int)
